@@ -1,5 +1,5 @@
 ---
-description: Run frontend tests for the mira editor
+description: Run frontend tests for the loom editor
 allowed-tools: Bash
 argument-hint: [test_path]
 ---

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Eye shape representing gaze/mira -->
+  <!-- Eye shape representing gaze/loom -->
   <ellipse cx="16" cy="16" rx="14" ry="10" fill="none" stroke="#3b82f6" stroke-width="2"/>
   <!-- Iris -->
   <circle cx="16" cy="16" r="6" fill="#3b82f6"/>

@@ -447,7 +447,7 @@ export default function Canvas({
     (event: React.DragEvent) => {
       event.preventDefault()
 
-      const paramData = event.dataTransfer.getData('application/mira-parameter')
+      const paramData = event.dataTransfer.getData('application/loom-parameter')
       if (!paramData || !onParameterDrop || !reactFlowInstance.current) return
 
       try {

@@ -207,7 +207,7 @@ export default function Sidebar({
                 draggable
                 onDragStart={(e) => {
                   e.dataTransfer.setData(
-                    'application/mira-parameter',
+                    'application/loom-parameter',
                     JSON.stringify({ name, value })
                   )
                   e.dataTransfer.effectAllowed = 'move'
