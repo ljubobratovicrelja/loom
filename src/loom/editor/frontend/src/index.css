@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* React Flow styles */
+.react-flow__node {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+}
+
+.react-flow__handle-left {
+  left: -5px;
+}
+
+.react-flow__handle-right {
+  right: -5px;
+}
+
+/* Pulse error animation for variable nodes */
+@keyframes pulse-error {
+  0%, 100% {
+    border-color: rgb(239 68 68); /* red-500 */
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.4);
+  }
+  50% {
+    border-color: rgb(185 28 28); /* red-700 */
+    box-shadow: 0 0 12px 4px rgb(239 68 68 / 0.6);
+  }
+}
+
+.animate-pulse-error {
+  animation: pulse-error 0.4s ease-in-out 3;
+}
