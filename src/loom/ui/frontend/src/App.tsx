@@ -842,13 +842,19 @@ export default function App() {
     variableName?: string,
     stepNames?: string[]
   ) => {
-    // Prompt to save if there are unsaved changes
+    // Handle unsaved changes before running
     if (configPath && hasChanges) {
-      const shouldSave = window.confirm('You have unsaved changes. Save before running?')
-      if (shouldSave) {
-        await handleSave()
+      if (skipSaveConfirmation) {
+        // Auto-save enabled - save without prompting
+        await performSave()
       } else {
-        return // Don't run if user declines to save
+        // Ask user
+        const shouldSave = window.confirm('You have unsaved changes. Save before running?')
+        if (shouldSave) {
+          await performSave()
+        } else {
+          return // Don't run if user declines to save
+        }
       }
     }
     // Don't reset all steps - server sends per-step status updates (RUNNING, SUCCESS, FAILED)
@@ -859,7 +865,7 @@ export default function App() {
     setTerminalVisible(true)
     // Create a new request object to trigger the terminal
     setRunRequest({ mode, step_name: stepName, variable_name: variableName, step_names: stepNames })
-  }, [configPath, hasChanges, handleSave])
+  }, [configPath, hasChanges, skipSaveConfirmation, performSave])
 
   // Handle per-step terminal output (for parallel execution)
   // Processes carriage returns (\r) to simulate terminal overwrite behavior (for tqdm etc.)
@@ -886,19 +892,25 @@ export default function App() {
 
   // Run a single step independently (concurrent execution)
   const handleRunStepIndependent = useCallback(async (stepName: string) => {
-    // Prompt to save if there are unsaved changes
+    // Handle unsaved changes before running
     if (configPath && hasChanges) {
-      const shouldSave = window.confirm('You have unsaved changes. Save before running?')
-      if (shouldSave) {
-        await handleSave()
+      if (skipSaveConfirmation) {
+        // Auto-save enabled - save without prompting
+        await performSave()
       } else {
-        return // Don't run if user declines to save
+        // Ask user
+        const shouldSave = window.confirm('You have unsaved changes. Save before running?')
+        if (shouldSave) {
+          await performSave()
+        } else {
+          return // Don't run if user declines to save
+        }
       }
     }
     setActiveTerminalStep(stepName)
     setTerminalVisible(true)
     runStepIndependent(stepName)
-  }, [configPath, hasChanges, handleSave, runStepIndependent])
+  }, [configPath, hasChanges, skipSaveConfirmation, performSave, runStepIndependent])
 
   // Cancel a specific step
   const handleCancelStepIndependent = useCallback((stepName: string) => {
