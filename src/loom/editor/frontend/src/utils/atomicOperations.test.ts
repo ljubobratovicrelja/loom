@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { Node, Edge } from '@xyflow/react'
-import type { StepData, ParameterData } from '../types/pipeline'
+import type { StepData } from '../types/pipeline'
 import {
   handleConnect,
   handleReconnect,

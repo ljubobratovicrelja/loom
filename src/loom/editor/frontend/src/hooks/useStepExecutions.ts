@@ -189,8 +189,9 @@ export function useStepExecutions(options: UseStepExecutionsOptions = {}) {
 
   // Cleanup on unmount
   useEffect(() => {
+    const executions = executionsRef.current
     return () => {
-      for (const [, exec] of executionsRef.current) {
+      for (const [, exec] of executions) {
         if (exec.retryTimeout) {
           clearTimeout(exec.retryTimeout)
         }

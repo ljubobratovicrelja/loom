@@ -3,7 +3,7 @@
  * These test the pure logic extracted from Canvas.tsx handlers.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import type { Node, Edge, Connection } from '@xyflow/react'
 import {
   isValidParameterNode,

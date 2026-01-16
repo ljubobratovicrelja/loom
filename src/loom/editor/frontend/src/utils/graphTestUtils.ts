@@ -309,7 +309,7 @@ export function reconnectEdge(
       if (node.type !== 'step') return node
 
       const stepData = node.data as StepData
-      let newArgs = { ...stepData.args }
+      const newArgs = { ...stepData.args }
       let changed = false
 
       // Clear old target's arg

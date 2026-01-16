@@ -118,7 +118,7 @@ export function useRunEligibility(
     }
 
     return result
-  }, [nodes, edges, stepStatuses, graph])
+  }, [nodes, stepStatuses, graph])
 
   return eligibility
 }

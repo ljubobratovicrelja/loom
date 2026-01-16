@@ -37,7 +37,6 @@ import {
   createLinearPipeline,
   createDiamondPipeline,
   createPipelineWithParameters,
-  type GraphState,
 } from './graphTestUtils'
 import type { StepData, ParameterData } from '../types/pipeline'
 

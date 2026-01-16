@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { Node, Edge } from '@xyflow/react'
-import type { StepData, VariableData, ParameterData } from '../types/pipeline'
+import type { StepData, VariableData } from '../types/pipeline'
 import {
   resetNodeIdCounter,
   createStepNode,
@@ -30,7 +30,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
    * Validates that a step name is unique within the graph.
    * This is the validation function that SHOULD exist but currently doesn't.
    */
-  function validateStepNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
+  function _validateStepNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
     const existingNames = nodes
       .filter((n) => n.type === 'step')
       .map((n) => (n.data as StepData).name)
@@ -44,7 +44,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   /**
    * Validates that a variable name is unique within the graph.
    */
-  function validateVariableNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
+  function _validateVariableNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
     const existingNames = nodes
       .filter((n) => n.type === 'variable')
       .map((n) => (n.data as VariableData).name)
@@ -306,7 +306,8 @@ describe('Critical Issue #4: Circular Dependency Detection', () => {
       { id: 'e2', source: 'var1', target: 'step2' },
     ]
 
-    const state = createGraphState([step1, step2, var1], edges)
+    // Create initial state (step1 -> var1 -> step2)
+    createGraphState([step1, step2, var1], edges)
 
     // Add another variable that step2 produces
     const var2 = createVariableNode('var2', 'data/var2.csv', { id: 'var2' })

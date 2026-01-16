@@ -21,9 +21,10 @@ export function useApi() {
 
   // Cleanup function to abort all pending requests on unmount
   useEffect(() => {
+    const controllers = abortControllers.current
     return () => {
-      abortControllers.current.forEach((controller) => controller.abort())
-      abortControllers.current.clear()
+      controllers.forEach((controller) => controller.abort())
+      controllers.clear()
     }
   }, [])
 

@@ -85,12 +85,12 @@ describe('High Priority Issue #5: AbortController for Request Cancellation', () 
   })
 
   it('should cancel pending request when new request starts', async () => {
-    let requestCount = 0
+    let _requestCount = 0
     const requests: Array<{ resolve: (value: unknown) => void; signal: AbortSignal }> = []
 
     fetchMock.mockImplementation((_url: string, options: RequestInit) => {
       return new Promise((resolve, reject) => {
-        requestCount++
+        _requestCount++
         const signal = options?.signal
         if (signal) {
           requests.push({ resolve, signal })

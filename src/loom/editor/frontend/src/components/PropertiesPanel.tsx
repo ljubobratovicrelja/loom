@@ -122,6 +122,7 @@ export default function PropertiesPanel({
         e.source?.startsWith('param_') &&
         e.targetHandle
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally using specific properties to avoid unnecessary recomputes
   }, [selectedNode?.id, selectedNode?.type, edges])
 
   // Find which args are connected to parameter nodes via edges
@@ -206,8 +207,7 @@ export default function PropertiesPanel({
   // Get available args that aren't currently in the step
   const availableArgs = taskSchema?.args
     ? Object.entries(taskSchema.args).filter(
-        ([key]) => !(editData.args as Record<string, unknown>)?.[key] !== undefined &&
-                   !Object.prototype.hasOwnProperty.call(editData.args || {}, key)
+        ([key]) => !Object.prototype.hasOwnProperty.call(editData.args || {}, key)
       )
     : []
 
