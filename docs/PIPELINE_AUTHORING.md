@@ -1,6 +1,6 @@
 # Pipeline Authoring Guide
 
-This guide explains how to create and edit pipelines for loom-editor and loom-runner. It's designed to help both humans and AI assistants understand the pipeline schema and build effective data processing workflows.
+How to connect Python scripts into pipelines. Covers the YAML schema, task script format, and common patterns.
 
 ## Table of Contents
 

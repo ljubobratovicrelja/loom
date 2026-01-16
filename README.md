@@ -1,11 +1,19 @@
 # Loom
 
-Visual pipeline editor and runner for task automation.
+A lightweight visual pipeline runner for research.
 
-Loom provides two tools for building and executing data processing pipelines:
+Connect your Python scripts into a graph, tweak parameters, run experiments, see results — without setting up Airflow or learning a workflow framework. Just `pip install` into your project's virtualenv and go.
 
-- **loom-runner**: CLI tool for executing YAML-defined pipelines with dependency tracking
-- **loom-editor**: Web-based visual editor for creating and editing pipelines
+**What it is:**
+- A visual graph editor for your existing Python scripts
+- A CLI runner with dependency tracking
+- A way to organize experiments as YAML files you can version control
+- Simple enough to install in any project's virtualenv
+
+**What it isn't:**
+- Not a replacement for Airflow/Kubeflow/Prefect (those are for production pipelines)
+- Not an experiment tracker like W&B or MLflow (though it complements them)
+- Not a framework that requires you to rewrite your scripts
 
 ## Installation
 
@@ -15,83 +23,97 @@ pip install loom
 
 # With visual editor
 pip install loom[editor]
-
-# Development
-pip install loom[dev]
 ```
+
+That's it. No services to start, no configuration files to create.
 
 ## Quick Start
 
-### Running Pipelines
+### 1. Point it at your scripts
 
-```bash
-# Run full pipeline
-loom-runner pipeline.yml
+Say you have some Python scripts that process data:
 
-# Run specific step
-loom-runner pipeline.yml --step extract
-
-# Run from a step onward
-loom-runner pipeline.yml --from process
-
-# Preview without executing
-loom-runner pipeline.yml --dry-run
-
-# Override parameters
-loom-runner pipeline.yml --set threshold=0.8
-
-# Override variables
-loom-runner pipeline.yml --var input=other.mp4
+```
+tasks/
+  extract_features.py    # Takes video, outputs CSV
+  train_model.py         # Takes CSV, outputs model
+  evaluate.py            # Takes model + test data, outputs metrics
 ```
 
-### Visual Editor
-
-```bash
-# Edit existing pipeline
-loom-editor pipeline.yml
-
-# Create new pipeline
-loom-editor --new
-
-# Custom port
-loom-editor pipeline.yml --port 8080
-```
-
-## Pipeline Format
-
-Pipelines are defined in YAML with the following structure:
+### 2. Describe the pipeline in YAML
 
 ```yaml
-# Typed data nodes (recommended)
-data:
-  video:
-    type: video
-    path: data/input.mp4
-  output_csv:
-    type: csv
-    path: data/output.csv
+# experiment.yml
+variables:
+  video: data/raw/recording.mp4
+  features: data/processed/features.csv
+  model: models/classifier.pt
+  metrics: results/metrics.json
 
-# Configuration parameters
 parameters:
-  threshold: 50.0
-  verbose: true
+  learning_rate: 0.001
+  epochs: 100
 
-# Processing steps
 pipeline:
   - name: extract
-    task: tasks/extract.py
+    task: tasks/extract_features.py
     inputs:
       video: $video
     outputs:
-      --output: $output_csv
+      -o: $features
+
+  - name: train
+    task: tasks/train_model.py
+    inputs:
+      data: $features
+    outputs:
+      -o: $model
     args:
-      --threshold: $threshold
-      --verbose: $verbose
+      --lr: $learning_rate
+      --epochs: $epochs
+
+  - name: evaluate
+    task: tasks/evaluate.py
+    inputs:
+      model: $model
+    outputs:
+      -o: $metrics
 ```
 
-## Task Scripts
+### 3. Run it
 
-Task scripts are Python files with argparse-based CLIs. Add a YAML frontmatter in the docstring to describe the interface:
+```bash
+# Run the full pipeline
+loom-runner experiment.yml
+
+# Run just one step
+loom-runner experiment.yml --step train
+
+# Run from a step onward
+loom-runner experiment.yml --from train
+
+# Try different parameters
+loom-runner experiment.yml --set learning_rate=0.01 epochs=200
+
+# Preview without executing
+loom-runner experiment.yml --dry-run
+```
+
+### 4. Or use the visual editor
+
+```bash
+loom-editor experiment.yml
+```
+
+This opens a browser-based editor where you can:
+- See your pipeline as a visual graph
+- Drag and drop to reorganize
+- Run individual steps and see output in real-time
+- Quickly see which outputs exist (green) vs missing (grey)
+
+## How Scripts Work
+
+Your scripts stay normal Python with argparse. Just add a YAML block in the docstring so Loom knows the interface:
 
 ```python
 """Extract features from video.
@@ -102,14 +124,14 @@ inputs:
     type: video
     description: Input video file
 outputs:
-  --output:
+  -o:
     type: csv
-    description: Output CSV file
+    description: Output features
 args:
-  --threshold:
-    type: float
-    default: 50.0
-    description: Detection threshold
+  --sample-rate:
+    type: int
+    default: 30
+    description: Frames to sample per second
 ---
 """
 
@@ -118,24 +140,46 @@ import argparse
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("video")
-    parser.add_argument("--output", "-o", required=True)
-    parser.add_argument("--threshold", type=float, default=50.0)
+    parser.add_argument("-o", "--output", required=True)
+    parser.add_argument("--sample-rate", type=int, default=30)
     args = parser.parse_args()
-    # ... processing logic
+    # ... your code ...
 
 if __name__ == "__main__":
     main()
 ```
 
+The YAML frontmatter is optional but enables the editor to show input/output types and provide better validation.
+
+## Use Cases
+
+**Parameter exploration**: Create parallel branches in your pipeline to test different configurations side by side.
+
+**Reproducible experiments**: The YAML file captures your entire experiment setup. Commit it to git alongside your code.
+
+**Iterative development**: Run just the steps you're working on. Loom tracks dependencies so upstream steps run only when needed.
+
+**Result organization**: Variables point to file paths, so your outputs are organized by experiment configuration.
+
 ## Documentation
 
-- [TOOLS.md](docs/TOOLS.md) - Complete reference for loom-runner and loom-editor
-- [PIPELINE_AUTHORING.md](docs/PIPELINE_AUTHORING.md) - Guide to creating pipelines
+- [TOOLS.md](docs/TOOLS.md) — Complete CLI reference and editor features
+- [PIPELINE_AUTHORING.md](docs/PIPELINE_AUTHORING.md) — Guide to writing pipelines and task scripts
+
+## Philosophy
+
+Loom is intentionally minimal:
+
+- **No database** — Everything is files: your scripts, YAML configs, and outputs
+- **No server** — The editor runs locally and shuts down when you close it
+- **No lock-in** — Your scripts work with or without Loom
+- **No magic** — Loom just builds shell commands and runs them
+
+This makes it easy to adopt incrementally. Start with one experiment, see if it helps, expand from there.
 
 ## Development
 
 ```bash
-# Clone and install
 git clone https://github.com/your-username/loom.git
 cd loom
 pip install -e ".[dev]"
@@ -143,26 +187,15 @@ pip install -e ".[dev]"
 # Run tests
 pytest
 
-# Format code
-ruff format src/
-
-# Lint
-ruff check src/
-
-# Type check
-mypy src/
-```
-
-### Building the Frontend
-
-The editor frontend requires Node.js 18+:
-
-```bash
+# Build frontend (requires Node.js 18+)
 cd src/loom/editor/frontend
-npm install
-npm run build
+npm install && npm run build
 ```
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+*Built for researchers who want to see their experiments, not manage infrastructure.*

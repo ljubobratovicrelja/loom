@@ -1,8 +1,13 @@
 # Loom Tools Documentation
 
-This document provides comprehensive documentation for the two pipeline tools: **loom-editor** (visual pipeline editor) and **loom-runner** (CLI executor).
+Complete reference for Loom's two tools:
 
-> **New to pipeline creation?** See the [Pipeline Authoring Guide](PIPELINE_AUTHORING.md) for a complete tutorial on building pipelines from scratch.
+- **loom-runner** — CLI for executing pipelines (CI/CD, batch runs, automation)
+- **loom-editor** — Visual editor for building and running pipelines interactively
+
+Both tools work with the same YAML pipeline format. No external services required.
+
+> **New to Loom?** Start with the [README](../README.md) for a quick overview, or the [Pipeline Authoring Guide](PIPELINE_AUTHORING.md) for a hands-on tutorial.
 
 ## Table of Contents
 
@@ -45,9 +50,10 @@ This document provides comprehensive documentation for the two pipeline tools: *
               └───────────┘
 ```
 
-Both tools operate on the same YAML pipeline configuration format:
-- **loom-editor**: Web-based visual editor for creating/editing pipelines, with live execution
-- **loom-runner**: CLI tool for automated pipeline execution (CI/CD, scripts)
+Both tools operate on the same YAML configuration:
+
+- **loom-editor**: Visual graph editor with real-time execution — for designing and debugging pipelines
+- **loom-runner**: Headless CLI executor — for batch runs and automation
 
 ---
 
@@ -135,7 +141,7 @@ pipeline:
 - **Steps**: Each has a name, task script, inputs/outputs, and optional args
 - **Optional steps**: Skipped by default, included with `--include`
 
-> For comprehensive schema documentation including typed data nodes, connection rules, and examples, see the [Pipeline Authoring Guide](PIPELINE_AUTHORING.md).
+See [Pipeline Authoring Guide](PIPELINE_AUTHORING.md) for the full schema reference.
 
 ### Runner Architecture
 
@@ -293,7 +299,7 @@ args:
 - `choices`: List of valid options (optional)
 - `required`: Whether arg must be provided (default: false)
 
-> For complete task script requirements and examples, see the [Pipeline Authoring Guide](PIPELINE_AUTHORING.md#task-script-requirements).
+See [Pipeline Authoring Guide](PIPELINE_AUTHORING.md#task-script-requirements) for full details.
 
 ---
 
@@ -708,4 +714,4 @@ import { describe, it, expect, vi } from 'vitest'
 
 ## Related Documentation
 
-- **[Pipeline Authoring Guide](PIPELINE_AUTHORING.md)** - Complete guide to creating and editing pipelines, including schema reference, task script requirements, and best practices
+- [Pipeline Authoring Guide](PIPELINE_AUTHORING.md) — YAML schema, task scripts, examples
