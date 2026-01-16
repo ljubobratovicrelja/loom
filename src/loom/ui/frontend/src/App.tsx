@@ -232,6 +232,8 @@ export default function App() {
   useEffect(() => {
     if (freshness.size === 0) return
 
+    // Runtime-only change - don't mark document as dirty
+    skipNextChangeTrackingRef.current = true
     setNodes((nds) => {
       // First pass: check if any nodes need updating
       let hasChanges = false
@@ -309,6 +311,8 @@ export default function App() {
     const status = await loadVariablesStatus()
     if (Object.keys(status).length === 0) return
 
+    // Runtime-only change - don't mark document as dirty
+    skipNextChangeTrackingRef.current = true
     setNodes((nds) =>
       nds.map((node) => {
         // Update data nodes - use key for lookup (not display name)
@@ -813,6 +817,8 @@ export default function App() {
 
   // Handle step execution state changes
   const handleStepStatusChange = useCallback((stepName: string, state: StepExecutionState) => {
+    // Runtime-only change - don't mark document as dirty
+    skipNextChangeTrackingRef.current = true
     setNodes((nds) =>
       nds.map((node) => {
         if (node.type === 'step' && (node.data as StepData).name === stepName) {
@@ -825,6 +831,8 @@ export default function App() {
 
   // Reset all step execution states (kept for future use)
   const _resetStepStates = useCallback(() => {
+    // Runtime-only change - don't mark document as dirty
+    skipNextChangeTrackingRef.current = true
     setNodes((nds) =>
       nds.map((node) => {
         if (node.type === 'step') {
@@ -955,6 +963,8 @@ export default function App() {
       if (dataNode.path) {
         // If file doesn't exist, show pulse error animation
         if (dataNode.exists === false) {
+          // Runtime-only change - don't mark document as dirty
+          skipNextChangeTrackingRef.current = true
           setNodes((nds) =>
             nds.map((n) =>
               n.id === node.id
@@ -964,6 +974,8 @@ export default function App() {
           )
           // Clear the pulse after animation completes (0.4s * 3 = 1.2s)
           setTimeout(() => {
+            // Runtime-only change - don't mark document as dirty
+            skipNextChangeTrackingRef.current = true
             setNodes((nds) =>
               nds.map((n) =>
                 n.id === node.id
