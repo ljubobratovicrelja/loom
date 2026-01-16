@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css'
 import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
-import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo } from '../types/pipeline'
+import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode, DataType } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 
 const nodeTypes = {
@@ -251,6 +251,85 @@ export default function Canvas({
         const sourceNode = nodesRef.current.find((n) => n.id === params.source)
         const targetNode = nodesRef.current.find((n) => n.id === params.target)
 
+        // Auto-create data node for step-to-step connections
+        if (sourceNode?.type === 'step' && targetNode?.type === 'step') {
+          // Require handles for proper connection
+          if (!params.sourceHandle || !params.targetHandle) {
+            return
+          }
+
+          // Infer data type from source output schema
+          const sourceStepData = sourceNode.data as StepData
+          const task = tasks.find((t) => t.path === sourceStepData.task)
+          const outputSchema = task?.outputs[params.sourceHandle]
+          const inferredType: DataType = outputSchema?.type || 'data_folder'
+
+          // Generate unique key based on step name and output
+          const baseKey = `${sourceStepData.name}_${params.sourceHandle}`.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+          const existingKeys = new Set(
+            nodesRef.current.filter((n) => n.type === 'data').map((n) => (n.data as DataNodeData).key)
+          )
+          let finalKey = baseKey
+          let counter = 2
+          while (existingKeys.has(finalKey)) {
+            finalKey = `${baseKey}_${counter++}`
+          }
+
+          // Position at midpoint between source and target
+          const midX = (sourceNode.position.x + targetNode.position.x) / 2
+          const midY = (sourceNode.position.y + targetNode.position.y) / 2
+
+          // Create the data node
+          const dataNodeId = `data_${Date.now()}`
+          const newDataNode: DataNode = {
+            id: dataNodeId,
+            type: 'data',
+            position: { x: midX, y: midY },
+            selected: true,
+            data: {
+              key: finalKey,
+              name: finalKey,
+              type: inferredType,
+              path: '',
+            },
+          }
+
+          // Create edges: source -> data, data -> target
+          const edge1: Edge = {
+            id: `e_${params.source}_${dataNodeId}_${params.sourceHandle}`,
+            source: params.source!,
+            target: dataNodeId,
+            sourceHandle: params.sourceHandle,
+            targetHandle: 'input',
+          }
+          const edge2: Edge = {
+            id: `e_${dataNodeId}_${params.target}`,
+            source: dataNodeId,
+            target: params.target!,
+            sourceHandle: 'value',
+            targetHandle: params.targetHandle,
+          }
+
+          // Cycle detection with new node and edges
+          const tempEdges = [...edgesRef.current, edge1, edge2]
+          const graph = buildDependencyGraph([...nodesRef.current, newDataNode], tempEdges)
+          if (graph.hasCycles()) {
+            alert('Cannot create connection: this would create a circular dependency.')
+            return
+          }
+
+          // Apply changes: add node (with selection), add edges
+          setNodes((nds) => {
+            const deselected = nds.map((n) => ({ ...n, selected: false }))
+            return [...deselected, newDataNode] as PipelineNode[]
+          })
+          setEdges((eds) => [...eds, edge1, edge2])
+
+          // Notify App of selection change
+          onSelectionChangeProp([newDataNode])
+          return
+        }
+
         // Data node connection validation
         if (sourceNode?.type === 'data' || targetNode?.type === 'data') {
           // Data → Data: Not allowed
@@ -312,7 +391,7 @@ export default function Canvas({
         setEdges((eds) => addEdge({ ...params, id: `e_${params.source}_${params.target}` }, eds))
       }
     },
-    [setEdges, setNodes, onSnapshot, tasks]
+    [setEdges, setNodes, onSnapshot, tasks, onSelectionChangeProp]
   )
 
   // Track edge being reconnected
