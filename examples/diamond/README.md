@@ -21,7 +21,7 @@ This pattern is common when you need to both analyze and clean data, then combin
 
 ```bash
 # Full pipeline (parallel steps run in dependency order)
-loom-runner pipeline.yml
+loom pipeline.yml
 
 # Check the outputs
 cat data/raw.csv           # Input data
@@ -31,10 +31,10 @@ cat data/clean.csv         # Outliers removed (path B)
 cat data/final_report.json # Combined results
 
 # Run from a specific step
-loom-runner pipeline.yml --from filter_outliers
+loom pipeline.yml --from filter_outliers
 
 # Open in editor to see the diamond shape
-loom-editor pipeline.yml
+loom-ui pipeline.yml
 ```
 
 ## Files

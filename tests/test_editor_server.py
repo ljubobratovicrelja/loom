@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from loom.editor.server import (
+from loom.ui.server import (
     DataEntry,
     EditorOptions,
     GraphNode,

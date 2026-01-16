@@ -4,7 +4,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-FRONTEND_DIR="$ROOT_DIR/src/loom/editor/frontend"
+FRONTEND_DIR="$ROOT_DIR/src/loom/ui/frontend"
 
 # Colors for output
 RED='\033[0;31m'

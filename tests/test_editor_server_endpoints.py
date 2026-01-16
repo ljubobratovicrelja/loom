@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from loom.editor.server import (
+from loom.ui.server import (
     ValidationWarning,
     _get_running_step,
     _is_step_running,
@@ -499,7 +499,7 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        with patch("loom.editor.server.endpoints.send2trash") as mock_trash:
+        with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
             response = client.delete("/api/variables/myvar/data")
 
         assert response.status_code == 200
@@ -522,7 +522,7 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        with patch("loom.editor.server.endpoints.send2trash") as mock_trash:
+        with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
             response = client.delete("/api/variables/video/data")
 
         assert response.status_code == 200
@@ -546,7 +546,7 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        with patch("loom.editor.server.endpoints.send2trash") as mock_trash:
+        with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
             response = client.delete("/api/variables/result/data")
 
         assert response.status_code == 200
@@ -906,7 +906,7 @@ class TestRunStatus:
 
     def test_run_status_idle(self) -> None:
         """Should return idle status when nothing is running."""
-        from loom.editor.server import _execution_state
+        from loom.ui.server import _execution_state
         _execution_state["status"] = "idle"
         _execution_state["current_step"] = None
 
@@ -920,7 +920,7 @@ class TestRunStatus:
 
     def test_run_status_running(self) -> None:
         """Should return running status with current step."""
-        from loom.editor.server import _execution_state
+        from loom.ui.server import _execution_state
         _execution_state["status"] = "running"
         _execution_state["current_step"] = "extract_features"
 

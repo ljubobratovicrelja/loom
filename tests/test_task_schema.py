@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from loom.editor.task_schema import (
+from loom.ui.task_schema import (
     ArgSchema,
     InputOutputSchema,
     TaskSchema,

@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-editor = [
+ui = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
     "websockets>=12.0",
@@ -31,7 +31,7 @@ editor = [
     "send2trash>=1.8.2",
 ]
 dev = [
-    "loom[editor]",
+    "loom[ui]",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
@@ -42,14 +42,14 @@ dev = [
 ]
 
 [project.scripts]
-loom-runner = "loom.runner:main"
-loom-editor = "loom.editor:main"
+loom = "loom.runner:main"
+loom-ui = "loom.ui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"loom.editor" = ["frontend/dist/**/*"]
+"loom.ui" = ["frontend/dist/**/*"]
 
 [tool.ruff]
 line-length = 100

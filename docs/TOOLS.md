@@ -2,8 +2,8 @@
 
 Complete reference for Loom's two tools:
 
-- **loom-runner** — CLI for executing pipelines (CI/CD, batch runs, automation)
-- **loom-editor** — Visual editor for building and running pipelines interactively
+- **loom** — CLI for executing pipelines (CI/CD, batch runs, automation)
+- **loom-ui** — Visual editor for building and running pipelines interactively
 
 Both tools work with the same YAML pipeline format. No external services required.
 
@@ -12,12 +12,12 @@ Both tools work with the same YAML pipeline format. No external services require
 ## Table of Contents
 
 - [Overview](#overview)
-- [loom-runner](#loom-runner)
+- [loom](#loom)
   - [Installation](#installation)
   - [CLI Reference](#cli-reference)
   - [Pipeline Configuration](#pipeline-configuration)
   - [Architecture](#runner-architecture)
-- [loom-editor](#loom-editor)
+- [loom-ui](#loom-ui)
   - [Getting Started](#getting-started)
   - [User Interface](#user-interface)
   - [Keyboard Shortcuts](#keyboard-shortcuts)
@@ -34,7 +34,7 @@ Both tools work with the same YAML pipeline format. No external services require
 
 ```
 ┌─────────────────┐      ┌─────────────────┐
-│   loom-editor   │      │   loom-runner   │
+│   loom-ui   │      │   loom   │
 │  (Visual UI)    │      │     (CLI)       │
 └────────┬────────┘      └────────┬────────┘
          │                        │
@@ -52,12 +52,12 @@ Both tools work with the same YAML pipeline format. No external services require
 
 Both tools operate on the same YAML configuration:
 
-- **loom-editor**: Visual graph editor with real-time execution — for designing and debugging pipelines
-- **loom-runner**: Headless CLI executor — for batch runs and automation
+- **loom-ui**: Visual graph editor with real-time execution — for designing and debugging pipelines
+- **loom**: Headless CLI executor — for batch runs and automation
 
 ---
 
-## loom-runner
+## loom
 
 ### Installation
 
@@ -66,7 +66,7 @@ Both tools operate on the same YAML configuration:
 pip install loom
 
 # With editor
-pip install loom[editor]
+pip install loom[ui]
 
 # Development
 pip install loom[dev]
@@ -76,28 +76,28 @@ pip install loom[dev]
 
 ```bash
 # Run full pipeline
-loom-runner pipeline.yml
+loom pipeline.yml
 
 # Preview commands without executing
-loom-runner pipeline.yml --dry-run
+loom pipeline.yml --dry-run
 
 # Run specific steps
-loom-runner pipeline.yml --step extract classify
+loom pipeline.yml --step extract classify
 
 # Run from a step onward (includes all subsequent steps)
-loom-runner pipeline.yml --from classify
+loom pipeline.yml --from classify
 
 # Include optional steps
-loom-runner pipeline.yml --include debug_visualize
+loom pipeline.yml --include debug_visualize
 
 # Override parameters
-loom-runner pipeline.yml --set backend=local threshold=25.0
+loom pipeline.yml --set backend=local threshold=25.0
 
 # Override variables
-loom-runner pipeline.yml --var video=other.mp4
+loom pipeline.yml --var video=other.mp4
 
 # Pass extra arguments to a step
-loom-runner pipeline.yml --step extract --extra "--debug --verbose"
+loom pipeline.yml --step extract --extra "--debug --verbose"
 ```
 
 ### Pipeline Configuration
@@ -164,28 +164,28 @@ src/loom/runner/
 
 ---
 
-## loom-editor
+## loom-ui
 
 ### Getting Started
 
 ```bash
 # Build frontend (first time only)
-cd src/loom/editor/frontend
+cd src/loom/ui/frontend
 npm install
 npm run build
 cd ../../../..
 
 # Open existing pipeline
-loom-editor pipeline.yml
+loom-ui pipeline.yml
 
 # Create new pipeline
-loom-editor --new
+loom-ui --new
 
 # Custom port/host
-loom-editor pipeline.yml --port 8080 --host 0.0.0.0
+loom-ui pipeline.yml --port 8080 --host 0.0.0.0
 
 # Headless mode (no browser auto-open)
-loom-editor pipeline.yml --no-browser
+loom-ui pipeline.yml --no-browser
 ```
 
 ### User Interface
@@ -318,7 +318,7 @@ See [Pipeline Authoring Guide](PIPELINE_AUTHORING.md#task-script-requirements) f
 ### File Structure
 
 ```
-src/loom/editor/frontend/
+src/loom/ui/frontend/
 ├── src/
 │   ├── main.tsx              # React DOM entry
 │   ├── App.tsx               # Root component (~760 lines)
@@ -500,8 +500,8 @@ Visual: green (exists), grey (missing), indigo (unknown)
 ### File Structure
 
 ```
-src/loom/editor/
-├── cli.py           # Entry point: loom-editor command
+src/loom/ui/
+├── cli.py           # Entry point: loom-ui command
 ├── server.py        # FastAPI server (~1150 lines)
 ├── execution.py     # Bridges to runner module
 ├── task_schema.py   # Parse task docstrings
@@ -666,7 +666,7 @@ WebSocket: ws://localhost:8000/ws/terminal
 ### Frontend Development
 
 ```bash
-cd src/loom/editor/frontend
+cd src/loom/ui/frontend
 
 # Install dependencies
 npm install

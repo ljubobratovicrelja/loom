@@ -17,25 +17,25 @@ Optional steps are skipped by default but can be included with `--include`.
 
 ```bash
 # Run main pipeline (skips optional steps)
-loom-runner pipeline.yml
+loom pipeline.yml
 
 # Check outputs
 cat data/frequencies.json    # Word counts
 cat data/top_words.json      # Top 10 words
 
 # Include the debug export
-loom-runner pipeline.yml --include export_debug
+loom pipeline.yml --include export_debug
 cat data/debug_dump.txt
 
 # Include visualization
-loom-runner pipeline.yml --include visualize
+loom pipeline.yml --include visualize
 cat data/chart.txt
 
 # Include both optional steps
-loom-runner pipeline.yml --include export_debug --include visualize
+loom pipeline.yml --include export_debug --include visualize
 
 # Open in editor (optional steps shown with dashed borders)
-loom-editor pipeline.yml
+loom-ui pipeline.yml
 ```
 
 ## Files

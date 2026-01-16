@@ -16,7 +16,7 @@ generate_data → compute_stats → format_report
 
 ```bash
 # Full pipeline
-loom-runner pipeline.yml
+loom pipeline.yml
 
 # Check the outputs
 cat data/readings.csv      # Raw generated data
@@ -24,10 +24,10 @@ cat data/stats.json        # Computed statistics
 cat data/report.txt        # Final report
 
 # Run just one step
-loom-runner pipeline.yml --step compute_stats
+loom pipeline.yml --step compute_stats
 
 # Open in editor
-loom-editor pipeline.yml
+loom-ui pipeline.yml
 ```
 
 ## Files

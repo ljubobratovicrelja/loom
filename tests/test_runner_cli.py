@@ -48,19 +48,19 @@ class TestCLIBasic:
 
     def test_cli_missing_config_returns_error(self):
         """Test that missing config file returns error code."""
-        with patch("sys.argv", ["loom-runner", "nonexistent.yml"]):
+        with patch("sys.argv", ["loom", "nonexistent.yml"]):
             result = main()
             assert result == 1
 
     def test_cli_dry_run_succeeds(self, sample_config_file: Path):
         """Test that dry run completes successfully."""
-        with patch("sys.argv", ["loom-runner", str(sample_config_file), "--dry-run"]):
+        with patch("sys.argv", ["loom", str(sample_config_file), "--dry-run"]):
             result = main()
             assert result == 0
 
     def test_cli_help_shows_usage(self, capsys):
         """Test that --help shows usage information."""
-        with patch("sys.argv", ["loom-runner", "--help"]):
+        with patch("sys.argv", ["loom", "--help"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 0
@@ -74,7 +74,7 @@ class TestCLIStepSelection:
 
     def test_cli_step_option(self, sample_config_file: Path, capsys):
         """Test --step option selects specific steps."""
-        with patch("sys.argv", ["loom-runner", str(sample_config_file), "--step", "process", "--dry-run"]):
+        with patch("sys.argv", ["loom", str(sample_config_file), "--step", "process", "--dry-run"]):
             result = main()
             assert result == 0
 
@@ -86,7 +86,7 @@ class TestCLIStepSelection:
         """Test --include option includes optional steps."""
         with patch(
             "sys.argv",
-            ["loom-runner", str(sample_config_file), "--include", "optional_step", "--dry-run"],
+            ["loom", str(sample_config_file), "--include", "optional_step", "--dry-run"],
         ):
             result = main()
             assert result == 0
@@ -102,7 +102,7 @@ class TestCLIOverrides:
         """Test --set overrides parameters."""
         with patch(
             "sys.argv",
-            ["loom-runner", str(sample_config_file), "--set", "threshold=0.9", "--dry-run"],
+            ["loom", str(sample_config_file), "--set", "threshold=0.9", "--dry-run"],
         ):
             result = main()
             assert result == 0
@@ -114,7 +114,7 @@ class TestCLIOverrides:
         """Test --var overrides variables."""
         with patch(
             "sys.argv",
-            ["loom-runner", str(sample_config_file), "--var", "input=new_input.txt", "--dry-run"],
+            ["loom", str(sample_config_file), "--var", "input=new_input.txt", "--dry-run"],
         ):
             result = main()
             assert result == 0
@@ -127,7 +127,7 @@ class TestCLIOverrides:
         with patch(
             "sys.argv",
             [
-                "loom-runner",
+                "loom",
                 str(sample_config_file),
                 "--set",
                 "threshold=0.8",
@@ -152,7 +152,7 @@ class TestCLIExtraArgs:
         with patch(
             "sys.argv",
             [
-                "loom-runner",
+                "loom",
                 str(sample_config_file),
                 "--step",
                 "process",
@@ -208,7 +208,7 @@ pipeline:
             f.write(content)
             config_path = Path(f.name)
 
-        with patch("sys.argv", ["loom-runner", str(config_path), "--from", "step2", "--dry-run"]):
+        with patch("sys.argv", ["loom", str(config_path), "--from", "step2", "--dry-run"]):
             result = main()
             assert result == 0
 
@@ -223,12 +223,12 @@ class TestCLIReturnCodes:
 
     def test_cli_returns_zero_on_success(self, sample_config_file: Path):
         """Test CLI returns 0 on successful dry run."""
-        with patch("sys.argv", ["loom-runner", str(sample_config_file), "--dry-run"]):
+        with patch("sys.argv", ["loom", str(sample_config_file), "--dry-run"]):
             result = main()
             assert result == 0
 
     def test_cli_returns_one_on_missing_config(self):
         """Test CLI returns 1 when config file is missing."""
-        with patch("sys.argv", ["loom-runner", "missing.yml"]):
+        with patch("sys.argv", ["loom", "missing.yml"]):
             result = main()
             assert result == 1

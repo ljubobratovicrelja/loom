@@ -1,4 +1,4 @@
-"""Tests for loom.editor.execution module.
+"""Tests for loom.ui.execution module.
 
 Tests the bridge between the editor server and the runner module
 for building commands from pipeline YAML files.
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from loom.editor.execution import (
+from loom.ui.execution import (
     build_parallel_commands,
     build_pipeline_commands,
     build_step_command,

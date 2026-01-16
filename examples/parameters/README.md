@@ -15,7 +15,7 @@ Parameters control the signal characteristics and processing settings.
 
 ```bash
 # Run with default parameters
-loom-runner pipeline.yml
+loom pipeline.yml
 
 # Check outputs
 cat data/signal.csv         # Raw noisy signal
@@ -23,13 +23,13 @@ cat data/smoothed.csv       # After smoothing
 cat data/peaks.json         # Detected peaks
 
 # Override parameters at runtime
-loom-runner pipeline.yml --set window_size=10 threshold=0.5
+loom pipeline.yml --set window_size=10 threshold=0.5
 
 # Try different noise levels
-loom-runner pipeline.yml --set noise_level=0.5
+loom pipeline.yml --set noise_level=0.5
 
 # Preview what would run
-loom-runner pipeline.yml --set window_size=20 --dry-run
+loom pipeline.yml --set window_size=20 --dry-run
 ```
 
 ## Parameters

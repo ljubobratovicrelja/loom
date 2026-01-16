@@ -3,8 +3,8 @@
 ## Project Overview
 
 Loom is a lightweight visual pipeline runner for research:
-- **loom-runner**: CLI for executing pipelines
-- **loom-editor**: Browser-based visual editor (Python backend + React frontend)
+- **loom**: CLI for executing pipelines
+- **loom-ui**: Browser-based visual editor (Python backend + React frontend)
 
 ## Development Standards
 

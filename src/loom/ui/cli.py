@@ -90,7 +90,7 @@ Examples:
         print("Creating new pipeline")
 
     uvicorn.run(
-        "loom.editor.server:app",
+        "loom.ui.server:app",
         host=args.host,
         port=args.port,
         log_level="warning",

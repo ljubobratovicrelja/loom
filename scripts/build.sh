@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRONTEND_DIR="$SCRIPT_DIR/src/loom/editor/frontend"
+FRONTEND_DIR="$SCRIPT_DIR/../src/loom/ui/frontend"
 
 # Load nvm if available
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"

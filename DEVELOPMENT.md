@@ -9,7 +9,7 @@ source venv/bin/activate
 pip install -e ".[dev]"
 
 # Setup frontend
-cd src/loom/editor/frontend
+cd src/loom/ui/frontend
 npm install
 cd ../../../..
 
@@ -32,7 +32,7 @@ cd ../../../..
 ```
 src/loom/
 ├── runner/          # CLI pipeline executor
-└── editor/
+└── ui/
     ├── server/      # FastAPI backend
     └── frontend/    # React/TypeScript app
 tests/               # Python tests (pytest)
@@ -70,7 +70,7 @@ ruff check --fix src/               # Auto-fix lint issues
 
 ## Frontend
 
-Located in `src/loom/editor/frontend/`
+Located in `src/loom/ui/frontend/`
 
 ### Additional Commands
 

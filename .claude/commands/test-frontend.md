@@ -17,7 +17,7 @@ Run the frontend test suite using Vitest.
 ## Command
 
 ```bash
-cd src/editor/frontend && npm run test:run -- $ARGUMENTS
+cd src/loom/ui/frontend && npm run test:run -- $ARGUMENTS
 ```
 
 If `--watch` is passed, use `npm test` instead for interactive mode.

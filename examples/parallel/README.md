@@ -22,7 +22,7 @@ Each "process" step uses a different threshold parameter, producing separate out
 
 ```bash
 # Run full pipeline (all three configs run in parallel)
-loom-runner pipeline.yml
+loom pipeline.yml
 
 # Check outputs
 cat data/dataset.csv           # Generated data
@@ -32,10 +32,10 @@ cat data/results_high.json     # Threshold 0.7
 cat data/comparison.json       # Side-by-side comparison
 
 # Run just one configuration branch
-loom-runner pipeline.yml --step process_config_low
+loom pipeline.yml --step process_config_low
 
 # Open in editor to see the parallel structure
-loom-editor pipeline.yml
+loom-ui pipeline.yml
 ```
 
 ## Pattern: Hyperparameter Search

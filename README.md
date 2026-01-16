@@ -22,7 +22,7 @@ Connect your Python scripts into a graph, tweak parameters, run experiments, see
 pip install loom
 
 # With visual editor
-pip install loom[editor]
+pip install loom[ui]
 ```
 
 That's it. No services to start, no configuration files to create.
@@ -84,25 +84,25 @@ pipeline:
 
 ```bash
 # Run the full pipeline
-loom-runner experiment.yml
+loom experiment.yml
 
 # Run just one step
-loom-runner experiment.yml --step train
+loom experiment.yml --step train
 
 # Run from a step onward
-loom-runner experiment.yml --from train
+loom experiment.yml --from train
 
 # Try different parameters
-loom-runner experiment.yml --set learning_rate=0.01 epochs=200
+loom experiment.yml --set learning_rate=0.01 epochs=200
 
 # Preview without executing
-loom-runner experiment.yml --dry-run
+loom experiment.yml --dry-run
 ```
 
 ### 4. Or use the visual editor
 
 ```bash
-loom-editor experiment.yml
+loom-ui experiment.yml
 ```
 
 This opens a browser-based editor where you can:
@@ -189,7 +189,7 @@ pip install -e ".[dev]"
 pytest
 
 # Build frontend (requires Node.js 18+)
-cd src/loom/editor/frontend
+cd src/loom/ui/frontend
 npm install && npm run build
 ```
 

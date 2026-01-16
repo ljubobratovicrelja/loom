@@ -6,13 +6,13 @@ Working examples to help you understand Loom. Each example is self-contained and
 
 ```bash
 # Run a pipeline
-loom-runner examples/linear/pipeline.yml
+loom examples/linear/pipeline.yml
 
 # Open in visual editor
-loom-editor examples/linear/pipeline.yml
+loom-ui examples/linear/pipeline.yml
 
 # Preview commands without executing
-loom-runner examples/linear/pipeline.yml --dry-run
+loom examples/linear/pipeline.yml --dry-run
 ```
 
 ## Examples

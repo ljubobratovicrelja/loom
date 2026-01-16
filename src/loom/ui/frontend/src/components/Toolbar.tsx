@@ -59,7 +59,7 @@ export default function Toolbar({
             <circle cx="4" cy="16" r="2" fill="#22c55e"/>
             <circle cx="28" cy="16" r="2" fill="#22c55e"/>
           </svg>
-          <h1 className="text-white font-semibold">Loom Editor</h1>
+          <h1 className="text-white font-semibold">Loom</h1>
         </div>
         {configPath && (
           <span className="text-slate-400 text-sm">

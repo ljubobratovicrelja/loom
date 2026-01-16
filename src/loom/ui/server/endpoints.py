@@ -348,7 +348,7 @@ def serve_index() -> HTMLResponse:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Loom Editor - Setup Required</title>
+    <title>Loom - Setup Required</title>
     <style>
         body {
             font-family: system-ui, sans-serif; padding: 40px;
@@ -366,12 +366,12 @@ def serve_index() -> HTMLResponse:
     <p>The frontend needs to be built first. This requires <strong>Node.js 18+</strong>.</p>
 
     <h3>Build Instructions</h3>
-    <pre><code>cd src/loom/editor/frontend
+    <pre><code>cd src/loom/ui/frontend
 npm install
 npm run build</code></pre>
 
     <p>Then restart the editor:</p>
-    <pre><code>loom-editor pipeline.yml</code></pre>
+    <pre><code>loom-ui pipeline.yml</code></pre>
 
     <div class="note">
         <strong>Note:</strong> The API is already running. You can test it at
