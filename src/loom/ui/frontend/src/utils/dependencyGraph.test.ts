@@ -10,12 +10,12 @@ const createStepNode = (id: string, name: string): Node => ({
   data: { name, task: 'tasks/test.py', inputs: {}, outputs: {}, args: {}, optional: false },
 })
 
-// Helper to create variable nodes
-const createVariableNode = (id: string, name: string): Node => ({
+// Helper to create data nodes
+const createDataNode = (id: string, name: string): Node => ({
   id,
-  type: 'variable',
+  type: 'data',
   position: { x: 0, y: 0 },
-  data: { name, value: 'data/test.csv' },
+  data: { key: name, name, type: 'csv', path: 'data/test.csv' },
 })
 
 // Helper to create edges
@@ -40,7 +40,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'input'),
+        createDataNode('var1', 'input'),
       ]
 
       const graph = buildDependencyGraph(nodes, [])
@@ -54,7 +54,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
 
       const edges = [
@@ -72,7 +72,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
 
       const edges = [
@@ -92,8 +92,8 @@ describe('buildDependencyGraph', () => {
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
         createStepNode('step3', 'classify'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
       ]
 
       const edges = [
@@ -115,8 +115,8 @@ describe('buildDependencyGraph', () => {
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
         createStepNode('step3', 'classify'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
       ]
 
       const edges = [
@@ -140,7 +140,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'alt_extract'),
-        createVariableNode('var1', 'output'),
+        createDataNode('var1', 'output'),
       ]
 
       const edges = [
@@ -158,8 +158,8 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'output1'),
-        createVariableNode('var2', 'output2'),
+        createDataNode('var1', 'output1'),
+        createDataNode('var2', 'output2'),
       ]
 
       const edges = [
@@ -186,7 +186,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
 
       const edges = [
@@ -206,7 +206,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
 
       const edges = [
@@ -230,8 +230,8 @@ describe('buildDependencyGraph', () => {
         createStepNode('step2', 'process'),
         createStepNode('step3', 'alt_extract'),
         createStepNode('step4', 'alt_process'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
       ]
 
       const edges = [
@@ -262,10 +262,10 @@ describe('buildDependencyGraph', () => {
         createStepNode('step2', 'branch_a'),
         createStepNode('step3', 'branch_b'),
         createStepNode('step4', 'merge'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
-        createVariableNode('var3', 'result_a'),
-        createVariableNode('var4', 'result_b'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
+        createDataNode('var3', 'result_a'),
+        createDataNode('var4', 'result_b'),
       ]
 
       const edges = [
@@ -300,7 +300,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
 
       const edges = [
@@ -342,7 +342,7 @@ describe('buildDependencyGraph', () => {
     it('should handle variable nodes without connections', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
-        createVariableNode('var1', 'orphan'),
+        createDataNode('var1', 'orphan'),
       ]
 
       const graph = buildDependencyGraph(nodes, [])
@@ -358,8 +358,8 @@ describe('buildDependencyGraph', () => {
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
         createStepNode('step3', 'classify'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
       ]
 
       const edges = [
@@ -380,8 +380,8 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
       ]
 
       const edges = [
@@ -403,7 +403,7 @@ describe('buildDependencyGraph', () => {
       // step1 -> var1 -> step1 (self-loop)
       const nodes = [
         createStepNode('step1', 'recursive'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
 
       const edges = [
@@ -423,9 +423,9 @@ describe('buildDependencyGraph', () => {
         createStepNode('step1', 'a'),
         createStepNode('step2', 'b'),
         createStepNode('step3', 'c'),
-        createVariableNode('var1', 'v1'),
-        createVariableNode('var2', 'v2'),
-        createVariableNode('var3', 'v3'),
+        createDataNode('var1', 'v1'),
+        createDataNode('var2', 'v2'),
+        createDataNode('var3', 'v3'),
       ]
 
       const edges = [
@@ -455,9 +455,9 @@ describe('buildDependencyGraph', () => {
         createStepNode('step0', 'source'),
         createStepNode('step1', 'a'),
         createStepNode('step2', 'b'),
-        createVariableNode('var0', 'input'),
-        createVariableNode('var1', 'v1'),
-        createVariableNode('var2', 'v2'),
+        createDataNode('var0', 'input'),
+        createDataNode('var1', 'v1'),
+        createDataNode('var2', 'v2'),
       ]
 
       const edges = [
@@ -493,9 +493,9 @@ describe('buildDependencyGraph', () => {
         createStepNode('step2', 'b'),
         createStepNode('step3', 'c'),
         createStepNode('step4', 'd'),
-        createVariableNode('var1', 'v1'),
-        createVariableNode('var2', 'v2'),
-        createVariableNode('var3', 'v3'),
+        createDataNode('var1', 'v1'),
+        createDataNode('var2', 'v2'),
+        createDataNode('var3', 'v3'),
       ]
 
       const edges = [
@@ -532,7 +532,7 @@ describe('buildDependencyGraph', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
         paramNode,
       ]
       // param -> step edge should not create dependency
@@ -558,7 +558,7 @@ describe('buildDependencyGraph', () => {
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process_a'),
         createStepNode('step3', 'process_b'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -583,8 +583,8 @@ describe('buildDependencyGraph', () => {
         createStepNode('step1', 'split'),
         createStepNode('step2', 'process_a'),
         createStepNode('step3', 'process_b'),
-        createVariableNode('var1', 'output_a'),
-        createVariableNode('var2', 'output_b'),
+        createDataNode('var1', 'output_a'),
+        createDataNode('var2', 'output_b'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -611,8 +611,8 @@ describe('getStepName', () => {
     expect(getStepName(node)).toBe('extract_data')
   })
 
-  it('should return name for variable node', () => {
-    const node = createVariableNode('var1', 'input_data')
+  it('should return name for data node', () => {
+    const node = createDataNode('data1', 'input_data')
     expect(getStepName(node)).toBe('input_data')
   })
 

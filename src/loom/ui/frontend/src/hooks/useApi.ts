@@ -130,10 +130,10 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  const loadVariablesStatus = useCallback(async (): Promise<Record<string, boolean>> => {
-    const signal = getSignal('loadVariablesStatus')
+  const loadDataStatus = useCallback(async (): Promise<Record<string, boolean>> => {
+    const signal = getSignal('loadDataStatus')
     try {
-      const res = await fetch(`${API_BASE}/variables/status`, { signal })
+      const res = await fetch(`${API_BASE}/data/status`, { signal })
       if (!res.ok) return {}
       return await res.json()
     } catch (e) {
@@ -142,14 +142,14 @@ export function useApi() {
       }
       return {}
     } finally {
-      cleanupSignal('loadVariablesStatus')
+      cleanupSignal('loadDataStatus')
     }
   }, [getSignal, cleanupSignal])
 
-  const trashVariableData = useCallback(async (name: string): Promise<{ success: boolean; message: string }> => {
-    const signal = getSignal(`trashVariableData_${name}`)
+  const trashData = useCallback(async (name: string): Promise<{ success: boolean; message: string }> => {
+    const signal = getSignal(`trashData_${name}`)
     try {
-      const res = await fetch(`${API_BASE}/variables/${encodeURIComponent(name)}/data`, {
+      const res = await fetch(`${API_BASE}/data/${encodeURIComponent(name)}`, {
         method: 'DELETE',
         signal,
       })
@@ -164,7 +164,7 @@ export function useApi() {
       }
       return { success: false, message: e instanceof Error ? e.message : 'Unknown error' }
     } finally {
-      cleanupSignal(`trashVariableData_${name}`)
+      cleanupSignal(`trashData_${name}`)
     }
   }, [getSignal, cleanupSignal])
 
@@ -311,5 +311,5 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error }
+  return { loadConfig, saveConfig, loadState, loadTasks, loadDataStatus, trashData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error }
 }

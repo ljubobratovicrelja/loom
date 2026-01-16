@@ -32,17 +32,6 @@ export interface StepData {
   [key: string]: unknown
 }
 
-export interface VariableData {
-  name: string
-  value: string
-  isOutput?: boolean
-  producedBy?: string
-  exists?: boolean
-  pulseError?: boolean
-  // Index signature for React Flow compatibility
-  [key: string]: unknown
-}
-
 export interface ParameterData {
   name: string
   value: unknown  // string | number | boolean
@@ -65,10 +54,9 @@ export interface DataNodeData {
 }
 
 export type StepNode = Node<StepData, 'step'>
-export type VariableNode = Node<VariableData, 'variable'>
 export type ParameterNode = Node<ParameterData, 'parameter'>
 export type DataNode = Node<DataNodeData, 'data'>
-export type PipelineNode = StepNode | VariableNode | ParameterNode | DataNode
+export type PipelineNode = StepNode | ParameterNode | DataNode
 
 export interface EditorOptions {
   autoSave: boolean
@@ -130,7 +118,7 @@ export interface TaskInfo {
 }
 
 // Execution types
-export type RunMode = 'step' | 'from_step' | 'to_variable' | 'all' | 'parallel'
+export type RunMode = 'step' | 'from_step' | 'to_data' | 'all' | 'parallel'
 
 export type ExecutionStatus = 'idle' | 'running' | 'cancelled' | 'completed' | 'failed'
 
@@ -138,7 +126,7 @@ export interface RunRequest {
   mode: RunMode
   step_name?: string
   step_names?: string[]  // For parallel mode
-  variable_name?: string
+  data_name?: string
 }
 
 // Per-step terminal output for parallel execution

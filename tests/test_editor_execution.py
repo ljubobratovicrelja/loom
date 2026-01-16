@@ -229,9 +229,7 @@ pipeline:
         config_file = tmp_path / "pipeline.yml"
         config_file.write_text(yaml_content)
 
-        commands = build_pipeline_commands(
-            config_file, "to_variable", variable_name="fixations_csv"
-        )
+        commands = build_pipeline_commands(config_file, "to_data", data_name="fixations_csv")
 
         step_names = [name for name, _ in commands]
         # Should include steps that produce fixations_csv and its dependencies
@@ -243,10 +241,10 @@ pipeline:
         with pytest.raises(ValueError, match="step_name required"):
             build_pipeline_commands(data_section_config, "step")
 
-    def test_mode_to_variable_requires_variable_name(self, data_section_config: Path) -> None:
-        """Test that 'to_variable' mode raises if variable_name not provided."""
-        with pytest.raises(ValueError, match="variable_name required"):
-            build_pipeline_commands(data_section_config, "to_variable")
+    def test_mode_to_data_requires_data_name(self, data_section_config: Path) -> None:
+        """Test that 'to_data' mode raises if data_name not provided."""
+        with pytest.raises(ValueError, match="data_name required"):
+            build_pipeline_commands(data_section_config, "to_data")
 
     def test_commands_have_correct_structure(self, data_section_config: Path) -> None:
         """Test that returned commands are tuples of (name, cmd_list)."""

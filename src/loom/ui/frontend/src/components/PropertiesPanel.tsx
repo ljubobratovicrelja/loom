@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion } from 'lucide-react'
-import type { StepData, VariableData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState } from '../types/pipeline'
+import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 import type { FreshnessInfo } from '../hooks/useFreshness'
@@ -55,7 +55,7 @@ const isDirectoryType = (type: DataType): boolean => {
 interface PropertiesPanelProps {
   selectedNode: Node | null
   edges: Edge[]
-  onUpdateNode: (id: string, data: Partial<StepData | VariableData | ParameterData | DataNodeData>) => void
+  onUpdateNode: (id: string, data: Partial<StepData | ParameterData | DataNodeData>) => void
   onDeleteNode: (id: string) => void
   onUpdateParameter?: (name: string, value: unknown) => void
   onDisconnectArg?: (stepId: string, argKey: string) => void
@@ -162,7 +162,7 @@ export default function PropertiesPanel({
   const handleChange = (key: string, value: unknown) => {
     const newData = { ...editData, [key]: value }
     setEditData(newData)
-    onUpdateNode(selectedNode.id, { [key]: value } as Partial<StepData | VariableData>)
+    onUpdateNode(selectedNode.id, { [key]: value } as Partial<StepData | DataNodeData>)
   }
 
   const handleArgChange = (argKey: string, value: string) => {
@@ -336,7 +336,7 @@ export default function PropertiesPanel({
                   type="text"
                   value={(editData.key as string) || ''}
                   onChange={(e) => handleChange('key', e.target.value)}
-                  placeholder="variable_name"
+                  placeholder="data_name"
                   className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm font-mono focus:border-teal-500"
                 />
               </div>

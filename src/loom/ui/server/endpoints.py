@@ -195,8 +195,8 @@ def open_pipeline(path: str = Query(..., description="Path to pipeline.yml")) ->
     }
 
 
-@router.get("/api/variables/status")
-def get_variables_status() -> dict[str, bool]:
+@router.get("/api/data/status")
+def get_data_status() -> dict[str, bool]:
     """Check which data node paths exist on disk.
 
     Returns a map of name -> exists (bool).
@@ -418,8 +418,8 @@ def get_preview_by_path(
     return dict(preview)
 
 
-@router.delete("/api/variables/{name}/data")
-def trash_variable_data(
+@router.delete("/api/data/{name}")
+def trash_data(
     name: str, force: bool = Query(False, description="Force deletion of source data")
 ) -> dict[str, str]:
     """Move data node data to trash.

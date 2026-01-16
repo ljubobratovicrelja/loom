@@ -484,7 +484,7 @@ async def _run_sequential_pipeline(
             state.config_path,
             run_request.mode,
             run_request.step_name,
-            run_request.variable_name,
+            run_request.data_name,
         )
     except ValueError as e:
         await websocket.send_text(f"\x1b[31m[ERROR]\x1b[0m {e}\r\n")

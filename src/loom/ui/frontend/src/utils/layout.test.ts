@@ -13,11 +13,11 @@ const createStepNode = (id: string): Node => ({
   data: { name: id, task: 'tasks/test.py', inputs: {}, outputs: {}, args: {} },
 })
 
-const createVariableNode = (id: string): Node => ({
+const createDataNode = (id: string): Node => ({
   id,
-  type: 'variable',
+  type: 'data',
   position: { x: 0, y: 0 },
-  data: { name: id, value: 'data/test.csv' },
+  data: { key: id, name: id, type: 'csv', path: 'data/test.csv' },
 })
 
 const createEdge = (source: string, target: string): Edge => ({
@@ -40,7 +40,7 @@ describe('applyDagreLayout', () => {
     it('should assign positions to all nodes', () => {
       const nodes = [
         createStepNode('step1'),
-        createVariableNode('var1'),
+        createDataNode('var1'),
       ]
 
       const result = applyDagreLayout(nodes, [])
@@ -57,7 +57,7 @@ describe('applyDagreLayout', () => {
     it('should preserve node data', () => {
       const nodes = [
         createStepNode('step1'),
-        createVariableNode('var1'),
+        createDataNode('var1'),
       ]
 
       const result = applyDagreLayout(nodes, [])
@@ -66,7 +66,7 @@ describe('applyDagreLayout', () => {
       expect(result[0].type).toBe('step')
       expect(result[0].data.name).toBe('step1')
       expect(result[1].id).toBe('var1')
-      expect(result[1].type).toBe('variable')
+      expect(result[1].type).toBe('data')
     })
   })
 
@@ -75,7 +75,7 @@ describe('applyDagreLayout', () => {
       // step1 -> var1 -> step2
       const nodes = [
         createStepNode('step1'),
-        createVariableNode('var1'),
+        createDataNode('var1'),
         createStepNode('step2'),
       ]
       const edges = [
@@ -100,11 +100,11 @@ describe('applyDagreLayout', () => {
       //       \-> var2 -> step3 ->/
       const nodes = [
         createStepNode('step1'),
-        createVariableNode('var1'),
-        createVariableNode('var2'),
+        createDataNode('var1'),
+        createDataNode('var2'),
         createStepNode('step2'),
         createStepNode('step3'),
-        createVariableNode('var3'),
+        createDataNode('var3'),
         createStepNode('step4'),
       ]
       const edges = [

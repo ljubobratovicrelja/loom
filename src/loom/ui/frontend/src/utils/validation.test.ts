@@ -5,11 +5,11 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { Node, Edge } from '@xyflow/react'
-import type { StepData, VariableData } from '../types/pipeline'
+import type { StepData, DataNodeData } from '../types/pipeline'
 import {
   resetNodeIdCounter,
   createStepNode,
-  createVariableNode,
+  createDataNode,
   createParameterNode,
   createGraphState,
   type GraphState,
@@ -42,15 +42,15 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   }
 
   /**
-   * Validates that a variable name is unique within the graph.
+   * Validates that a data node name is unique within the graph.
    */
-  function _validateVariableNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
+  function _validateDataNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
     const existingNames = nodes
-      .filter((n) => n.type === 'variable')
-      .map((n) => (n.data as VariableData).name)
+      .filter((n) => n.type === 'data')
+      .map((n) => (n.data as DataNodeData).name)
 
     if (existingNames.includes(newName)) {
-      return { valid: false, error: `Variable name "${newName}" already exists` }
+      return { valid: false, error: `Data name "${newName}" already exists` }
     }
     return { valid: true }
   }
@@ -75,13 +75,13 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   }
 
   /**
-   * Generates a unique variable name, similar to the fixed handleAddVariable in App.tsx.
+   * Generates a unique data node name, similar to the fixed handleAddVariable in App.tsx.
    */
-  function generateUniqueVariableName(existingNodes: Node[], baseName: string): string {
+  function generateUniqueDataName(existingNodes: Node[], baseName: string): string {
     const existingNames = new Set(
       existingNodes
-        .filter((n) => n.type === 'variable')
-        .map((n) => (n.data as VariableData).name)
+        .filter((n) => n.type === 'data')
+        .map((n) => (n.data as DataNodeData).name)
     )
     if (!existingNames.has(baseName)) {
       return baseName
@@ -132,27 +132,29 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   }
 
   /**
-   * Simulates adding a variable node with uniqueness validation (fixed behavior).
+   * Simulates adding a data node with uniqueness validation (fixed behavior).
    */
-  function addVariableNode(
+  function addDataNode(
     state: GraphState,
-    varName: string,
+    dataName: string,
     options: { validateUniqueness?: boolean } = {}
   ): GraphState {
     const { validateUniqueness = true } = options // Now defaults to true (fixed)
 
-    let finalName = varName
+    let finalName = dataName
     if (validateUniqueness) {
-      finalName = generateUniqueVariableName(state.nodes, varName)
+      finalName = generateUniqueDataName(state.nodes, dataName)
     }
 
     const newNode: Node = {
-      id: `var_${Date.now()}`,
-      type: 'variable',
+      id: `data_${Date.now()}`,
+      type: 'data',
       position: { x: 50, y: 50 },
       data: {
+        key: finalName.toLowerCase().replace(/\s+/g, '_'),
         name: finalName,
-        value: '',
+        type: 'csv',
+        path: `data/${finalName}.csv`,
       },
     }
 
@@ -180,20 +182,20 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
     expect(names).toContain('extract_2')
   })
 
-  it('should generate unique variable name when duplicate exists', () => {
-    const existingVar = createVariableNode('output')
-    const state = createGraphState([existingVar], [])
+  it('should generate unique data name when duplicate exists', () => {
+    const existingData = createDataNode('output')
+    const state = createGraphState([existingData], [])
 
-    // Adding a variable with same name should generate unique name
-    const newState = addVariableNode(state, 'output')
+    // Adding a data node with same name should generate unique name
+    const newState = addDataNode(state, 'output')
 
-    const outputVars = newState.nodes.filter(
-      (n) => n.type === 'variable' && (n.data as VariableData).name.startsWith('output')
+    const outputData = newState.nodes.filter(
+      (n) => n.type === 'data' && (n.data as DataNodeData).name.startsWith('output')
     )
-    expect(outputVars.length).toBe(2)
+    expect(outputData.length).toBe(2)
 
     // Names should be unique
-    const names = outputVars.map((n) => (n.data as VariableData).name)
+    const names = outputData.map((n) => (n.data as DataNodeData).name)
     expect(names).toContain('output')
     expect(names).toContain('output_2')
   })
@@ -240,23 +242,23 @@ describe('Critical Issue #4: Circular Dependency Detection', () => {
 
   /**
    * Creates a graph with a circular dependency:
-   * step1 -> var1 -> step2 -> var2 -> step1 (cycle!)
+   * step1 -> data1 -> step2 -> data2 -> step1 (cycle!)
    */
   function createCyclicPipeline(): GraphState {
     const step1 = createStepNode('step1', { id: 'step1' })
     const step2 = createStepNode('step2', { id: 'step2' })
-    const var1 = createVariableNode('var1', 'data/var1.csv', { id: 'var1' })
-    const var2 = createVariableNode('var2', 'data/var2.csv', { id: 'var2' })
+    const data1 = createDataNode('data1', 'csv', 'data/data1.csv', { id: 'data1' })
+    const data2 = createDataNode('data2', 'csv', 'data/data2.csv', { id: 'data2' })
 
-    // Create cycle: step1 -> var1 -> step2 -> var2 -> step1
+    // Create cycle: step1 -> data1 -> step2 -> data2 -> step1
     const edges: Edge[] = [
-      { id: 'e1', source: 'step1', target: 'var1' },
-      { id: 'e2', source: 'var1', target: 'step2' },
-      { id: 'e3', source: 'step2', target: 'var2' },
-      { id: 'e4', source: 'var2', target: 'step1' }, // This creates the cycle
+      { id: 'e1', source: 'step1', target: 'data1' },
+      { id: 'e2', source: 'data1', target: 'step2' },
+      { id: 'e3', source: 'step2', target: 'data2' },
+      { id: 'e4', source: 'data2', target: 'step1' }, // This creates the cycle
     ]
 
-    return { nodes: [step1, step2, var1, var2], edges }
+    return { nodes: [step1, step2, data1, data2], edges }
   }
 
   /**
@@ -298,27 +300,27 @@ describe('Critical Issue #4: Circular Dependency Detection', () => {
     // Start with non-cyclic graph
     const step1 = createStepNode('step1', { id: 'step1' })
     const step2 = createStepNode('step2', { id: 'step2' })
-    const var1 = createVariableNode('var1', 'data/var1.csv', { id: 'var1' })
+    const data1 = createDataNode('data1', 'csv', 'data/data1.csv', { id: 'data1' })
 
-    // step1 -> var1 -> step2 (no cycle yet)
+    // step1 -> data1 -> step2 (no cycle yet)
     const edges: Edge[] = [
-      { id: 'e1', source: 'step1', target: 'var1' },
-      { id: 'e2', source: 'var1', target: 'step2' },
+      { id: 'e1', source: 'step1', target: 'data1' },
+      { id: 'e2', source: 'data1', target: 'step2' },
     ]
 
-    // Create initial state (step1 -> var1 -> step2)
-    createGraphState([step1, step2, var1], edges)
+    // Create initial state (step1 -> data1 -> step2)
+    createGraphState([step1, step2, data1], edges)
 
-    // Add another variable that step2 produces
-    const var2 = createVariableNode('var2', 'data/var2.csv', { id: 'var2' })
-    const newEdges = [...edges, { id: 'e3', source: 'step2', target: 'var2' }]
-    const stateWithVar2 = createGraphState([step1, step2, var1, var2], newEdges)
+    // Add another data node that step2 produces
+    const data2 = createDataNode('data2', 'csv', 'data/data2.csv', { id: 'data2' })
+    const newEdges = [...edges, { id: 'e3', source: 'step2', target: 'data2' }]
+    const stateWithData2 = createGraphState([step1, step2, data1, data2], newEdges)
 
-    // Trying to connect var2 -> step1 would create a cycle
+    // Trying to connect data2 -> step1 would create a cycle
     const validation = validateNoCircularDependency(
-      stateWithVar2.nodes,
-      stateWithVar2.edges,
-      'var2',
+      stateWithData2.nodes,
+      stateWithData2.edges,
+      'data2',
       'step1'
     )
 

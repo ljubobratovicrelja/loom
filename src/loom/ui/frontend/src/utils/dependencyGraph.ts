@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { StepData, VariableData } from '../types/pipeline'
+import type { StepData, DataNodeData } from '../types/pipeline'
 
 /**
  * Dependency graph for pipeline steps.
@@ -326,8 +326,8 @@ export function getStepName(node: Node): string {
   if (node.type === 'step') {
     return (node.data as StepData).name
   }
-  if (node.type === 'variable') {
-    return (node.data as VariableData).name
+  if (node.type === 'data') {
+    return (node.data as DataNodeData).name
   }
   return node.id
 }

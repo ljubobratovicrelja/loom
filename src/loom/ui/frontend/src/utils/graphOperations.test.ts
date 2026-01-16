@@ -17,11 +17,11 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   resetNodeIdCounter,
   createStepNode,
-  createVariableNode,
+  createDataNode,
   createParameterNode,
   createEdge,
-  createStepToVariableEdge,
-  createVariableToStepEdge,
+  createStepToDataEdge,
+  createDataToStepEdge,
   createParameterToStepEdge,
   createGraphState,
   connectParameterToStep,
@@ -38,7 +38,7 @@ import {
   createDiamondPipeline,
   createPipelineWithParameters,
 } from './graphTestUtils'
-import type { StepData, ParameterData } from '../types/pipeline'
+import type { StepData, ParameterData, DataNodeData } from '../types/pipeline'
 
 describe('Graph Operations', () => {
   beforeEach(() => {
@@ -58,12 +58,12 @@ describe('Graph Operations', () => {
       expect((step.data as StepData).args.threshold).toBe(0.5)
     })
 
-    it('should create variable nodes with correct structure', () => {
-      const variable = createVariableNode('output', 'data/output.csv')
+    it('should create data nodes with correct structure', () => {
+      const dataNode = createDataNode('output', 'csv', 'data/output.csv')
 
-      expect(variable.type).toBe('variable')
-      expect(variable.data.name).toBe('output')
-      expect(variable.data.value).toBe('data/output.csv')
+      expect(dataNode.type).toBe('data')
+      expect((dataNode.data as DataNodeData).name).toBe('output')
+      expect((dataNode.data as DataNodeData).path).toBe('data/output.csv')
     })
 
     it('should create parameter nodes with correct structure', () => {
@@ -100,18 +100,18 @@ describe('Graph Operations', () => {
       expect(edge.targetHandle).toBe('input')
     })
 
-    it('should create step-to-variable edges', () => {
-      const edge = createStepToVariableEdge('step1', 'var1', 'output_handle')
+    it('should create step-to-data edges', () => {
+      const edge = createStepToDataEdge('step1', 'data1', 'output_handle')
 
       expect(edge.source).toBe('step1')
-      expect(edge.target).toBe('var1')
+      expect(edge.target).toBe('data1')
       expect(edge.sourceHandle).toBe('output_handle')
     })
 
-    it('should create variable-to-step edges', () => {
-      const edge = createVariableToStepEdge('var1', 'step1', 'input_handle')
+    it('should create data-to-step edges', () => {
+      const edge = createDataToStepEdge('data1', 'step1', 'input_handle')
 
-      expect(edge.source).toBe('var1')
+      expect(edge.source).toBe('data1')
       expect(edge.target).toBe('step1')
       expect(edge.targetHandle).toBe('input_handle')
     })
@@ -259,13 +259,13 @@ describe('Graph Operations', () => {
       expect(newState.edges.length).toBeLessThan(initialEdgeCount)
     })
 
-    it('should delete variable node and connected edges', () => {
+    it('should delete data node and connected edges', () => {
       const state = createLinearPipeline()
 
-      const newState = deleteNode(state, 'var1')
+      const newState = deleteNode(state, 'data1')
 
-      expect(newState.nodes.find((n) => n.id === 'var1')).toBeUndefined()
-      expect(getNodeEdges(newState, 'var1').length).toBe(0)
+      expect(newState.nodes.find((n) => n.id === 'data1')).toBeUndefined()
+      expect(getNodeEdges(newState, 'data1').length).toBe(0)
     })
 
     /**
@@ -388,9 +388,9 @@ describe('Graph Operations', () => {
 
     it('should handle reconnecting non-parameter edges', () => {
       const state = createLinearPipeline()
-      const edgeToReconnect = state.edges.find((e) => e.source === 'var1')!
+      const edgeToReconnect = state.edges.find((e) => e.source === 'data1')!
 
-      // Reconnecting variable edge (non-parameter) shouldn't affect args
+      // Reconnecting data edge (non-parameter) shouldn't affect args
       const newState = reconnectEdge(state, edgeToReconnect, 'step3')
 
       // No arg changes expected for non-parameter edges
@@ -407,13 +407,13 @@ describe('Graph Operations', () => {
     it('should handle diamond pipeline topology', () => {
       const state = createDiamondPipeline()
 
-      // step1 has one outgoing edge to var1
+      // step1 has one outgoing edge to data1
       expect(getOutgoingEdges(state, 'step1').length).toBe(1)
 
-      // var1 has two outgoing edges (to step2 and step3)
-      expect(getOutgoingEdges(state, 'var1').length).toBe(2)
+      // data1 has two outgoing edges (to step2 and step3)
+      expect(getOutgoingEdges(state, 'data1').length).toBe(2)
 
-      // step4 has two incoming edges (from var2 and var3)
+      // step4 has two incoming edges (from data2 and data3)
       expect(getIncomingEdges(state, 'step4').length).toBe(2)
     })
 

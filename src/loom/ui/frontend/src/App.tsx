@@ -28,7 +28,6 @@ import type {
   DataType,
   DataEntry,
   DataNodeData,
-  VariableData,
   ExecutionStatus,
   RunMode,
   RunRequest,
@@ -204,7 +203,7 @@ export default function App() {
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
 
-  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error: apiError } = useApi()
+  const { loadConfig, saveConfig, loadState, loadTasks, loadDataStatus, trashData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error: apiError } = useApi()
 
   // Debounced path check: validates path existence after typing stops
   // Used when editing data node paths to provide instant feedback
@@ -358,7 +357,7 @@ export default function App() {
   // Refresh data node existence status and update ALL node states accordingly
   // This is the single source of truth for node visual states based on file existence
   const refreshVariableStatus = useCallback(async () => {
-    const status = await loadVariablesStatus()
+    const status = await loadDataStatus()
     if (Object.keys(status).length === 0) return
 
     // Runtime-only change - don't mark document as dirty
@@ -392,7 +391,7 @@ export default function App() {
         return node
       })
     )
-  }, [loadVariablesStatus, setNodes])
+  }, [loadDataStatus, setNodes])
 
   // Load initial state and tasks
   useEffect(() => {
@@ -436,7 +435,7 @@ export default function App() {
           clearHistory()
 
           // Check data node file existence immediately after loading
-          const status = await loadVariablesStatus()
+          const status = await loadDataStatus()
           if (Object.keys(status).length > 0) {
             setNodes((nds) =>
               nds.map((node) => {
@@ -489,7 +488,7 @@ export default function App() {
       isLoadingRef.current = false
     }
     init()
-  }, [loadConfig, loadState, loadTasks, loadVariablesStatus, validateConfig, listPipelines, setNodes, setEdges, clearHistory, refreshFreshness])
+  }, [loadConfig, loadState, loadTasks, loadDataStatus, validateConfig, listPipelines, setNodes, setEdges, clearHistory, refreshFreshness])
 
   // Track changes - skip initial mount and handle save properly
   useEffect(() => {
@@ -797,7 +796,7 @@ export default function App() {
     setNodes((nds) => [...nds, newNode])
   }, [nodes, setNodes, snapshot])
 
-  const handleUpdateNode = useCallback((id: string, data: Partial<StepData | VariableData | DataNodeData>) => {
+  const handleUpdateNode = useCallback((id: string, data: Partial<StepData | DataNodeData>) => {
     // Check if this is a data node path change
     const node = nodesRef.current.find(n => n.id === id)
     const isDataPathChange = node?.type === 'data' && 'path' in data
@@ -887,14 +886,14 @@ export default function App() {
 
   // Handle trashing variable data
   const handleTrashData = useCallback(async (variableName: string) => {
-    const result = await trashVariableData(variableName)
+    const result = await trashData(variableName)
     if (result.success) {
       // Refresh variable status to update the UI
       await refreshVariableStatus()
     } else {
       alert(`Failed to trash data: ${result.message}`)
     }
-  }, [trashVariableData, refreshVariableStatus])
+  }, [trashData, refreshVariableStatus])
 
   // Handle showing the clean dialog
   const handleShowCleanDialog = useCallback(async () => {
@@ -998,7 +997,7 @@ export default function App() {
         }
 
         // Check file existence
-        const status = await loadVariablesStatus()
+        const status = await loadDataStatus()
         if (Object.keys(status).length > 0) {
           setNodes((nds) =>
             nds.map((node) => {
@@ -1035,7 +1034,7 @@ export default function App() {
 
     // Mark loading as complete
     isLoadingRef.current = false
-  }, [openPipeline, independentStepStatuses, setNodes, setEdges, clearHistory, loadTasks, loadConfig, loadVariablesStatus, validateConfig, refreshFreshness])
+  }, [openPipeline, independentStepStatuses, setNodes, setEdges, clearHistory, loadTasks, loadConfig, loadDataStatus, validateConfig, refreshFreshness])
 
   // Handle pipeline selection from browser (checks for unsaved changes)
   const handleSelectPipeline = useCallback((pipelinePath: string) => {
@@ -1133,7 +1132,7 @@ export default function App() {
     }
     setTerminalVisible(true)
     // Create a new request object to trigger the terminal
-    setRunRequest({ mode, step_name: stepName, variable_name: variableName, step_names: stepNames })
+    setRunRequest({ mode, step_name: stepName, data_name: variableName, step_names: stepNames })
   }, [configPath, hasChanges, skipSaveConfirmation, performSave])
 
   // Handle per-step terminal output (for parallel execution)

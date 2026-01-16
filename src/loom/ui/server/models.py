@@ -8,10 +8,10 @@ from pydantic import BaseModel
 class RunRequest(BaseModel):
     """Request to run pipeline steps."""
 
-    mode: Literal["step", "from_step", "to_variable", "all", "parallel"]
+    mode: Literal["step", "from_step", "to_data", "all", "parallel"]
     step_name: str | None = None
     step_names: list[str] | None = None  # For parallel mode
-    variable_name: str | None = None
+    data_name: str | None = None
 
 
 class ExecutionStatus(BaseModel):

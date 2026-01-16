@@ -434,15 +434,15 @@ pipeline:
         assert data["freshness"]["process"]["status"] == "stale"
 
 
-class TestTrashVariableData:
-    """Tests for DELETE /api/variables/{name}/data endpoint."""
+class TestTrashData:
+    """Tests for DELETE /api/data/{name} endpoint."""
 
     def test_trash_no_config_returns_400(self) -> None:
         """Should return 400 when no config loaded."""
         configure(config_path=None)
         client = TestClient(app)
 
-        response = client.delete("/api/variables/myvar/data")
+        response = client.delete("/api/data/myvar")
 
         assert response.status_code == 400
         assert "No config loaded" in response.json()["detail"]
@@ -460,7 +460,7 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.delete("/api/variables/nonexistent/data")
+        response = client.delete("/api/data/nonexistent")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
@@ -481,7 +481,7 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.delete("/api/variables/input/data")
+        response = client.delete("/api/data/input")
 
         assert response.status_code == 403
         assert "Cannot delete source data" in response.json()["detail"]
@@ -503,7 +503,7 @@ pipeline:
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.delete("/api/variables/mydata/data")
+        response = client.delete("/api/data/mydata")
 
         assert response.status_code == 404
         assert "does not exist" in response.json()["detail"]
@@ -529,7 +529,7 @@ pipeline:
         client = TestClient(app)
 
         with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
-            response = client.delete("/api/variables/mydata/data")
+            response = client.delete("/api/data/mydata")
 
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
@@ -552,7 +552,7 @@ pipeline: []
         client = TestClient(app)
 
         with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
-            response = client.delete("/api/variables/input/data?force=true")
+            response = client.delete("/api/data/input?force=true")
 
         assert response.status_code == 200
         mock_trash.assert_called_once_with(str(data_file))
@@ -578,7 +578,7 @@ pipeline:
         client = TestClient(app)
 
         with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
-            response = client.delete("/api/variables/video/data")
+            response = client.delete("/api/data/video")
 
         assert response.status_code == 200
         mock_trash.assert_called_once_with(str(data_file))
@@ -608,7 +608,7 @@ pipeline:
         client = TestClient(app)
 
         with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
-            response = client.delete("/api/variables/result/data")
+            response = client.delete("/api/data/result")
 
         assert response.status_code == 200
         mock_trash.assert_called_once()
@@ -642,22 +642,22 @@ pipeline:
         client = TestClient(app)
 
         with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
-            response = client.delete("/api/variables/output/data")
+            response = client.delete("/api/data/output")
 
         assert response.status_code == 200
         # Verify it resolved the path relative to pipeline.yml, not cwd
         mock_trash.assert_called_once_with(str(data_file))
 
 
-class TestGetVariablesStatus:
-    """Tests for GET /api/variables/status endpoint."""
+class TestGetDataStatus:
+    """Tests for GET /api/data/status endpoint."""
 
     def test_status_no_config_returns_empty(self) -> None:
         """Should return empty dict when no config loaded."""
         configure(config_path=None)
         client = TestClient(app)
 
-        response = client.get("/api/variables/status")
+        response = client.get("/api/data/status")
 
         assert response.status_code == 200
         assert response.json() == {}
@@ -681,7 +681,7 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.get("/api/variables/status")
+        response = client.get("/api/data/status")
 
         assert response.status_code == 200
         data = response.json()

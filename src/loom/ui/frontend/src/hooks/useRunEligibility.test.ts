@@ -20,11 +20,11 @@ const createStepNode = (id: string, name: string): Node => ({
   data: { name, task: 'tasks/test.py', inputs: {}, outputs: {}, args: {}, optional: false },
 })
 
-const createVariableNode = (id: string, name: string): Node => ({
+const createDataNode = (id: string, name: string): Node => ({
   id,
-  type: 'variable',
+  type: 'data',
   position: { x: 0, y: 0 },
-  data: { name, value: 'data/test.csv' },
+  data: { key: name, name, type: 'csv', path: 'data/test.csv' },
 })
 
 const createEdge = (source: string, target: string): Edge => ({
@@ -63,7 +63,7 @@ describe('useRunEligibility', () => {
     })
 
     it('should return empty map for no step nodes', () => {
-      const nodes = [createVariableNode('var1', 'data')]
+      const nodes = [createDataNode('var1', 'data')]
       const edges: Edge[] = []
       const stepStatuses = new Map<string, StepExecutionState>()
 
@@ -79,7 +79,7 @@ describe('useRunEligibility', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -101,8 +101,8 @@ describe('useRunEligibility', () => {
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
         createStepNode('step3', 'classify'),
-        createVariableNode('var1', 'data1'),
-        createVariableNode('var2', 'data2'),
+        createDataNode('var1', 'data1'),
+        createDataNode('var2', 'data2'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -127,7 +127,7 @@ describe('useRunEligibility', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
         createStepNode('step2', 'process'),
-        createVariableNode('var1', 'data'),
+        createDataNode('var1', 'data'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -150,7 +150,7 @@ describe('useRunEligibility', () => {
       const nodes = [
         createStepNode('step1', 'extract_v1'),
         createStepNode('step2', 'extract_v2'),
-        createVariableNode('var1', 'output'),
+        createDataNode('var1', 'output'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -173,8 +173,8 @@ describe('useRunEligibility', () => {
       const nodes = [
         createStepNode('step1', 'extract_a'),
         createStepNode('step2', 'extract_b'),
-        createVariableNode('var1', 'data_a'),
-        createVariableNode('var2', 'data_b'),
+        createDataNode('var1', 'data_a'),
+        createDataNode('var2', 'data_b'),
       ]
       const edges = [
         createEdge('step1', 'var1'),
@@ -256,8 +256,8 @@ describe('getParallelRunEligibility', () => {
     const nodes = [
       createStepNode('step1', 'extract_a'),
       createStepNode('step2', 'extract_b'),
-      createVariableNode('var1', 'data_a'),
-      createVariableNode('var2', 'data_b'),
+      createDataNode('var1', 'data_a'),
+      createDataNode('var2', 'data_b'),
     ]
     const edges = [
       createEdge('step1', 'var1'),
@@ -273,7 +273,7 @@ describe('getParallelRunEligibility', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
       createStepNode('step2', 'process'),
-      createVariableNode('var1', 'data'),
+      createDataNode('var1', 'data'),
     ]
     const edges = [
       createEdge('step1', 'var1'),
@@ -290,7 +290,7 @@ describe('getParallelRunEligibility', () => {
     const nodes = [
       createStepNode('step1', 'extract_v1'),
       createStepNode('step2', 'extract_v2'),
-      createVariableNode('var1', 'output'),
+      createDataNode('var1', 'output'),
     ]
     const edges = [
       createEdge('step1', 'var1'),
@@ -316,7 +316,7 @@ describe('getParallelRunEligibility', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
       createStepNode('step2', 'process'),
-      createVariableNode('var1', 'data'),
+      createDataNode('var1', 'data'),
     ]
     const edges = [
       createEdge('step1', 'var1'),
@@ -335,7 +335,7 @@ describe('getParallelRunEligibility', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
       createStepNode('step2', 'process'),
-      createVariableNode('var1', 'data'),
+      createDataNode('var1', 'data'),
     ]
     const edges = [
       createEdge('step1', 'var1'),

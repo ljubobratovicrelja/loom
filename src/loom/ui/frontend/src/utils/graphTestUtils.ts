@@ -4,7 +4,7 @@
  */
 
 import type { Node, Edge } from '@xyflow/react'
-import type { StepData, VariableData, ParameterData, DataNodeData, DataType } from '../types/pipeline'
+import type { StepData, ParameterData, DataNodeData, DataType } from '../types/pipeline'
 
 // ============================================================================
 // Node Factories
@@ -34,27 +34,6 @@ export function createStepNode(
       optional: options.optional ?? false,
       executionState: options.executionState,
       freshnessStatus: options.freshnessStatus,
-    },
-  }
-}
-
-export function createVariableNode(
-  name: string,
-  value: string = `data/${name}.csv`,
-  options: Partial<VariableData> & { id?: string; position?: { x: number; y: number } } = {}
-): Node<VariableData, 'variable'> {
-  const id = options.id ?? `var_${name}_${++nodeIdCounter}`
-  return {
-    id,
-    type: 'variable',
-    position: options.position ?? { x: 0, y: 0 },
-    data: {
-      name,
-      value,
-      isOutput: options.isOutput,
-      producedBy: options.producedBy,
-      exists: options.exists,
-      pulseError: options.pulseError,
     },
   }
 }
@@ -122,14 +101,6 @@ export function createEdge(
     sourceHandle: options.sourceHandle,
     targetHandle: options.targetHandle,
   }
-}
-
-export function createStepToVariableEdge(stepId: string, variableId: string, outputHandle?: string): Edge {
-  return createEdge(stepId, variableId, { sourceHandle: outputHandle })
-}
-
-export function createVariableToStepEdge(variableId: string, stepId: string, inputHandle?: string): Edge {
-  return createEdge(variableId, stepId, { targetHandle: inputHandle })
 }
 
 export function createParameterToStepEdge(parameterId: string, stepId: string, argHandle: string): Edge {
@@ -406,30 +377,30 @@ export function getParameterNameFromArg(argValue: unknown): string | null {
 // ============================================================================
 
 /**
- * Creates a simple linear pipeline: step1 -> var1 -> step2 -> var2 -> step3
+ * Creates a simple linear pipeline: step1 -> data1 -> step2 -> data2 -> step3
  */
 export function createLinearPipeline(): GraphState {
   resetNodeIdCounter()
   const step1 = createStepNode('extract', { id: 'step1' })
   const step2 = createStepNode('process', { id: 'step2' })
   const step3 = createStepNode('classify', { id: 'step3' })
-  const var1 = createVariableNode('raw_data', 'data/raw.csv', { id: 'var1' })
-  const var2 = createVariableNode('processed_data', 'data/processed.csv', { id: 'var2' })
+  const data1 = createDataNode('raw_data', 'csv', 'data/raw.csv', { id: 'data1' })
+  const data2 = createDataNode('processed_data', 'csv', 'data/processed.csv', { id: 'data2' })
 
   const edges = [
-    createStepToVariableEdge('step1', 'var1'),
-    createVariableToStepEdge('var1', 'step2'),
-    createStepToVariableEdge('step2', 'var2'),
-    createVariableToStepEdge('var2', 'step3'),
+    createStepToDataEdge('step1', 'data1'),
+    createDataToStepEdge('data1', 'step2'),
+    createStepToDataEdge('step2', 'data2'),
+    createDataToStepEdge('data2', 'step3'),
   ]
 
-  return { nodes: [step1, step2, step3, var1, var2], edges }
+  return { nodes: [step1, step2, step3, data1, data2], edges }
 }
 
 /**
  * Creates a diamond pipeline:
  *           -> step2 ->
- * step1 -> var1       var3 -> step4
+ * step1 -> data1      data3 -> step4
  *           -> step3 ->
  */
 export function createDiamondPipeline(): GraphState {
@@ -438,21 +409,21 @@ export function createDiamondPipeline(): GraphState {
   const step2 = createStepNode('branch_a', { id: 'step2' })
   const step3 = createStepNode('branch_b', { id: 'step3' })
   const step4 = createStepNode('merge', { id: 'step4' })
-  const var1 = createVariableNode('input', 'data/input.csv', { id: 'var1' })
-  const var2 = createVariableNode('result_a', 'data/result_a.csv', { id: 'var2' })
-  const var3 = createVariableNode('result_b', 'data/result_b.csv', { id: 'var3' })
+  const data1 = createDataNode('input', 'csv', 'data/input.csv', { id: 'data1' })
+  const data2 = createDataNode('result_a', 'csv', 'data/result_a.csv', { id: 'data2' })
+  const data3 = createDataNode('result_b', 'csv', 'data/result_b.csv', { id: 'data3' })
 
   const edges = [
-    createStepToVariableEdge('step1', 'var1'),
-    createVariableToStepEdge('var1', 'step2'),
-    createVariableToStepEdge('var1', 'step3'),
-    createStepToVariableEdge('step2', 'var2'),
-    createStepToVariableEdge('step3', 'var3'),
-    createVariableToStepEdge('var2', 'step4'),
-    createVariableToStepEdge('var3', 'step4'),
+    createStepToDataEdge('step1', 'data1'),
+    createDataToStepEdge('data1', 'step2'),
+    createDataToStepEdge('data1', 'step3'),
+    createStepToDataEdge('step2', 'data2'),
+    createStepToDataEdge('step3', 'data3'),
+    createDataToStepEdge('data2', 'step4'),
+    createDataToStepEdge('data3', 'step4'),
   ]
 
-  return { nodes: [step1, step2, step3, step4, var1, var2, var3], edges }
+  return { nodes: [step1, step2, step3, step4, data1, data2, data3], edges }
 }
 
 /**
@@ -464,15 +435,15 @@ export function createPipelineWithParameters(): GraphState {
     id: 'step1',
     args: { threshold: '$threshold', window_size: '$window_size' },
   })
-  const var1 = createVariableNode('output', 'data/output.csv', { id: 'var1' })
+  const data1 = createDataNode('output', 'csv', 'data/output.csv', { id: 'data1' })
   const param1 = createParameterNode('threshold', 0.5, { id: 'param_threshold' })
   const param2 = createParameterNode('window_size', 100, { id: 'param_window_size' })
 
   const edges = [
-    createStepToVariableEdge('step1', 'var1'),
+    createStepToDataEdge('step1', 'data1'),
     createParameterToStepEdge('param_threshold', 'step1', 'threshold'),
     createParameterToStepEdge('param_window_size', 'step1', 'window_size'),
   ]
 
-  return { nodes: [step1, var1, param1, param2], edges }
+  return { nodes: [step1, data1, param1, param2], edges }
 }

@@ -29,11 +29,11 @@ const createStepNode = (id: string, name: string, args: Record<string, unknown> 
   data: { name, task: 'tasks/test.py', inputs: {}, outputs: {}, args } as StepData,
 })
 
-const createVariableNode = (id: string, name: string): Node => ({
+const createDataNode = (id: string, name: string): Node => ({
   id,
-  type: 'variable',
+  type: 'data',
   position: { x: 0, y: 0 },
-  data: { name, value: 'data/test.csv' },
+  data: { key: name, name, type: 'csv', path: 'data/test.csv' },
 })
 
 const createParameterNode = (id: string, name: string, value: unknown): Node => ({
@@ -139,7 +139,7 @@ describe('handleConnect', () => {
     it('should add edge for step → variable connection', () => {
       const nodes = [
         createStepNode('step1', 'extract'),
-        createVariableNode('var1', 'output'),
+        createDataNode('var1', 'output'),
       ]
       const edges: Edge[] = []
       const connection: Connection = { source: 'step1', target: 'var1', sourceHandle: null, targetHandle: null }
@@ -154,7 +154,7 @@ describe('handleConnect', () => {
 
     it('should add edge for variable → step connection', () => {
       const nodes = [
-        createVariableNode('var1', 'input'),
+        createDataNode('var1', 'input'),
         createStepNode('step1', 'process'),
       ]
       const edges: Edge[] = []
@@ -294,8 +294,8 @@ describe('handleReconnect', () => {
   it('should reconnect edge to new target', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
-      createVariableNode('var1', 'output1'),
-      createVariableNode('var2', 'output2'),
+      createDataNode('var1', 'output1'),
+      createDataNode('var2', 'output2'),
     ]
     const edges = [createEdge('step1', 'var1')]
     const newConnection: Connection = {
@@ -339,7 +339,7 @@ describe('handleReconnect', () => {
     const nodes = [
       createParameterNode('param_threshold', 'threshold', 0.5),
       createStepNode('step1', 'process', { value: '$threshold' }),
-      createVariableNode('var1', 'output'),
+      createDataNode('var1', 'output'),
     ]
     const oldEdge = createEdge('param_threshold', 'step1', undefined, 'value')
     const edges = [oldEdge]
@@ -376,7 +376,7 @@ describe('handleEdgeDrop', () => {
   it('should remove edge when dropped', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
-      createVariableNode('var1', 'output'),
+      createDataNode('var1', 'output'),
     ]
     const edge = createEdge('step1', 'var1')
     const edges = [edge]
@@ -405,7 +405,7 @@ describe('handleEdgeDrop', () => {
   it('should not modify nodes when dropping non-parameter edge', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
-      createVariableNode('var1', 'output'),
+      createDataNode('var1', 'output'),
     ]
     const edge = createEdge('step1', 'var1')
 
@@ -474,7 +474,7 @@ describe('handleDeleteNode', () => {
     const nodes = [
       createStepNode('step1', 'extract'),
       createStepNode('step2', 'process'),
-      createVariableNode('var1', 'data'),
+      createDataNode('var1', 'data'),
     ]
     const edges = [
       createEdge('step1', 'var1'),
@@ -597,7 +597,7 @@ describe('Complex Graph Operations', () => {
       createParameterNode('param_a', 'param_a', 1),
       createParameterNode('param_b', 'param_b', 2),
       createStepNode('step1', 'process', { arg1: '', arg2: '' }),
-      createVariableNode('var1', 'output'),
+      createDataNode('var1', 'output'),
     ]
     let edges: Edge[] = []
 

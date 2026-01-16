@@ -49,36 +49,36 @@ def build_step_command(config_path: Path, step_name: str) -> list[str]:
     return executor.build_command(step)
 
 
-def _get_steps_to_produce_variable(
+def _get_steps_to_produce_data(
     config: PipelineConfig,
-    variable_name: str,
+    data_name: str,
     skip_completed: bool = False,
 ) -> list:
-    """Get all steps needed to produce a variable, in execution order.
+    """Get all steps needed to produce a data output, in execution order.
 
     Args:
         config: Pipeline configuration.
-        variable_name: Name of the variable to produce.
+        data_name: Name of the data output to produce.
         skip_completed: If True, filter out steps whose outputs already exist.
 
     Returns:
         List of steps in execution order.
 
     Raises:
-        ValueError: If no step produces the variable.
+        ValueError: If no step produces the data output.
     """
-    # Find which step produces this variable
+    # Find which step produces this data output
     producing_step = None
     for step in config.steps:
         for out_ref in step.outputs.values():
-            if out_ref == f"${variable_name}":
+            if out_ref == f"${data_name}":
                 producing_step = step
                 break
         if producing_step:
             break
 
     if not producing_step:
-        raise ValueError(f"No step produces variable '{variable_name}'")
+        raise ValueError(f"No step produces data '{data_name}'")
 
     # Build dependency graph: which variables does each step need?
     # Then trace back from producing_step to find all required steps
@@ -122,23 +122,23 @@ def build_pipeline_commands(
     config_path: Path,
     mode: str,
     step_name: str | None = None,
-    variable_name: str | None = None,
+    data_name: str | None = None,
     include_optional: list[str] | None = None,
 ) -> list[tuple[str, list[str]]]:
     """Build commands for pipeline execution.
 
     Args:
         config_path: Path to pipeline YAML.
-        mode: Execution mode - "step", "from_step", "to_variable", or "all".
+        mode: Execution mode - "step", "from_step", "to_data", or "all".
         step_name: Step name (required for "step" and "from_step" modes).
-        variable_name: Variable name (required for "to_variable" mode).
+        data_name: Data output name (required for "to_data" mode).
         include_optional: List of optional step names to include.
 
     Returns:
         List of (step_name, command) tuples in execution order.
 
     Raises:
-        ValueError: If mode requires step_name/variable_name but not provided.
+        ValueError: If mode requires step_name/data_name but not provided.
     """
     config = PipelineConfig.from_yaml(config_path)
     executor = PipelineExecutor(config, dry_run=True)
@@ -152,11 +152,11 @@ def build_pipeline_commands(
         if not step_name:
             raise ValueError("step_name required for 'from_step' mode")
         steps = executor._get_steps_to_run(from_step=step_name, include_optional=include_optional)
-    elif mode == "to_variable":
-        if not variable_name:
-            raise ValueError("variable_name required for 'to_variable' mode")
+    elif mode == "to_data":
+        if not data_name:
+            raise ValueError("data_name required for 'to_data' mode")
         # Skip steps whose outputs already exist (only run what's missing)
-        steps = _get_steps_to_produce_variable(config, variable_name, skip_completed=True)
+        steps = _get_steps_to_produce_data(config, data_name, skip_completed=True)
     else:  # mode == "all"
         steps = executor._get_steps_to_run(include_optional=include_optional)
 
