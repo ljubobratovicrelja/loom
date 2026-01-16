@@ -16,12 +16,12 @@ echo -e "${BLUE}=== Running Example Pipelines ===${NC}"
 
 cd "$ROOT_DIR"
 
-# Activate venv if not already active
-if [ -z "$VIRTUAL_ENV" ]; then
+# Check if loom is available, otherwise try to activate venv
+if ! command -v loom &> /dev/null; then
     if [ -f "venv/bin/activate" ]; then
         source venv/bin/activate
     else
-        echo -e "${RED}Error: venv not found. Run: python -m venv venv && pip install -e '.[dev]'${NC}"
+        echo -e "${RED}Error: loom not found. Run: python -m venv venv && pip install -e '.[dev]'${NC}"
         exit 1
     fi
 fi
