@@ -189,3 +189,70 @@ class TestEditorCLI:
 
         captured = capsys.readouterr()
         assert "Creating new pipeline" in captured.out
+
+    def test_workspace_mode_with_directory(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Should enter workspace mode when given a directory."""
+        from loom.ui.cli import main
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        with (
+            patch("sys.argv", ["loom-ui", str(workspace)]),
+            patch("loom.ui.cli.webbrowser.open"),
+            patch("loom.ui.cli.uvicorn.run"),
+            patch("loom.ui.server.configure") as mock_configure,
+        ):
+            result = main()
+
+        assert result == 0
+        # Check that configure was called with workspace parameter
+        mock_configure.assert_called_once()
+        call_kwargs = mock_configure.call_args.kwargs
+        assert call_kwargs["workspace"] == workspace.resolve()
+        assert call_kwargs["config_path"] is None
+
+        captured = capsys.readouterr()
+        assert "Workspace:" in captured.out
+
+    def test_workspace_mode_tasks_dir_default(self, tmp_path: Path) -> None:
+        """In workspace mode, tasks_dir should default to cwd/tasks."""
+        from loom.ui.cli import main
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        with (
+            patch("sys.argv", ["loom-ui", str(workspace)]),
+            patch("loom.ui.cli.webbrowser.open"),
+            patch("loom.ui.cli.uvicorn.run"),
+            patch("loom.ui.server.configure") as mock_configure,
+        ):
+            main()
+
+        call_kwargs = mock_configure.call_args.kwargs
+        # In workspace mode without a specific pipeline, tasks_dir is the default
+        assert call_kwargs["tasks_dir"] == Path("tasks")
+
+    def test_file_mode_no_workspace(self, tmp_path: Path) -> None:
+        """Should not set workspace when given a file."""
+        from loom.ui.cli import main
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text("variables: {}\npipeline: []")
+
+        with (
+            patch("sys.argv", ["loom-ui", str(config)]),
+            patch("loom.ui.cli.webbrowser.open"),
+            patch("loom.ui.cli.uvicorn.run"),
+            patch("loom.ui.server.configure") as mock_configure,
+        ):
+            main()
+
+        # Check that configure was called without workspace parameter
+        mock_configure.assert_called_once()
+        call_kwargs = mock_configure.call_args.kwargs
+        assert "workspace" not in call_kwargs or call_kwargs.get("workspace") is None
+        assert call_kwargs["config_path"] == config

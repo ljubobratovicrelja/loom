@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder } from 'lucide-react'
-import type { TaskInfo, DataType } from '../types/pipeline'
+import type { TaskInfo, DataType, PipelineInfo } from '../types/pipeline'
+import PipelineBrowser from './PipelineBrowser'
 
 // Data type configuration for the palette
 const DATA_TYPES: Array<{ type: DataType; icon: ReactNode; label: string }> = [
@@ -19,6 +20,13 @@ interface SidebarProps {
   parameters: Record<string, unknown>
   onUpdateParameter: (name: string, value: unknown) => void
   onAddParameter: (name: string, value: unknown) => void
+  // Workspace mode props
+  isWorkspaceMode?: boolean
+  pipelines?: PipelineInfo[]
+  currentPipelinePath?: string | null
+  onSelectPipeline?: (path: string) => void
+  onRefreshPipelines?: () => void
+  pipelinesLoading?: boolean
 }
 
 export default function Sidebar({
@@ -28,6 +36,12 @@ export default function Sidebar({
   parameters,
   onUpdateParameter,
   onAddParameter,
+  isWorkspaceMode = false,
+  pipelines = [],
+  currentPipelinePath = null,
+  onSelectPipeline,
+  onRefreshPipelines,
+  pipelinesLoading = false,
 }: SidebarProps) {
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -92,6 +106,17 @@ export default function Sidebar({
       <div className="p-4 border-b border-slate-700 shrink-0">
         <h2 className="text-white font-semibold text-sm uppercase tracking-wide">Add Nodes</h2>
       </div>
+
+      {/* Pipeline Browser (workspace mode only) */}
+      {isWorkspaceMode && onSelectPipeline && onRefreshPipelines && (
+        <PipelineBrowser
+          pipelines={pipelines}
+          currentPipelinePath={currentPipelinePath}
+          onSelectPipeline={onSelectPipeline}
+          onRefresh={onRefreshPipelines}
+          loading={pipelinesLoading}
+        />
+      )}
 
       {/* Data Types Palette */}
       <div className="p-3 border-t border-slate-700 shrink-0">

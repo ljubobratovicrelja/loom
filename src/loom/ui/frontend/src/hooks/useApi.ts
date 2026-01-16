@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import type { PipelineGraph, EditorState, TaskInfo, ValidationResult, CleanPreview, CleanResult } from '../types/pipeline'
+import type { PipelineGraph, EditorState, TaskInfo, ValidationResult, CleanPreview, CleanResult, PipelineInfo } from '../types/pipeline'
 
 const API_BASE = '/api'
 
@@ -252,5 +252,43 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, loading, error }
+  const listPipelines = useCallback(async (): Promise<PipelineInfo[]> => {
+    const signal = getSignal('listPipelines')
+    try {
+      const res = await fetch(`${API_BASE}/pipelines`, { signal })
+      if (!res.ok) return []
+      return await res.json()
+    } catch (e) {
+      if (isAbortError(e)) {
+        return []
+      }
+      return []
+    } finally {
+      cleanupSignal('listPipelines')
+    }
+  }, [getSignal, cleanupSignal])
+
+  const openPipeline = useCallback(async (path: string): Promise<{ success: boolean; configPath?: string; tasksDir?: string; error?: string }> => {
+    const signal = getSignal('openPipeline')
+    try {
+      const res = await fetch(`${API_BASE}/pipelines/open?path=${encodeURIComponent(path)}`, {
+        method: 'POST',
+        signal,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.detail || 'Failed to open pipeline' }
+      }
+      return { success: true, configPath: data.configPath, tasksDir: data.tasksDir }
+    } catch (e) {
+      if (isAbortError(e)) {
+        return { success: false, error: 'Request cancelled' }
+      }
+      return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+    } finally {
+      cleanupSignal('openPipeline')
+    }
+  }, [getSignal, cleanupSignal])
+
+  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, loading, error }
 }

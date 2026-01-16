@@ -83,3 +83,11 @@ class ValidationResult(BaseModel):
     """Result of pipeline validation."""
 
     warnings: list[ValidationWarning] = []
+
+
+class PipelineInfo(BaseModel):
+    """Information about a discovered pipeline in workspace mode."""
+
+    name: str  # Display name (parent directory name)
+    path: str  # Absolute path to pipeline.yml
+    relative_path: str  # Path relative to workspace directory

@@ -118,6 +118,12 @@ This opens a browser-based editor where you can:
 - Run individual steps and see output in real-time
 - Quickly see which outputs exist (green) vs missing (grey)
 
+You can also point it at a directory to browse multiple pipelines:
+
+```bash
+loom-ui experiments/    # Browse all pipelines in a folder
+```
+
 ## How Scripts Work
 
 Your scripts stay normal Python with argparse. Just add a YAML block in the docstring so Loom knows the interface:

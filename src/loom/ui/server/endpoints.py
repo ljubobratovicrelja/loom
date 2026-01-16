@@ -14,7 +14,7 @@ from send2trash import send2trash  # type: ignore[import-untyped]
 
 from . import state
 from .graph import update_yaml_from_graph, yaml_to_graph
-from .models import ExecutionStatus, PipelineGraph, ValidationResult
+from .models import ExecutionStatus, PipelineGraph, PipelineInfo, ValidationResult
 from .validation import validate_pipeline
 
 # Create YAML instance that preserves comments
@@ -115,6 +115,82 @@ def get_state() -> dict[str, Any]:
     """Get current editor state."""
     return {
         "configPath": str(state.config_path) if state.config_path else None,
+        "tasksDir": str(state.tasks_dir),
+        "workspaceDir": str(state.workspace_dir) if state.workspace_dir else None,
+        "isWorkspaceMode": state.workspace_dir is not None,
+    }
+
+
+@router.get("/api/pipelines")
+def list_pipelines() -> list[PipelineInfo]:
+    """List all pipelines in the workspace directory.
+
+    Returns an empty list if not in workspace mode.
+    Recursively scans for pipeline.yml files and returns them sorted by path.
+    """
+    if not state.workspace_dir:
+        return []
+
+    pipelines: list[PipelineInfo] = []
+    workspace = state.workspace_dir
+
+    # Recursively find all pipeline.yml files
+    for pipeline_path in workspace.rglob("pipeline.yml"):
+        # Skip hidden directories and common non-pipeline locations
+        rel_path = pipeline_path.relative_to(workspace)
+        parts = rel_path.parts
+        if any(part.startswith(".") for part in parts):
+            continue
+        if any(part in ("node_modules", "__pycache__", "dist", "build") for part in parts):
+            continue
+
+        # Use parent directory name as display name
+        name = pipeline_path.parent.name if pipeline_path.parent != workspace else "root"
+
+        pipelines.append(
+            PipelineInfo(
+                name=name,
+                path=str(pipeline_path.resolve()),
+                relative_path=str(rel_path.parent) if rel_path.parent != Path(".") else "",
+            )
+        )
+
+    # Sort alphabetically by relative path
+    pipelines.sort(key=lambda p: p.relative_path.lower())
+    return pipelines
+
+
+@router.post("/api/pipelines/open")
+def open_pipeline(path: str = Query(..., description="Path to pipeline.yml")) -> dict[str, str]:
+    """Switch to a different pipeline.
+
+    Updates the config_path and tasks_dir to the new pipeline.
+    The frontend should reload state after calling this endpoint.
+    """
+    pipeline_path = Path(path)
+
+    if not pipeline_path.exists():
+        raise HTTPException(status_code=404, detail=f"Pipeline not found: {path}")
+
+    if not pipeline_path.name == "pipeline.yml":
+        raise HTTPException(status_code=400, detail="Path must point to a pipeline.yml file")
+
+    # Security check: ensure path is within workspace if in workspace mode
+    if state.workspace_dir:
+        try:
+            pipeline_path.resolve().relative_to(state.workspace_dir.resolve())
+        except ValueError:
+            raise HTTPException(
+                status_code=403, detail="Pipeline must be within workspace directory"
+            )
+
+    # Update global state
+    state.config_path = pipeline_path.resolve()
+    state.tasks_dir = pipeline_path.parent / "tasks"
+
+    return {
+        "status": "ok",
+        "configPath": str(state.config_path),
         "tasksDir": str(state.tasks_dir),
     }
 

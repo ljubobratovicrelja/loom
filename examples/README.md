@@ -4,11 +4,22 @@ Working examples to help you understand Loom. Each example is self-contained and
 
 ## Running Examples
 
+The easiest way to explore the examples is with the visual editor:
+
+```bash
+# Browse all examples in the visual editor
+loom-ui examples/
+```
+
+This opens a pipeline browser in the sidebar where you can switch between examples with a double-click.
+
+You can also run individual examples from the command line:
+
 ```bash
 # Run a pipeline
 loom examples/linear/pipeline.yml
 
-# Open in visual editor
+# Open a specific pipeline in the editor
 loom-ui examples/linear/pipeline.yml
 
 # Preview commands without executing

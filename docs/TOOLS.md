@@ -178,6 +178,9 @@ cd ../../../..
 # Open existing pipeline
 loom-ui pipeline.yml
 
+# Browse pipelines in a directory (workspace mode)
+loom-ui experiments/
+
 # Create new pipeline
 loom-ui --new
 
@@ -187,6 +190,8 @@ loom-ui pipeline.yml --port 8080 --host 0.0.0.0
 # Headless mode (no browser auto-open)
 loom-ui pipeline.yml --no-browser
 ```
+
+**Workspace Mode:** Point loom-ui at a directory to browse all pipelines within it. A pipeline browser appears in the sidebar, letting you switch between pipelines with a double-click. Unsaved changes prompt you to save before switching.
 
 ### User Interface
 
@@ -567,9 +572,11 @@ def parse_frontmatter(docstring) -> dict | None  # YAML extraction
 | `GET /api/config` | GET | Load pipeline as graph |
 | `POST /api/config` | POST | Save graph to YAML |
 | `GET /api/tasks` | GET | List available tasks with schemas |
-| `GET /api/state` | GET | Get editor state (configPath, tasksDir) |
+| `GET /api/state` | GET | Get editor state (configPath, tasksDir, workspaceDir, isWorkspaceMode) |
 | `GET /api/variables/status` | GET | Check which variable files exist |
 | `DELETE /api/variables/{name}/data` | DELETE | Move variable data to trash |
+| `GET /api/pipelines` | GET | List pipelines in workspace (workspace mode only) |
+| `POST /api/pipelines/open` | POST | Switch to a different pipeline |
 
 ### Request/Response Examples
 

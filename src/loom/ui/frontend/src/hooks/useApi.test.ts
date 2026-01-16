@@ -286,3 +286,168 @@ describe('High Priority Issue #7: Sync Status Indicator', () => {
     expect(true).toBe(true)
   })
 })
+
+// ============================================================================
+// Tests for Pipeline Browser API Functions
+// ============================================================================
+
+describe('Pipeline Browser API Functions', () => {
+  let originalFetch: typeof global.fetch
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    originalFetch = global.fetch
+    fetchMock = vi.fn()
+    global.fetch = fetchMock
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  describe('listPipelines', () => {
+    /**
+     * Implementation of listPipelines that mirrors useApi.ts
+     */
+    async function listPipelines(): Promise<Array<{ name: string; path: string; relative_path: string }>> {
+      try {
+        const res = await fetch('/api/pipelines')
+        if (!res.ok) return []
+        return await res.json()
+      } catch {
+        return []
+      }
+    }
+
+    it('should fetch pipelines from /api/pipelines', async () => {
+      const mockPipelines = [
+        { name: 'project_a', path: '/workspace/project_a/pipeline.yml', relative_path: 'project_a' },
+        { name: 'project_b', path: '/workspace/project_b/pipeline.yml', relative_path: 'project_b' },
+      ]
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPipelines),
+      })
+
+      const result = await listPipelines()
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/pipelines')
+      expect(result).toEqual(mockPipelines)
+    })
+
+    it('should return empty array on error', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 500,
+      })
+
+      const result = await listPipelines()
+
+      expect(result).toEqual([])
+    })
+
+    it('should return empty array on network failure', async () => {
+      fetchMock.mockRejectedValue(new Error('Network error'))
+
+      const result = await listPipelines()
+
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('openPipeline', () => {
+    /**
+     * Implementation of openPipeline that mirrors useApi.ts
+     */
+    async function openPipeline(path: string): Promise<{
+      success: boolean
+      configPath?: string
+      tasksDir?: string
+      error?: string
+    }> {
+      try {
+        const res = await fetch(`/api/pipelines/open?path=${encodeURIComponent(path)}`, {
+          method: 'POST',
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          return { success: false, error: data.detail || 'Failed to open pipeline' }
+        }
+        return { success: true, configPath: data.configPath, tasksDir: data.tasksDir }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+      }
+    }
+
+    it('should POST to /api/pipelines/open with encoded path', async () => {
+      const pipelinePath = '/workspace/my project/pipeline.yml'
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          status: 'ok',
+          configPath: pipelinePath,
+          tasksDir: '/workspace/my project/tasks',
+        }),
+      })
+
+      await openPipeline(pipelinePath)
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/pipelines/open?path=${encodeURIComponent(pipelinePath)}`,
+        { method: 'POST' }
+      )
+    })
+
+    it('should return success with config and tasks paths', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          status: 'ok',
+          configPath: '/path/to/pipeline.yml',
+          tasksDir: '/path/to/tasks',
+        }),
+      })
+
+      const result = await openPipeline('/path/to/pipeline.yml')
+
+      expect(result.success).toBe(true)
+      expect(result.configPath).toBe('/path/to/pipeline.yml')
+      expect(result.tasksDir).toBe('/path/to/tasks')
+    })
+
+    it('should return error on 404', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ detail: 'Pipeline not found' }),
+      })
+
+      const result = await openPipeline('/nonexistent/pipeline.yml')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Pipeline not found')
+    })
+
+    it('should return error on 403 (outside workspace)', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ detail: 'Pipeline must be within workspace directory' }),
+      })
+
+      const result = await openPipeline('/outside/workspace/pipeline.yml')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('within workspace')
+    })
+
+    it('should return error on network failure', async () => {
+      fetchMock.mockRejectedValue(new Error('Network error'))
+
+      const result = await openPipeline('/path/to/pipeline.yml')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Network error')
+    })
+  })
+})

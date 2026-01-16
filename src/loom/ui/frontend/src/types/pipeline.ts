@@ -96,6 +96,14 @@ export interface PipelineGraph {
 export interface EditorState {
   configPath: string | null
   tasksDir: string
+  workspaceDir: string | null
+  isWorkspaceMode: boolean
+}
+
+export interface PipelineInfo {
+  name: string          // Display name (parent directory name)
+  path: string          // Absolute path to pipeline.yml
+  relative_path: string // Path relative to workspace directory
 }
 
 export interface ArgSchema {

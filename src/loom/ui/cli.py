@@ -15,6 +15,7 @@ def main() -> int:
         epilog="""
 Examples:
   %(prog)s pipeline.yml           # Edit existing pipeline
+  %(prog)s examples/              # Browse pipelines in directory
   %(prog)s --new                  # Create new pipeline
   %(prog)s pipeline.yml --port 8080  # Custom port
         """,
@@ -24,7 +25,7 @@ Examples:
         "config",
         nargs="?",
         type=Path,
-        help="Path to pipeline YAML config (optional for new pipeline)",
+        help="Path to pipeline YAML config or directory to browse",
     )
     parser.add_argument(
         "--new",
@@ -56,25 +57,36 @@ Examples:
 
     args = parser.parse_args()
 
-    # Validate args
-    if not args.new and args.config and not args.config.exists():
+    # Determine if this is workspace mode (directory) or single file mode
+    workspace_mode = False
+    config_path = args.config
+
+    if args.config and args.config.is_dir():
+        # Workspace mode - browsing a directory of pipelines
+        workspace_mode = True
+        workspace_dir = args.config.resolve()
+        config_path = None  # Will be set when user selects a pipeline
+    elif not args.new and args.config and not args.config.exists():
         print(f"Config file not found: {args.config}")
         print("Use --new to create a new pipeline")
         return 1
 
     # Resolve tasks directory relative to pipeline file
     tasks_dir = args.tasks_dir
-    if tasks_dir is None and args.config:
+    if tasks_dir is None and config_path:
         # Default to tasks/ in the same directory as the pipeline
-        tasks_dir = args.config.parent / "tasks"
+        tasks_dir = config_path.parent / "tasks"
     elif tasks_dir is None:
-        # Fallback for --new without config
+        # Fallback for --new without config or workspace mode
         tasks_dir = Path("tasks")
 
     # Configure server
     from .server import configure
 
-    configure(config_path=args.config, tasks_dir=tasks_dir)
+    if workspace_mode:
+        configure(config_path=None, tasks_dir=tasks_dir, workspace=workspace_dir)
+    else:
+        configure(config_path=config_path, tasks_dir=tasks_dir)
 
     # Open browser
     url = f"http://{args.host}:{args.port}"
@@ -84,8 +96,10 @@ Examples:
 
     # Start server
     print(f"Starting editor at {url}")
-    if args.config:
-        print(f"Editing: {args.config}")
+    if workspace_mode:
+        print(f"Workspace: {workspace_dir}")
+    elif config_path:
+        print(f"Editing: {config_path}")
     else:
         print("Creating new pipeline")
 

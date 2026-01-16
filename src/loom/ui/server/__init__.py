@@ -95,9 +95,13 @@ if FRONTEND_DIR.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
 
-def configure(config_path: Path | None = None, tasks_dir: Path | None = None) -> None:
+def configure(
+    config_path: Path | None = None,
+    tasks_dir: Path | None = None,
+    workspace: Path | None = None,
+) -> None:
     """Configure the server with paths."""
-    state.configure(config=config_path, tasks=tasks_dir)
+    state.configure(config=config_path, tasks=tasks_dir, workspace=workspace)
 
 
 __all__ = [

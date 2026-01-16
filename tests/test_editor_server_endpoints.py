@@ -961,6 +961,283 @@ class TestGetState:
         data = response.json()
         assert data["configPath"] is None
 
+    def test_get_state_workspace_mode(self, tmp_path: Path) -> None:
+        """Should return workspace info when in workspace mode."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/state")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["isWorkspaceMode"] is True
+        assert data["workspaceDir"] == str(workspace)
+
+    def test_get_state_not_workspace_mode(self, tmp_path: Path) -> None:
+        """Should return isWorkspaceMode=False when not in workspace mode."""
+        config = tmp_path / "pipeline.yml"
+        configure(config_path=config, workspace=None)
+        client = TestClient(app)
+
+        response = client.get("/api/state")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["isWorkspaceMode"] is False
+        assert data["workspaceDir"] is None
+
+
+class TestListPipelines:
+    """Tests for GET /api/pipelines endpoint."""
+
+    def test_list_pipelines_not_workspace_mode_returns_empty(self) -> None:
+        """Should return empty list when not in workspace mode."""
+        configure(config_path=None, workspace=None)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_list_pipelines_finds_pipeline_files(self, tmp_path: Path) -> None:
+        """Should find pipeline.yml files in workspace."""
+        workspace = tmp_path / "workspace"
+
+        # Create multiple pipeline directories
+        (workspace / "project_a").mkdir(parents=True)
+        (workspace / "project_a" / "pipeline.yml").write_text("pipeline: []")
+
+        (workspace / "project_b").mkdir(parents=True)
+        (workspace / "project_b" / "pipeline.yml").write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        pipelines = response.json()
+        assert len(pipelines) == 2
+        names = {p["name"] for p in pipelines}
+        assert names == {"project_a", "project_b"}
+
+    def test_list_pipelines_sorted_alphabetically(self, tmp_path: Path) -> None:
+        """Should return pipelines sorted by relative path."""
+        workspace = tmp_path / "workspace"
+
+        # Create pipelines in different order
+        (workspace / "zebra").mkdir(parents=True)
+        (workspace / "zebra" / "pipeline.yml").write_text("pipeline: []")
+        (workspace / "alpha").mkdir(parents=True)
+        (workspace / "alpha" / "pipeline.yml").write_text("pipeline: []")
+        (workspace / "beta").mkdir(parents=True)
+        (workspace / "beta" / "pipeline.yml").write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        pipelines = response.json()
+        names = [p["name"] for p in pipelines]
+        assert names == ["alpha", "beta", "zebra"]
+
+    def test_list_pipelines_nested_directories(self, tmp_path: Path) -> None:
+        """Should find pipelines in nested directories."""
+        workspace = tmp_path / "workspace"
+
+        # Create nested pipeline
+        (workspace / "examples" / "demo").mkdir(parents=True)
+        (workspace / "examples" / "demo" / "pipeline.yml").write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        pipelines = response.json()
+        assert len(pipelines) == 1
+        assert pipelines[0]["name"] == "demo"
+        assert pipelines[0]["relative_path"] == "examples/demo"
+
+    def test_list_pipelines_skips_hidden_directories(self, tmp_path: Path) -> None:
+        """Should skip pipelines in hidden directories."""
+        workspace = tmp_path / "workspace"
+
+        # Create visible and hidden pipeline directories
+        (workspace / "visible").mkdir(parents=True)
+        (workspace / "visible" / "pipeline.yml").write_text("pipeline: []")
+        (workspace / ".hidden").mkdir(parents=True)
+        (workspace / ".hidden" / "pipeline.yml").write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        pipelines = response.json()
+        assert len(pipelines) == 1
+        assert pipelines[0]["name"] == "visible"
+
+    def test_list_pipelines_skips_node_modules(self, tmp_path: Path) -> None:
+        """Should skip pipelines in node_modules directory."""
+        workspace = tmp_path / "workspace"
+
+        (workspace / "real_project").mkdir(parents=True)
+        (workspace / "real_project" / "pipeline.yml").write_text("pipeline: []")
+        (workspace / "node_modules" / "some_package").mkdir(parents=True)
+        (workspace / "node_modules" / "some_package" / "pipeline.yml").write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        pipelines = response.json()
+        assert len(pipelines) == 1
+        assert pipelines[0]["name"] == "real_project"
+
+    def test_list_pipelines_returns_absolute_path(self, tmp_path: Path) -> None:
+        """Should return absolute path in the path field."""
+        workspace = tmp_path / "workspace"
+        (workspace / "project").mkdir(parents=True)
+        pipeline_path = workspace / "project" / "pipeline.yml"
+        pipeline_path.write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.get("/api/pipelines")
+
+        assert response.status_code == 200
+        pipelines = response.json()
+        assert pipelines[0]["path"] == str(pipeline_path.resolve())
+
+
+class TestOpenPipeline:
+    """Tests for POST /api/pipelines/open endpoint."""
+
+    def test_open_pipeline_not_found_returns_404(self, tmp_path: Path) -> None:
+        """Should return 404 when pipeline doesn't exist."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/pipelines/open",
+            params={"path": str(workspace / "nonexistent" / "pipeline.yml")},
+        )
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+    def test_open_pipeline_not_pipeline_yml_returns_400(self, tmp_path: Path) -> None:
+        """Should return 400 when path is not a pipeline.yml file."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        other_file = workspace / "config.yml"
+        other_file.write_text("some: config")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/pipelines/open",
+            params={"path": str(other_file)},
+        )
+
+        assert response.status_code == 400
+        assert "pipeline.yml" in response.json()["detail"]
+
+    def test_open_pipeline_outside_workspace_returns_403(self, tmp_path: Path) -> None:
+        """Should return 403 when pipeline is outside workspace."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        outside_pipeline = tmp_path / "outside" / "pipeline.yml"
+        outside_pipeline.parent.mkdir(parents=True)
+        outside_pipeline.write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/pipelines/open",
+            params={"path": str(outside_pipeline)},
+        )
+
+        assert response.status_code == 403
+        assert "within workspace" in response.json()["detail"]
+
+    def test_open_pipeline_success(self, tmp_path: Path) -> None:
+        """Should switch to the new pipeline successfully."""
+        workspace = tmp_path / "workspace"
+        (workspace / "project").mkdir(parents=True)
+        pipeline_path = workspace / "project" / "pipeline.yml"
+        pipeline_path.write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/pipelines/open",
+            params={"path": str(pipeline_path)},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert str(pipeline_path.resolve()) in data["configPath"]
+
+    def test_open_pipeline_updates_tasks_dir(self, tmp_path: Path) -> None:
+        """Should update tasks_dir to pipeline's tasks directory."""
+        workspace = tmp_path / "workspace"
+        (workspace / "project").mkdir(parents=True)
+        pipeline_path = workspace / "project" / "pipeline.yml"
+        pipeline_path.write_text("pipeline: []")
+
+        configure(config_path=None, workspace=workspace)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/pipelines/open",
+            params={"path": str(pipeline_path)},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        expected_tasks_dir = str(workspace / "project" / "tasks")
+        assert data["tasksDir"] == expected_tasks_dir
+
+    def test_open_pipeline_without_workspace_mode(self, tmp_path: Path) -> None:
+        """Should allow opening pipeline even when not in workspace mode."""
+        config = tmp_path / "initial" / "pipeline.yml"
+        config.parent.mkdir(parents=True)
+        config.write_text("pipeline: []")
+
+        new_pipeline = tmp_path / "other" / "pipeline.yml"
+        new_pipeline.parent.mkdir(parents=True)
+        new_pipeline.write_text("pipeline: []")
+
+        configure(config_path=config, workspace=None)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/pipelines/open",
+            params={"path": str(new_pipeline)},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+
 
 class TestRunStatus:
     """Tests for GET /api/run/status endpoint."""

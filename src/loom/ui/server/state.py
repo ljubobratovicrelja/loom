@@ -6,6 +6,7 @@ from typing import Any
 # Server configuration
 config_path: Path | None = None
 tasks_dir: Path = Path("tasks")
+workspace_dir: Path | None = None  # Set when launched in workspace mode
 
 # Execution state for terminal - supports multiple concurrent steps
 # Each step has its own entry: {"pid": int, "master_fd": int, "status": str}
@@ -20,12 +21,17 @@ execution_state: dict[str, Any] = {
 }
 
 
-def configure(config: Path | None = None, tasks: Path | None = None) -> None:
+def configure(
+    config: Path | None = None,
+    tasks: Path | None = None,
+    workspace: Path | None = None,
+) -> None:
     """Configure the server with paths."""
-    global config_path, tasks_dir
+    global config_path, tasks_dir, workspace_dir
     config_path = config
     if tasks:
         tasks_dir = tasks
+    workspace_dir = workspace
 
 
 def register_running_step(step_name: str, pid: int, master_fd: int) -> None:

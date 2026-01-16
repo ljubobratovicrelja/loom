@@ -5,6 +5,7 @@ import { AlertTriangle, Info, XCircle, X } from 'lucide-react'
 import Canvas from './components/Canvas'
 import CleanDialog from './components/CleanDialog'
 import ConfirmDialog from './components/ConfirmDialog'
+import UnsavedChangesDialog from './components/UnsavedChangesDialog'
 import Sidebar from './components/Sidebar'
 import PropertiesPanel from './components/PropertiesPanel'
 import Toolbar from './components/Toolbar'
@@ -18,6 +19,7 @@ import { applyDagreLayout } from './utils/layout'
 import type {
   PipelineGraph,
   PipelineNode,
+  PipelineInfo,
   StepNode,
   ParameterNode,
   DataNode,
@@ -194,7 +196,7 @@ export default function App() {
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
 
-  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, loading, error: apiError } = useApi()
+  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, loading, error: apiError } = useApi()
 
   // Validation warnings
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
@@ -205,6 +207,13 @@ export default function App() {
   const [showCleanDialog, setShowCleanDialog] = useState(false)
   const [cleanPreview, setCleanPreview] = useState<CleanPreview | null>(null)
   const [cleanLoading, setCleanLoading] = useState(false)
+
+  // Workspace mode state
+  const [isWorkspaceMode, setIsWorkspaceMode] = useState(false)
+  const [pipelines, setPipelines] = useState<PipelineInfo[]>([])
+  const [pipelinesLoading, setPipelinesLoading] = useState(false)
+  const [pendingPipeline, setPendingPipeline] = useState<PipelineInfo | null>(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
 
 
   // Independent step execution hook - each step can run concurrently
@@ -361,6 +370,17 @@ export default function App() {
       setTasks(loadedTasks)
 
       const state = await loadState()
+
+      // Check if we're in workspace mode
+      if (state?.isWorkspaceMode) {
+        setIsWorkspaceMode(true)
+        // Load available pipelines
+        setPipelinesLoading(true)
+        const pipelineList = await listPipelines()
+        setPipelines(pipelineList)
+        setPipelinesLoading(false)
+      }
+
       if (state?.configPath) {
         setConfigPath(state.configPath)
         const graph = await loadConfig(state.configPath)
@@ -437,7 +457,7 @@ export default function App() {
       isLoadingRef.current = false
     }
     init()
-  }, [loadConfig, loadState, loadTasks, loadVariablesStatus, validateConfig, setNodes, setEdges, clearHistory, refreshFreshness])
+  }, [loadConfig, loadState, loadTasks, loadVariablesStatus, validateConfig, listPipelines, setNodes, setEdges, clearHistory, refreshFreshness])
 
   // Track changes - skip initial mount and handle save properly
   useEffect(() => {
@@ -865,6 +885,151 @@ export default function App() {
     setCleanPreview(null)
   }, [])
 
+  // Handle refreshing pipeline list
+  const handleRefreshPipelines = useCallback(async () => {
+    setPipelinesLoading(true)
+    const pipelineList = await listPipelines()
+    setPipelines(pipelineList)
+    setPipelinesLoading(false)
+  }, [listPipelines])
+
+  // Perform the actual pipeline switch
+  const performOpenPipeline = useCallback(async (pipelinePath: string) => {
+    // Check if any step is currently running
+    const hasRunningSteps = Object.values(independentStepStatuses).some(
+      (status) => status === 'running'
+    )
+    if (hasRunningSteps) {
+      alert('Cannot switch pipelines while steps are running. Please wait for execution to complete.')
+      return
+    }
+
+    // Call backend to switch pipeline
+    const result = await openPipeline(pipelinePath)
+    if (!result.success) {
+      alert(`Failed to open pipeline: ${result.error}`)
+      return
+    }
+
+    // Set loading flag to skip change tracking during reload
+    isLoadingRef.current = true
+
+    // Clear current state
+    skipNextChangeTrackingRef.current = true
+    setNodes([])
+    setEdges([])
+    setParameters({})
+    setHasChanges(false)
+    clearHistory()
+    setValidationWarnings([])
+    setTerminalVisible(false)
+    setStepTerminalOutputs(new Map())
+
+    // Update config path
+    setConfigPath(result.configPath || null)
+
+    // Reload tasks from new directory
+    const loadedTasks = await loadTasks()
+    setTasks(loadedTasks)
+
+    // Load the new pipeline
+    if (result.configPath) {
+      const graph = await loadConfig(result.configPath)
+      if (graph) {
+        // Apply Dagre layout if no saved layout
+        let layoutedNodes = graph.hasLayout
+          ? graph.nodes
+          : applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[]
+        // Enrich step nodes with type information
+        layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
+        setNodes(layoutedNodes)
+        setEdges(graph.edges)
+        setParameters(graph.parameters)
+
+        // Load editor options
+        if (graph.editor) {
+          setSkipSaveConfirmation(graph.editor.autoSave ?? false)
+        }
+
+        // Check file existence
+        const status = await loadVariablesStatus()
+        if (Object.keys(status).length > 0) {
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.type === 'data') {
+                const data = node.data as DataNodeData
+                const exists = status[data.key]
+                if (exists !== undefined) {
+                  return { ...node, data: { ...data, exists } }
+                }
+              }
+              if (node.type === 'step') {
+                const data = node.data as StepData
+                const allExist = checkStepCompleted(data, status)
+                if (allExist) {
+                  return { ...node, data: { ...data, executionState: 'completed' as StepExecutionState } }
+                }
+              }
+              return node
+            })
+          )
+        }
+
+        // Fetch freshness status
+        refreshFreshness()
+
+        // Validate the loaded config
+        const validationResult = await validateConfig(result.configPath)
+        if (validationResult.warnings.length > 0) {
+          setValidationWarnings(validationResult.warnings)
+          setShowWarnings(true)
+        }
+      }
+    }
+
+    // Mark loading as complete
+    isLoadingRef.current = false
+  }, [openPipeline, independentStepStatuses, setNodes, setEdges, clearHistory, loadTasks, loadConfig, loadVariablesStatus, validateConfig, refreshFreshness])
+
+  // Handle pipeline selection from browser (checks for unsaved changes)
+  const handleSelectPipeline = useCallback((pipelinePath: string) => {
+    // Find the pipeline info for the dialog
+    const pipeline = pipelines.find(p => p.path === pipelinePath)
+    if (!pipeline) return
+
+    // If current pipeline has unsaved changes, show dialog
+    if (hasChanges) {
+      setPendingPipeline(pipeline)
+      setShowUnsavedDialog(true)
+    } else {
+      // No unsaved changes, switch directly
+      performOpenPipeline(pipelinePath)
+    }
+  }, [pipelines, hasChanges, performOpenPipeline])
+
+  // Handle unsaved changes dialog actions
+  const handleUnsavedSave = useCallback(async () => {
+    setShowUnsavedDialog(false)
+    if (pendingPipeline) {
+      await performSave()
+      performOpenPipeline(pendingPipeline.path)
+      setPendingPipeline(null)
+    }
+  }, [pendingPipeline, performSave, performOpenPipeline])
+
+  const handleUnsavedDontSave = useCallback(() => {
+    setShowUnsavedDialog(false)
+    if (pendingPipeline) {
+      performOpenPipeline(pendingPipeline.path)
+      setPendingPipeline(null)
+    }
+  }, [pendingPipeline, performOpenPipeline])
+
+  const handleUnsavedCancel = useCallback(() => {
+    setShowUnsavedDialog(false)
+    setPendingPipeline(null)
+  }, [])
+
   // Handle step execution state changes
   const handleStepStatusChange = useCallback((stepName: string, state: StepExecutionState) => {
     // Runtime-only change - don't mark document as dirty
@@ -1224,6 +1389,12 @@ export default function App() {
               parameters={parameters}
               onUpdateParameter={handleUpdateParameter}
               onAddParameter={handleUpdateParameter}
+              isWorkspaceMode={isWorkspaceMode}
+              pipelines={pipelines}
+              currentPipelinePath={configPath}
+              onSelectPipeline={handleSelectPipeline}
+              onRefreshPipelines={handleRefreshPipelines}
+              pipelinesLoading={pipelinesLoading}
             />
             <div
               className="w-1 bg-slate-800 hover:bg-blue-600 cursor-ew-resize transition-colors"
@@ -1309,6 +1480,16 @@ export default function App() {
           loading={cleanLoading}
           onCancel={handleCloseCleanDialog}
           onClean={handleClean}
+        />
+      )}
+
+      {/* Unsaved changes dialog */}
+      {showUnsavedDialog && pendingPipeline && (
+        <UnsavedChangesDialog
+          pipelineName={pendingPipeline.name}
+          onSave={handleUnsavedSave}
+          onDontSave={handleUnsavedDontSave}
+          onCancel={handleUnsavedCancel}
         />
       )}
     </div>
