@@ -27,13 +27,13 @@ if [ -z "$VIRTUAL_ENV" ]; then
 fi
 
 echo "Running ruff format --check..."
-ruff format --check src/
+ruff format --check src/ tests/
 
 echo "Running ruff check..."
-ruff check src/
+ruff check src/ tests/
 
 echo "Running mypy..."
-mypy src/
+mypy src/ tests/
 
 echo -e "${GREEN}Python linting passed!${NC}"
 
