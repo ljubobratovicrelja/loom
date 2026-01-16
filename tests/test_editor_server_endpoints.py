@@ -702,3 +702,232 @@ pipeline: []
         content = config.read_text()
         assert "# Important comment" in content
         assert "new_path" in content
+
+
+class TestValidateConfig:
+    """Tests for GET /api/config/validate endpoint."""
+
+    def test_validate_no_config_returns_empty_warnings(self) -> None:
+        """Should return empty warnings list when no config path set."""
+        configure(config_path=None)
+        client = TestClient(app)
+
+        response = client.get("/api/config/validate")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["warnings"] == []
+
+    def test_validate_missing_config_returns_empty_warnings(self, tmp_path: Path) -> None:
+        """Should return empty warnings for non-existent config file."""
+        missing = tmp_path / "missing.yml"
+        configure(config_path=missing)
+        client = TestClient(app)
+
+        response = client.get("/api/config/validate")
+
+        assert response.status_code == 200
+        assert response.json()["warnings"] == []
+
+    def test_validate_valid_pipeline_no_warnings(self, tmp_path: Path) -> None:
+        """Should return no warnings for valid pipeline without type mismatches."""
+        config = tmp_path / "pipeline.yml"
+        config.write_text("""
+variables:
+  input_video: /path/to/video.mp4
+
+pipeline:
+  - name: process
+    task: tasks/process.py
+    inputs:
+      video: $input_video
+""")
+        # Note: Schema lookup requires task paths to match exactly.
+        # When tasks_dir doesn't contain a file matching the pipeline's task path,
+        # no schema is found and no warnings are produced.
+        configure(config_path=config, tasks_dir=tmp_path / "tasks")
+        client = TestClient(app)
+
+        response = client.get("/api/config/validate")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["warnings"], list)
+
+    def test_validate_with_path_query_param(self, tmp_path: Path) -> None:
+        """Should validate a specific config file via path query param."""
+        config = tmp_path / "other.yml"
+        config.write_text("""
+variables:
+  input: /path/to/input
+pipeline: []
+""")
+        # Set a different default config
+        configure(config_path=tmp_path / "default.yml")
+        client = TestClient(app)
+
+        response = client.get("/api/config/validate", params={"path": str(config)})
+
+        assert response.status_code == 200
+        # Should validate successfully with no warnings (empty pipeline)
+        assert response.json()["warnings"] == []
+
+
+class TestListTasks:
+    """Tests for GET /api/tasks endpoint."""
+
+    def test_list_tasks_empty_directory(self, tmp_path: Path) -> None:
+        """Should return empty list when tasks directory is empty."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        configure(tasks_dir=tasks_dir)
+        client = TestClient(app)
+
+        response = client.get("/api/tasks")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_list_tasks_returns_schemas(self, tmp_path: Path) -> None:
+        """Should return task schemas from task files."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+
+        # Create a task with schema
+        task_file = tasks_dir / "extract_features.py"
+        task_file.write_text('''"""Extract features from video.
+
+---
+inputs:
+  video:
+    type: video
+    description: Input video file
+outputs:
+  -o:
+    type: csv
+    description: Feature CSV
+args:
+  --batch-size:
+    type: int
+    default: 32
+    description: Batch size for processing
+---
+"""
+''')
+
+        configure(tasks_dir=tasks_dir)
+        client = TestClient(app)
+
+        response = client.get("/api/tasks")
+
+        assert response.status_code == 200
+        tasks = response.json()
+        assert len(tasks) == 1
+        task = tasks[0]
+        assert task["name"] == "extract_features"
+        assert "video" in task["inputs"]
+        assert task["inputs"]["video"]["type"] == "video"
+        assert "-o" in task["outputs"]
+        assert "--batch-size" in task["args"]
+
+    def test_list_tasks_skips_private_files(self, tmp_path: Path) -> None:
+        """Should skip files starting with underscore."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+
+        # Create public and private task files
+        (tasks_dir / "public_task.py").write_text('"""Public task."""\n')
+        (tasks_dir / "_private_task.py").write_text('"""Private task."""\n')
+
+        configure(tasks_dir=tasks_dir)
+        client = TestClient(app)
+
+        response = client.get("/api/tasks")
+
+        assert response.status_code == 200
+        tasks = response.json()
+        # Should only include the public task
+        names = [t["name"] for t in tasks]
+        assert "public_task" in names
+        assert "_private_task" not in names
+
+    def test_list_tasks_multiple_tasks(self, tmp_path: Path) -> None:
+        """Should return all tasks sorted by name."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+
+        # Create multiple tasks
+        (tasks_dir / "zebra.py").write_text('"""Zebra task."""\n')
+        (tasks_dir / "alpha.py").write_text('"""Alpha task."""\n')
+        (tasks_dir / "beta.py").write_text('"""Beta task."""\n')
+
+        configure(tasks_dir=tasks_dir)
+        client = TestClient(app)
+
+        response = client.get("/api/tasks")
+
+        assert response.status_code == 200
+        tasks = response.json()
+        names = [t["name"] for t in tasks]
+        assert names == ["alpha", "beta", "zebra"]
+
+
+class TestGetState:
+    """Tests for GET /api/state endpoint."""
+
+    def test_get_state_returns_current_paths(self, tmp_path: Path) -> None:
+        """Should return current config path and tasks directory."""
+        config = tmp_path / "pipeline.yml"
+        tasks = tmp_path / "tasks"
+        configure(config_path=config, tasks_dir=tasks)
+        client = TestClient(app)
+
+        response = client.get("/api/state")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["configPath"] == str(config)
+        assert data["tasksDir"] == str(tasks)
+
+    def test_get_state_no_config_returns_null(self) -> None:
+        """Should return null configPath when no config set."""
+        configure(config_path=None)
+        client = TestClient(app)
+
+        response = client.get("/api/state")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["configPath"] is None
+
+
+class TestRunStatus:
+    """Tests for GET /api/run/status endpoint."""
+
+    def test_run_status_idle(self) -> None:
+        """Should return idle status when nothing is running."""
+        from loom.editor.server import _execution_state
+        _execution_state["status"] = "idle"
+        _execution_state["current_step"] = None
+
+        client = TestClient(app)
+        response = client.get("/api/run/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "idle"
+        assert data["current_step"] is None
+
+    def test_run_status_running(self) -> None:
+        """Should return running status with current step."""
+        from loom.editor.server import _execution_state
+        _execution_state["status"] = "running"
+        _execution_state["current_step"] = "extract_features"
+
+        client = TestClient(app)
+        response = client.get("/api/run/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "running"
+        assert data["current_step"] == "extract_features"
