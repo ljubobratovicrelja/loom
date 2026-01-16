@@ -27,10 +27,10 @@ if [ -z "$VIRTUAL_ENV" ]; then
 fi
 
 echo "Running ruff format --check..."
-ruff format --check src/ tests/
+ruff format --check src/ tests/ examples/
 
 echo "Running ruff check..."
-ruff check src/ tests/
+ruff check src/ tests/ examples/
 
 echo "Running mypy..."
 mypy src/ tests/
