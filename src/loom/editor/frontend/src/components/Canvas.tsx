@@ -486,6 +486,8 @@ export default function Canvas({
         nodeTypes={nodeTypes}
         fitView
         panOnDrag={[1, 2]}
+        panOnScroll
+        zoomOnScroll={false}
         selectionOnDrag
         selectionMode={SelectionMode.Partial}
         proOptions={{ hideAttribution: true }}
