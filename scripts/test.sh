@@ -6,6 +6,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 FRONTEND_DIR="$ROOT_DIR/src/loom/ui/frontend"
 
+# Load nvm if available (needed for Node.js >= 18)
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+    source "$NVM_DIR/nvm.sh"
+    nvm use 20 --silent 2>/dev/null || true
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
