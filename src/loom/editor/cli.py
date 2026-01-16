@@ -50,8 +50,8 @@ Examples:
     parser.add_argument(
         "--tasks-dir",
         type=Path,
-        default=Path("tasks"),
-        help="Directory containing tasks (default: tasks)",
+        default=None,
+        help="Directory containing tasks (default: tasks/ relative to pipeline)",
     )
 
     args = parser.parse_args()
@@ -62,10 +62,19 @@ Examples:
         print("Use --new to create a new pipeline")
         return 1
 
+    # Resolve tasks directory relative to pipeline file
+    tasks_dir = args.tasks_dir
+    if tasks_dir is None and args.config:
+        # Default to tasks/ in the same directory as the pipeline
+        tasks_dir = args.config.parent / "tasks"
+    elif tasks_dir is None:
+        # Fallback for --new without config
+        tasks_dir = Path("tasks")
+
     # Configure server
     from .server import configure
 
-    configure(config_path=args.config, tasks_dir=args.tasks_dir)
+    configure(config_path=args.config, tasks_dir=tasks_dir)
 
     # Open browser
     url = f"http://{args.host}:{args.port}"

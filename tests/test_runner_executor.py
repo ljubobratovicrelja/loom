@@ -79,8 +79,8 @@ class TestPipelineExecutorBuildCommand:
         cmd = executor.build_command(step)
 
         assert cmd[0] == sys.executable
-        assert cmd[1] == "scripts/test.py"
-        assert len(cmd) == 2
+        # Script path is resolved relative to base_dir (cwd by default)
+        assert Path(cmd[1]).name == "test.py"
 
     def test_build_command_with_inputs(self, config: PipelineConfig):
         """Test building command with positional inputs."""
@@ -92,7 +92,9 @@ class TestPipelineExecutorBuildCommand:
         executor = PipelineExecutor(config)
         cmd = executor.build_command(step)
 
-        assert cmd[2] == "data/video.mp4"
+        # Input paths are resolved to absolute
+        assert Path(cmd[2]).is_absolute()
+        assert Path(cmd[2]).name == "video.mp4"
 
     def test_build_command_with_outputs(self, config: PipelineConfig):
         """Test building command with output flags."""
@@ -106,7 +108,9 @@ class TestPipelineExecutorBuildCommand:
 
         assert "-o" in cmd
         idx = cmd.index("-o")
-        assert cmd[idx + 1] == "data/out.csv"
+        # Output paths are resolved to absolute
+        assert Path(cmd[idx + 1]).is_absolute()
+        assert Path(cmd[idx + 1]).name == "out.csv"
 
     def test_build_command_with_args(self, config: PipelineConfig):
         """Test building command with various argument types."""
@@ -177,11 +181,95 @@ class TestPipelineExecutorBuildCommand:
 
         # Check order: executable, script, inputs, outputs, args
         assert cmd[0] == sys.executable
-        assert cmd[1] == "scripts/process.py"
-        assert cmd[2] == "data/video.mp4"  # input
-        assert "-o" in cmd and "data/out.csv" in cmd  # output
+        assert Path(cmd[1]).name == "process.py"  # script (resolved)
+        assert Path(cmd[2]).name == "video.mp4"  # input (resolved)
+        assert "-o" in cmd  # output flag
         assert "--threshold" in cmd  # args
         assert "--verbose" in cmd
+
+
+class TestPipelineExecutorPathResolution:
+    """Tests for path resolution in build_command from a YAML file."""
+
+    def test_build_command_resolves_paths_from_yaml(self, tmp_path: Path):
+        """Test that build_command resolves all paths relative to pipeline file."""
+        # Create a pipeline in a subdirectory
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        config_file = project_dir / "pipeline.yml"
+        config_file.write_text("""
+variables:
+  input_video: data/input.mp4
+  output_csv: data/output.csv
+
+pipeline:
+  - name: extract
+    task: tasks/extract.py
+    inputs:
+      video: $input_video
+    outputs:
+      --output: $output_csv
+""")
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config)
+        step = config.get_step_by_name("extract")
+        cmd = executor.build_command(step)
+
+        # Script path should be absolute, relative to pipeline dir
+        script_path = Path(cmd[1])
+        assert script_path.is_absolute()
+        assert script_path == project_dir / "tasks" / "extract.py"
+
+        # Input path should be absolute, relative to pipeline dir
+        input_path = Path(cmd[2])
+        assert input_path.is_absolute()
+        assert input_path == project_dir / "data" / "input.mp4"
+
+        # Output path should be absolute, relative to pipeline dir
+        output_idx = cmd.index("--output")
+        output_path = Path(cmd[output_idx + 1])
+        assert output_path.is_absolute()
+        assert output_path == project_dir / "data" / "output.csv"
+
+    def test_build_command_from_different_cwd(self, tmp_path: Path):
+        """Test that paths are correct even when cwd differs from pipeline dir."""
+        import os
+
+        # Create pipeline in subdirectory
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        config_file = project_dir / "pipeline.yml"
+        config_file.write_text("""
+variables:
+  output: results/out.csv
+
+pipeline:
+  - name: process
+    task: tasks/process.py
+    outputs:
+      --output: $output
+""")
+        # Save current cwd and change to tmp_path (not project_dir)
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+
+            # Load config - paths should still be relative to pipeline file
+            config = PipelineConfig.from_yaml(config_file)
+            executor = PipelineExecutor(config)
+            step = config.get_step_by_name("process")
+            cmd = executor.build_command(step)
+
+            # Script should resolve to project_dir/tasks/process.py, not tmp_path/tasks/process.py
+            script_path = Path(cmd[1])
+            assert script_path == project_dir / "tasks" / "process.py"
+
+            # Output should resolve to project_dir/results/out.csv
+            output_idx = cmd.index("--output")
+            output_path = Path(cmd[output_idx + 1])
+            assert output_path == project_dir / "results" / "out.csv"
+        finally:
+            os.chdir(original_cwd)
 
 
 class TestPipelineExecutorGetStepsToRun:

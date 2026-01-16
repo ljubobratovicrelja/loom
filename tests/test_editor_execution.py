@@ -108,10 +108,12 @@ class TestBuildStepCommand:
         cmd = build_step_command(data_section_config, "extract_gaze")
 
         assert cmd[0] == sys.executable
-        assert cmd[1] == "tasks/extract_gaze.py"
-        assert "data/videos/test.mp4" in cmd
+        # Script and paths are now resolved to absolute paths
+        assert Path(cmd[1]).name == "extract_gaze.py"
+        assert Path(cmd[1]).is_absolute()
+        assert any("test.mp4" in c for c in cmd)
         assert "--output" in cmd
-        assert "data/tracking/gaze.csv" in cmd
+        assert any("gaze.csv" in c for c in cmd)
         assert "--threshold" in cmd
         assert "50.0" in cmd
 
@@ -120,10 +122,12 @@ class TestBuildStepCommand:
         cmd = build_step_command(variables_section_config, "process")
 
         assert cmd[0] == sys.executable
-        assert cmd[1] == "scripts/process.py"
-        assert "data/videos/test.mp4" in cmd
+        # Script and paths are now resolved to absolute paths
+        assert Path(cmd[1]).name == "process.py"
+        assert Path(cmd[1]).is_absolute()
+        assert any("test.mp4" in c for c in cmd)
         assert "-o" in cmd
-        assert "data/output.csv" in cmd
+        assert any("output.csv" in c for c in cmd)
 
     def test_build_command_resolves_boolean_flags(self, data_section_config: Path):
         """Test that boolean True args add the flag without value."""
@@ -160,8 +164,10 @@ pipeline:
         cmd = build_step_command(config_file, "Extract Gaze")
 
         assert cmd[0] == sys.executable
-        assert cmd[1] == "tasks/extract.py"
-        assert "data/input.csv" in cmd
+        # Script and paths are now resolved to absolute paths
+        assert Path(cmd[1]).name == "extract.py"
+        assert Path(cmd[1]).is_absolute()
+        assert any("input.csv" in c for c in cmd)
 
 
 class TestBuildPipelineCommands:

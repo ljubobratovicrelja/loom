@@ -2,7 +2,6 @@
 
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 from .config import PipelineConfig, StepConfig
@@ -32,16 +31,18 @@ class PipelineExecutor:
         Returns:
             Command as list of strings.
         """
-        cmd = [sys.executable, step.script]
+        # Resolve script path relative to pipeline directory
+        script_path = self.config.resolve_script_path(step.script)
+        cmd = [sys.executable, str(script_path)]
 
-        # Add positional inputs in order
+        # Add positional inputs in order (resolved to absolute paths)
         for var_ref in step.inputs.values():
-            resolved = self.config.resolve_value(var_ref)
+            resolved = self.config.resolve_path(var_ref)
             cmd.append(str(resolved))
 
-        # Add output flags
+        # Add output flags (resolved to absolute paths)
         for flag, var_ref in step.outputs.items():
-            resolved = self.config.resolve_value(var_ref)
+            resolved = self.config.resolve_path(var_ref)
             cmd.append(flag)
             cmd.append(str(resolved))
 
@@ -66,8 +67,7 @@ class PipelineExecutor:
     def _ensure_output_dirs(self, step: StepConfig) -> None:
         """Create parent directories for step outputs."""
         for var_ref in step.outputs.values():
-            resolved = self.config.resolve_value(var_ref)
-            output_path = Path(resolved)
+            output_path = self.config.resolve_path(var_ref)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
     def run_step(

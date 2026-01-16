@@ -829,42 +829,27 @@ def get_variables_status() -> dict[str, bool]:
     """Check which variable and data node paths exist on disk.
 
     Returns a map of name -> exists (bool).
-    Resolves parameter references in values before checking.
+    Paths are resolved relative to the pipeline file's directory.
     """
+    from loom.runner import PipelineConfig
+
     if not _config_path or not _config_path.exists():
         return {}
 
-    with open(_config_path) as f:
-        data = _yaml.load(f) or {}
-
-    variables = data.get("variables", {})
-    parameters = data.get("parameters", {})
-    data_section = data.get("data", {})
+    try:
+        config = PipelineConfig.from_yaml(_config_path)
+    except Exception:
+        return {}
 
     result = {}
 
-    # Check variable paths
-    for name, value in variables.items():
-        # Resolve parameter references like $param
-        resolved = str(value)
-        for param_name, param_value in parameters.items():
-            resolved = resolved.replace(f"${param_name}", str(param_value))
-
-        # Check if path exists
-        path = Path(resolved)
-        result[name] = path.exists()
-
-    # Check data node paths
-    for name, data_info in data_section.items():
-        data_path = data_info.get("path", "")
-        # Resolve parameter references
-        resolved = str(data_path)
-        for param_name, param_value in parameters.items():
-            resolved = resolved.replace(f"${param_name}", str(param_value))
-
-        # Check if path exists
-        path = Path(resolved)
-        result[name] = path.exists()
+    # Check all variable paths
+    for name in config.variables:
+        try:
+            path = config.resolve_path(f"${name}")
+            result[name] = path.exists()
+        except (ValueError, OSError):
+            result[name] = False
 
     return result
 
@@ -909,8 +894,7 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
 
         for var_ref in step.outputs.values():
             try:
-                resolved = config.resolve_value(var_ref)
-                output_path = Path(resolved)
+                output_path = config.resolve_path(var_ref)
                 output_paths.append(output_path)
 
                 if output_path.exists():
@@ -935,8 +919,7 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
 
         for var_ref in step.inputs.values():
             try:
-                resolved = config.resolve_value(var_ref)
-                input_path = Path(resolved)
+                input_path = config.resolve_path(var_ref)
 
                 if input_path.exists():
                     mtime = input_path.stat().st_mtime

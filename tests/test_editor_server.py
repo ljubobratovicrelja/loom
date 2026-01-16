@@ -2,12 +2,9 @@
 
 from pathlib import Path
 
-import pytest
-
 from loom.editor.server import (
     DataEntry,
     EditorOptions,
-    GraphEdge,
     GraphNode,
     PipelineGraph,
     _update_yaml_from_graph,
@@ -40,30 +37,30 @@ pipeline:
   - name: extract_gaze
     task: tasks/extract_gaze.py
     inputs:
-      video: \$video
+      video: \\$video
     outputs:
-      -o: \$gaze_csv
+      -o: \\$gaze_csv
     args:
-      --threshold: \$threshold
+      --threshold: \\$threshold
 
   # Step 2: Detect fixations
   - name: detect_fixations
     task: tasks/detect_fixations.py
     inputs:
-      gaze_csv: \$gaze_csv
+      gaze_csv: \\$gaze_csv
     outputs:
-      -o: \$fixations_csv
+      -o: \\$fixations_csv
     args:
-      --width: \$frame_width
-      --height: \$frame_height
+      --width: \\$frame_width
+      --height: \\$frame_height
 
   # Step 3: Optional visualization
   - name: visualize
     task: tasks/visualize.py
     optional: true
     inputs:
-      video: \$video
-      fixations: \$fixations_csv
+      video: \\$video
+      fixations: \\$fixations_csv
     outputs:
       -o: data/viz/output.mp4
 """
@@ -317,18 +314,18 @@ pipeline:
   - name: extract_gaze
     task: tasks/extract_gaze.py
     inputs:
-      video: \$video
+      video: \\$video
     outputs:
-      --output: \$gaze_csv
+      --output: \\$gaze_csv
     args:
-      --threshold: \$threshold
+      --threshold: \\$threshold
 
   - name: detect_fixations
     task: tasks/detect_fixations.py
     inputs:
-      gaze_csv: \$gaze_csv
+      gaze_csv: \\$gaze_csv
     outputs:
-      --output: \$fixations_csv
+      --output: \\$fixations_csv
 """
 
 

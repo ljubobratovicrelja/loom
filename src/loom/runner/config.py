@@ -42,6 +42,7 @@ class PipelineConfig:
     variables: dict[str, str]
     parameters: dict[str, Any]
     steps: list[StepConfig]
+    base_dir: Path = field(default_factory=Path.cwd)
     _output_producers: dict[str, str] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -54,7 +55,11 @@ class PipelineConfig:
 
     @classmethod
     def from_yaml(cls, path: Path) -> "PipelineConfig":
-        """Load pipeline configuration from YAML file."""
+        """Load pipeline configuration from YAML file.
+
+        All relative paths in the pipeline (scripts, variables) are resolved
+        relative to the directory containing the YAML file.
+        """
         with open(path) as f:
             data = yaml.safe_load(f) or {}
 
@@ -74,10 +79,14 @@ class PipelineConfig:
                 # Fallback: treat as path string
                 variables[name] = str(entry)
 
+        # Store the pipeline file's directory for relative path resolution
+        base_dir = path.parent.resolve()
+
         return cls(
             variables=variables,
             parameters=data.get("parameters", {}),
             steps=steps,
+            base_dir=base_dir,
         )
 
     def resolve_value(self, value: Any) -> Any:
@@ -102,6 +111,41 @@ class PipelineConfig:
             return self.parameters[ref_name]
 
         raise ValueError(f"Unknown reference: {value}")
+
+    def resolve_path(self, value: Any) -> Path:
+        """Resolve a value to an absolute path.
+
+        First resolves any $variable/$parameter references, then makes the
+        resulting path absolute relative to the pipeline's base directory.
+
+        Args:
+            value: Value to resolve (string with optional $ reference).
+
+        Returns:
+            Absolute Path object.
+        """
+        resolved = self.resolve_value(value)
+        path = Path(str(resolved))
+
+        # Make relative paths absolute relative to pipeline directory
+        if not path.is_absolute():
+            path = self.base_dir / path
+
+        return path
+
+    def resolve_script_path(self, script: str) -> Path:
+        """Resolve a task script path to an absolute path.
+
+        Args:
+            script: Script path (e.g., 'tasks/process.py').
+
+        Returns:
+            Absolute Path object.
+        """
+        path = Path(script)
+        if not path.is_absolute():
+            path = self.base_dir / path
+        return path
 
     def get_step_by_name(self, name: str) -> StepConfig:
         """Get a step by its name."""

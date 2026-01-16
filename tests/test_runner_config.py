@@ -404,6 +404,121 @@ pipeline: []
         assert config.variables["incomplete"] == ""
 
 
+class TestPipelineConfigPathResolution:
+    """Tests for path resolution relative to pipeline file."""
+
+    def test_base_dir_set_from_yaml_path(self, tmp_path: Path):
+        """Test that base_dir is set to the pipeline file's directory."""
+        subdir = tmp_path / "project" / "pipelines"
+        subdir.mkdir(parents=True)
+        config_file = subdir / "pipeline.yml"
+        config_file.write_text("pipeline: []")
+
+        config = PipelineConfig.from_yaml(config_file)
+
+        assert config.base_dir == subdir.resolve()
+
+    def test_resolve_path_makes_relative_paths_absolute(self, tmp_path: Path):
+        """Test that resolve_path makes relative paths absolute."""
+        subdir = tmp_path / "project"
+        subdir.mkdir()
+        config_file = subdir / "pipeline.yml"
+        config_file.write_text("""
+variables:
+  output: data/output.csv
+pipeline: []
+""")
+        config = PipelineConfig.from_yaml(config_file)
+
+        resolved = config.resolve_path("$output")
+
+        assert resolved.is_absolute()
+        assert resolved == subdir / "data" / "output.csv"
+
+    def test_resolve_path_preserves_absolute_paths(self, tmp_path: Path):
+        """Test that resolve_path doesn't modify absolute paths."""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text("""
+variables:
+  output: /absolute/path/output.csv
+pipeline: []
+""")
+        config = PipelineConfig.from_yaml(config_file)
+
+        resolved = config.resolve_path("$output")
+
+        assert resolved == Path("/absolute/path/output.csv")
+
+    def test_resolve_path_with_parameter_reference(self, tmp_path: Path):
+        """Test that resolve_path works with parameter references."""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text("""
+parameters:
+  model_name: bert
+variables:
+  output: models/$model_name/weights.pt
+pipeline: []
+""")
+        config = PipelineConfig.from_yaml(config_file)
+
+        # Note: $model_name in variable value won't be expanded by resolve_path
+        # since variable values are literal strings. This tests the path resolution.
+        resolved = config.resolve_path("$output")
+
+        assert resolved.is_absolute()
+        assert "models" in str(resolved)
+
+    def test_resolve_script_path_relative(self, tmp_path: Path):
+        """Test that resolve_script_path makes relative script paths absolute."""
+        subdir = tmp_path / "project"
+        subdir.mkdir()
+        config_file = subdir / "pipeline.yml"
+        config_file.write_text("pipeline: []")
+
+        config = PipelineConfig.from_yaml(config_file)
+
+        resolved = config.resolve_script_path("tasks/process.py")
+
+        assert resolved.is_absolute()
+        assert resolved == subdir / "tasks" / "process.py"
+
+    def test_resolve_script_path_absolute(self, tmp_path: Path):
+        """Test that resolve_script_path preserves absolute paths."""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text("pipeline: []")
+
+        config = PipelineConfig.from_yaml(config_file)
+
+        resolved = config.resolve_script_path("/usr/local/bin/script.py")
+
+        assert resolved == Path("/usr/local/bin/script.py")
+
+    def test_base_dir_default_is_cwd(self):
+        """Test that base_dir defaults to cwd when not loading from file."""
+        config = PipelineConfig(variables={}, parameters={}, steps=[])
+
+        assert config.base_dir == Path.cwd()
+
+    def test_resolve_path_with_data_section(self, tmp_path: Path):
+        """Test path resolution with data section entries."""
+        subdir = tmp_path / "project"
+        subdir.mkdir()
+        config_file = subdir / "pipeline.yml"
+        config_file.write_text("""
+data:
+  video:
+    type: video
+    path: data/input.mp4
+pipeline: []
+""")
+        config = PipelineConfig.from_yaml(config_file)
+
+        resolved = config.resolve_path("$video")
+
+        assert resolved.is_absolute()
+        assert resolved == subdir / "data" / "input.mp4"
+
+
 class TestStepConfigTaskField:
     """Tests for task field support in StepConfig."""
 

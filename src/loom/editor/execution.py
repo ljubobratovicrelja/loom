@@ -23,8 +23,8 @@ def _step_outputs_exist(config: PipelineConfig, step: StepConfig) -> bool:
         return False
 
     for var_ref in step.outputs.values():
-        resolved = config.resolve_value(var_ref)
-        if not Path(resolved).exists():
+        output_path = config.resolve_path(var_ref)
+        if not output_path.exists():
             return False
 
     return True
@@ -228,15 +228,14 @@ def get_step_output_dirs(config_path: Path, step_name: str) -> list[Path]:
         step_name: Name of step.
 
     Returns:
-        List of parent directories for step outputs.
+        List of parent directories for step outputs (absolute paths).
     """
     config = PipelineConfig.from_yaml(config_path)
     step = config.get_step_by_name(step_name)
 
     dirs = []
     for var_ref in step.outputs.values():
-        resolved = config.resolve_value(var_ref)
-        output_path = Path(resolved)
+        output_path = config.resolve_path(var_ref)
         parent = output_path.parent
         if parent not in dirs:
             dirs.append(parent)
