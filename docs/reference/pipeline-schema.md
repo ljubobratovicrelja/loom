@@ -55,12 +55,42 @@ data:
 
 Types enable connection validation in the visual editor.
 
+### URL Data Sources
+
+You can use HTTP/HTTPS URLs instead of local paths. URLs are automatically downloaded and cached locally.
+
+```yaml
+data:
+  source_image:
+    type: image
+    path: https://example.com/images/photo.png
+    description: Image from URL
+```
+
+**How it works:**
+
+1. URLs are detected by `http://` or `https://` prefix
+2. On first access, the URL is downloaded to `.loom-url-cache/` in the pipeline directory
+3. Subsequent runs use the cached file (fast)
+4. Use `loom clean` to clear the cache and re-download
+
+**Example:**
+
+```yaml
+data:
+  lena_image:
+    type: image
+    path: https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png
+    name: Lena (Source)
+```
+
 ### Visual Representation
 
 In the editor:
 
-- **Green** = file exists on disk
-- **Grey** = file doesn't exist yet
+- **Green** = file exists on disk or URL is reachable
+- **Grey** = file doesn't exist or URL is unreachable
+- **Link icon** = path is a URL
 
 ## Parameters Section
 

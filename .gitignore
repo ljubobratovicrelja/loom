@@ -69,5 +69,6 @@ Thumbs.db
 # Example data
 examples/*/data/**
 examples/*/.loom-thumbnails/**
+examples/*/.loom-url-cache/**
 # MkDocs build output
 site/

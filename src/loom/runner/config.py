@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from .url import URL_CACHE_DIR_NAME, ensure_url_downloaded, is_url
+
 
 @dataclass
 class StepConfig:
@@ -208,3 +210,69 @@ class PipelineConfig:
     def override_parameters(self, overrides: dict[str, Any]) -> None:
         """Override parameter values."""
         self.parameters.update(overrides)
+
+    def get_url_cache_dir(self) -> Path:
+        """Get the URL cache directory for this pipeline.
+
+        Returns:
+            Path to the URL cache directory.
+        """
+        return self.base_dir / URL_CACHE_DIR_NAME
+
+    def is_url_path(self, value: Any) -> bool:
+        """Check if a value resolves to a URL.
+
+        Args:
+            value: Value to check (string with optional $ reference).
+
+        Returns:
+            True if the resolved value is an HTTP/HTTPS URL.
+        """
+        resolved = self.resolve_value(value)
+        return isinstance(resolved, str) and is_url(resolved)
+
+    def get_raw_path(self, value: Any) -> str:
+        """Get the raw path value without downloading URLs.
+
+        This is useful for checking if a path is a URL or getting the
+        original path before any transformations.
+
+        Args:
+            value: Value to resolve (string with optional $ reference).
+
+        Returns:
+            The raw path string (may be a URL or local path).
+        """
+        resolved = self.resolve_value(value)
+        return str(resolved)
+
+    def resolve_path_for_execution(self, value: Any) -> Path:
+        """Resolve a value to a local path, downloading URLs if needed.
+
+        This method should be used during pipeline execution when actual
+        local file access is required. For URLs, it downloads the resource
+        to the cache directory first.
+
+        Args:
+            value: Value to resolve (string with optional $ reference).
+
+        Returns:
+            Absolute Path object pointing to a local file.
+
+        Raises:
+            RuntimeError: If URL download fails.
+        """
+        resolved = self.resolve_value(value)
+        path_str = str(resolved)
+
+        # If it's a URL, download and return cache path
+        if is_url(path_str):
+            cache_dir = self.get_url_cache_dir()
+            return ensure_url_downloaded(path_str, cache_dir)
+
+        # Otherwise, resolve as normal path
+        path = Path(path_str)
+        if not path.is_absolute():
+            path = self.base_dir / path
+
+        return path

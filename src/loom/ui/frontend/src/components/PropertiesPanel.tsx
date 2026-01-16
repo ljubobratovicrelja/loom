@@ -1,11 +1,16 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import type { Node, Edge } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion } from 'lucide-react'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion, Link } from 'lucide-react'
 import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 import type { FreshnessInfo } from '../hooks/useFreshness'
 import { getFreshnessLabel, getFreshnessColorClasses } from '../hooks/useFreshness'
+
+// Helper to check if a path is a URL
+const isUrl = (path: string): boolean => {
+  return path.startsWith('http://') || path.startsWith('https://')
+}
 
 // Icon component lookup for data types
 const TYPE_ICON_COMPONENTS: Record<DataType, ReactNode> = {
@@ -360,13 +365,26 @@ export default function PropertiesPanel({
             </div>
             <div>
               <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Path</label>
-              <input
-                type="text"
-                value={(editData.path as string) || ''}
-                onChange={(e) => handleChange('path', e.target.value)}
-                placeholder="data/path/to/file.ext"
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm focus:border-teal-500"
-              />
+              <div className="relative">
+                {(editData.path as string) && isUrl(editData.path as string) && (
+                  <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 dark:text-blue-400" />
+                )}
+                <input
+                  type="text"
+                  value={(editData.path as string) || ''}
+                  onChange={(e) => handleChange('path', e.target.value)}
+                  placeholder="data/path/to/file.ext or https://..."
+                  className={`w-full py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm focus:border-teal-500 ${
+                    (editData.path as string) && isUrl(editData.path as string) ? 'pl-9 pr-3' : 'px-3'
+                  }`}
+                />
+              </div>
+              {(editData.path as string) && isUrl(editData.path as string) && (
+                <p className="text-blue-500 dark:text-blue-400 text-xs mt-1 flex items-center gap-1">
+                  <Link className="w-3 h-3" />
+                  URL will be downloaded and cached locally
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Description (optional)</label>

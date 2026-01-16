@@ -36,8 +36,9 @@ class PipelineExecutor:
         cmd = [sys.executable, str(script_path)]
 
         # Add positional inputs in order (resolved to absolute paths)
+        # Use resolve_path_for_execution to handle URL downloads
         for var_ref in step.inputs.values():
-            resolved = self.config.resolve_path(var_ref)
+            resolved = self.config.resolve_path_for_execution(var_ref)
             cmd.append(str(resolved))
 
         # Add output flags (resolved to absolute paths)

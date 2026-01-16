@@ -1,8 +1,13 @@
 import { memo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText } from 'lucide-react'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText, Link } from 'lucide-react'
 import type { DataNode as DataNodeType, DataType } from '../types/pipeline'
 import { useThumbnail } from '../hooks/useThumbnail'
+
+// Helper to check if a path is a URL
+const isUrl = (path: string): boolean => {
+  return path.startsWith('http://') || path.startsWith('https://')
+}
 
 // Type configuration with icons and labels
 const TYPE_CONFIG: Record<DataType, { icon: ReactNode; label: string }> = {
@@ -126,8 +131,11 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
           <span className="text-slate-400 dark:text-slate-500 text-xs">&#9675;</span>
         )}
       </div>
-      <div className={`px-3 pb-2 text-xs ${colors.value} truncate max-w-[180px]`} title={data.path}>
-        {data.path || '(no path)'}
+      <div className={`px-3 pb-2 text-xs ${colors.value} truncate max-w-[180px] flex items-center gap-1`} title={data.path}>
+        {data.path && isUrl(data.path) && (
+          <Link className="w-3 h-3 flex-shrink-0" />
+        )}
+        <span className="truncate">{data.path || '(no path)'}</span>
       </div>
     </div>
   )

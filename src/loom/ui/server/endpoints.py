@@ -12,6 +12,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from ruamel.yaml import YAML
 from send2trash import send2trash  # type: ignore[import-untyped]
 
+from loom.runner.url import check_url_exists, download_url, is_url
+
 from . import state
 from .graph import update_yaml_from_graph, yaml_to_graph
 from .models import ExecutionStatus, PipelineGraph, PipelineInfo, ValidationResult
@@ -197,10 +199,11 @@ def open_pipeline(path: str = Query(..., description="Path to pipeline.yml")) ->
 
 @router.get("/api/data/status")
 def get_data_status() -> dict[str, bool]:
-    """Check which data node paths exist on disk.
+    """Check which data node paths exist on disk or are reachable URLs.
 
     Returns a map of name -> exists (bool).
     Paths are resolved relative to the pipeline file's directory.
+    URLs are checked for reachability via HEAD request.
     """
     from loom.runner import PipelineConfig
 
@@ -217,8 +220,16 @@ def get_data_status() -> dict[str, bool]:
     # Check all data node paths (stored internally as variables for path resolution)
     for name in config.variables:
         try:
-            path = config.resolve_path(f"${name}")
-            result[name] = path.exists()
+            raw_path = config.get_raw_path(f"${name}")
+
+            # Check if it's a URL
+            if is_url(raw_path):
+                # For URLs, check reachability
+                result[name] = check_url_exists(raw_path)
+            else:
+                # For local paths, check existence
+                path = config.resolve_path(f"${name}")
+                result[name] = path.exists()
         except (ValueError, OSError):
             result[name] = False
 
@@ -349,6 +360,7 @@ def get_thumbnail_by_path(
 
     Unlike /api/thumbnail/{data_key}, this doesn't require the path to be saved
     in the config. Used for real-time preview when editing data node paths.
+    Supports both local paths and URLs.
     """
     from loom.runner import PipelineConfig
 
@@ -362,7 +374,17 @@ def get_thumbnail_by_path(
 
     try:
         config = PipelineConfig.from_yaml(state.config_path)
-        resolved = config.resolve_path(path)
+        raw_path = config.get_raw_path(path)
+
+        # Handle URL paths by downloading first
+        if is_url(raw_path):
+            cache_dir = config.get_url_cache_dir()
+            result = download_url(raw_path, cache_dir)
+            if not result.success or result.local_path is None:
+                return Response(status_code=204)
+            resolved = result.local_path
+        else:
+            resolved = config.resolve_path(path)
     except Exception:
         return Response(status_code=204)
 
@@ -388,6 +410,7 @@ def get_preview_by_path(
 
     Unlike /api/preview/{data_key}, this doesn't require the path to be saved
     in the config. Used for real-time preview when editing data node paths.
+    Supports both local paths and URLs.
     """
     from loom.runner import PipelineConfig
 
@@ -401,7 +424,17 @@ def get_preview_by_path(
 
     try:
         config = PipelineConfig.from_yaml(state.config_path)
-        resolved = config.resolve_path(path)
+        raw_path = config.get_raw_path(path)
+
+        # Handle URL paths by downloading first
+        if is_url(raw_path):
+            cache_dir = config.get_url_cache_dir()
+            result = download_url(raw_path, cache_dir)
+            if not result.success or result.local_path is None:
+                return Response(status_code=204)
+            resolved = result.local_path
+        else:
+            resolved = config.resolve_path(path)
     except Exception:
         return Response(status_code=204)
 
@@ -595,6 +628,7 @@ def get_thumbnail(data_key: str) -> Response:
     Returns a PNG thumbnail for image/video data types.
     Returns 404 if data node doesn't exist or isn't image/video type.
     Returns 204 if thumbnail generation fails.
+    Supports both local paths and URLs.
     """
     from loom.runner import PipelineConfig
 
@@ -618,9 +652,18 @@ def get_thumbnail(data_key: str) -> Response:
             status_code=404, detail=f"Data type '{data_type}' doesn't support thumbnails"
         )
 
-    # Resolve path
+    # Resolve path (handle URLs by downloading first)
     try:
-        file_path = config.resolve_path(f"${data_key}")
+        raw_path = config.get_raw_path(f"${data_key}")
+
+        if is_url(raw_path):
+            cache_dir = config.get_url_cache_dir()
+            result = download_url(raw_path, cache_dir)
+            if not result.success or result.local_path is None:
+                return Response(status_code=204)
+            file_path = result.local_path
+        else:
+            file_path = config.resolve_path(f"${data_key}")
     except (ValueError, OSError) as e:
         raise HTTPException(status_code=400, detail=f"Failed to resolve path: {e}")
 
@@ -643,6 +686,7 @@ def get_preview(data_key: str) -> dict[str, Any]:
 
     Returns first few lines for txt/csv/json data types.
     Returns 404 if data node doesn't exist or isn't a text type.
+    Supports both local paths and URLs.
     """
     from loom.runner import PipelineConfig
 
@@ -666,9 +710,18 @@ def get_preview(data_key: str) -> dict[str, Any]:
             status_code=404, detail=f"Data type '{data_type}' doesn't support preview"
         )
 
-    # Resolve path
+    # Resolve path (handle URLs by downloading first)
     try:
-        file_path = config.resolve_path(f"${data_key}")
+        raw_path = config.get_raw_path(f"${data_key}")
+
+        if is_url(raw_path):
+            cache_dir = config.get_url_cache_dir()
+            result = download_url(raw_path, cache_dir)
+            if not result.success or result.local_path is None:
+                raise HTTPException(status_code=500, detail="Failed to download URL")
+            file_path = result.local_path
+        else:
+            file_path = config.resolve_path(f"${data_key}")
     except (ValueError, OSError) as e:
         raise HTTPException(status_code=400, detail=f"Failed to resolve path: {e}")
 
