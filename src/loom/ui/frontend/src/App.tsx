@@ -96,6 +96,8 @@ export default function App() {
 
   // Refs for change tracking and history
   const isInitialMount = useRef(true)
+  // Flag to skip change tracking during initial load (stays true until init completes)
+  const isLoadingRef = useRef(true)
   // Flag to skip change tracking after restore/save operations
   // Using a boolean flag ensures we skip exactly once regardless of React's batching behavior
   const skipNextChangeTrackingRef = useRef(false)
@@ -362,8 +364,6 @@ export default function App() {
             : applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[]
           // Enrich step nodes with type information from task schemas
           layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
-          // Initial load - don't mark document as dirty
-          skipNextChangeTrackingRef.current = true
           setNodes(layoutedNodes)
           setEdges(graph.edges)
           setParameters(graph.parameters)
@@ -379,8 +379,6 @@ export default function App() {
           // Check data node file existence immediately after loading
           const status = await loadVariablesStatus()
           if (Object.keys(status).length > 0) {
-            // Runtime-only change - don't mark document as dirty
-            skipNextChangeTrackingRef.current = true
             setNodes((nds) =>
               nds.map((node) => {
                 // Update data nodes - use key for lookup (not display name)
@@ -428,6 +426,8 @@ export default function App() {
           }
         }
       }
+      // Mark loading as complete - changes after this point should mark dirty
+      isLoadingRef.current = false
     }
     init()
   }, [loadConfig, loadState, loadTasks, loadVariablesStatus, validateConfig, setNodes, setEdges, clearHistory, refreshFreshness])
@@ -437,6 +437,10 @@ export default function App() {
     // Skip initial mount - don't mark as changed when first loading
     if (isInitialMount.current) {
       isInitialMount.current = false
+      return
+    }
+    // Skip during initial load phase
+    if (isLoadingRef.current) {
       return
     }
     // Skip if flagged (after restore/save) - reset flag for next change
