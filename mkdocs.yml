@@ -1,0 +1,51 @@
+site_name: Loom
+site_description: A lightweight visual pipeline runner for research
+repo_url: https://github.com/relja/loom
+repo_name: relja/loom
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - tables
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Your First Pipeline: getting-started/first-pipeline.md
+  - Tutorials:
+    - Overview: tutorials/index.md
+    - Linear Pipeline: tutorials/linear.md
+    - Branching (Diamond): tutorials/diamond.md
+    - Using Parameters: tutorials/parameters.md
+    - Parallel Execution: tutorials/parallel.md
+    - Optional Steps: tutorials/optional-steps.md
+    - Scientific Workflow: tutorials/curve-fitting.md
+  - Reference:
+    - CLI Commands: reference/cli.md
+    - Pipeline Schema: reference/pipeline-schema.md
+    - Task Scripts: reference/task-scripts.md
+    - Visual Editor: reference/editor.md
