@@ -28,6 +28,7 @@ import type {
   DataType,
   DataEntry,
   DataNodeData,
+  VariableData,
   ExecutionStatus,
   RunMode,
   RunRequest,
@@ -131,6 +132,10 @@ export default function App() {
   const SNAPSHOT_DEBOUNCE_MS = 300
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Debounce for path check (when editing data node paths)
+  const PATH_CHECK_DEBOUNCE_MS = 500
+  const pathCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // History hook with restore callback
   const handleHistoryRestore = useCallback(
     (state: HistoryState) => {
@@ -175,11 +180,14 @@ export default function App() {
     [snapshot]
   )
 
-  // Clean up debounce timer on unmount
+  // Clean up debounce timers on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+      }
+      if (pathCheckTimerRef.current) {
+        clearTimeout(pathCheckTimerRef.current)
       }
     }
   }, [])
@@ -196,7 +204,31 @@ export default function App() {
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
 
-  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, loading, error: apiError } = useApi()
+  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error: apiError } = useApi()
+
+  // Debounced path check: validates path existence after typing stops
+  // Used when editing data node paths to provide instant feedback
+  const debouncedPathCheck = useCallback(
+    (nodeId: string, path: string) => {
+      if (pathCheckTimerRef.current) {
+        clearTimeout(pathCheckTimerRef.current)
+      }
+      pathCheckTimerRef.current = setTimeout(async () => {
+        const result = await checkPath(path)
+        // Runtime-only change - don't mark as dirty
+        skipNextChangeTrackingRef.current = true
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === nodeId && n.type === 'data'
+              ? { ...n, data: { ...n.data, exists: result.exists } }
+              : n
+          )
+        )
+        pathCheckTimerRef.current = null
+      }, PATH_CHECK_DEBOUNCE_MS)
+    },
+    [checkPath, setNodes]
+  )
 
   // Validation warnings
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
@@ -766,15 +798,29 @@ export default function App() {
   }, [nodes, setNodes, snapshot])
 
   const handleUpdateNode = useCallback((id: string, data: Partial<StepData | VariableData | DataNodeData>) => {
+    // Check if this is a data node path change
+    const node = nodesRef.current.find(n => n.id === id)
+    const isDataPathChange = node?.type === 'data' && 'path' in data
+
     // Debounced snapshot to avoid flooding history with keystroke micro-changes
     debouncedSnapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
 
+    // Reset exists to undefined when path changes (shows "checking" state)
+    const finalData = isDataPathChange
+      ? { ...data, exists: undefined }
+      : data
+
     setNodes((nds) =>
       nds.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...data } } : node
+        node.id === id ? { ...node, data: { ...node.data, ...finalData } } : node
       ) as PipelineNode[]
     )
-  }, [setNodes, debouncedSnapshot])
+
+    // Trigger debounced path check for data nodes
+    if (isDataPathChange && data.path) {
+      debouncedPathCheck(id, data.path as string)
+    }
+  }, [setNodes, debouncedSnapshot, debouncedPathCheck])
 
   const handleDeleteNode = useCallback((id: string) => {
     // Snapshot before change for undo

@@ -320,6 +320,104 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
     return {"freshness": freshness}
 
 
+@router.post("/api/check-path")
+async def check_path(path: str = Query(..., description="Path to check")) -> dict[str, Any]:
+    """Check if a path exists, resolving $references.
+
+    Used for real-time validation when editing data node paths in the UI.
+    """
+    from loom.runner import PipelineConfig
+
+    if not state.config_path or not state.config_path.exists():
+        return {"exists": False, "resolved_path": None}
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+        # Resolve $variable references and parameter references in path
+        resolved = config.resolve_path(path)
+        return {"exists": resolved.exists(), "resolved_path": str(resolved)}
+    except Exception:
+        return {"exists": False, "resolved_path": None}
+
+
+@router.get("/api/thumbnail/by-path")
+def get_thumbnail_by_path(
+    path: str = Query(..., description="Path to the file"),
+    type: str = Query(..., description="Data type (image or video)"),
+) -> Response:
+    """Generate thumbnail for a given path and type.
+
+    Unlike /api/thumbnail/{data_key}, this doesn't require the path to be saved
+    in the config. Used for real-time preview when editing data node paths.
+    """
+    from loom.runner import PipelineConfig
+
+    from .thumbnails import ThumbnailGenerator
+
+    if not state.config_path or not state.config_path.exists():
+        return Response(status_code=204)
+
+    if type not in ("image", "video"):
+        return Response(status_code=204)
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+        resolved = config.resolve_path(path)
+    except Exception:
+        return Response(status_code=204)
+
+    if not resolved.exists():
+        return Response(status_code=204)
+
+    # Generate thumbnail
+    generator = ThumbnailGenerator(state.config_path.parent)
+    thumbnail_bytes = generator.get_thumbnail(resolved, type)
+
+    if thumbnail_bytes is None:
+        return Response(status_code=204)
+
+    return Response(content=thumbnail_bytes, media_type="image/png")
+
+
+@router.get("/api/preview/by-path", response_model=None)
+def get_preview_by_path(
+    path: str = Query(..., description="Path to the file"),
+    type: str = Query(..., description="Data type (txt, csv, or json)"),
+) -> dict[str, Any] | Response:
+    """Generate text preview for a given path and type.
+
+    Unlike /api/preview/{data_key}, this doesn't require the path to be saved
+    in the config. Used for real-time preview when editing data node paths.
+    """
+    from loom.runner import PipelineConfig
+
+    from .thumbnails import ThumbnailGenerator
+
+    if not state.config_path or not state.config_path.exists():
+        return Response(status_code=204)
+
+    if type not in ("txt", "csv", "json"):
+        return Response(status_code=204)
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+        resolved = config.resolve_path(path)
+    except Exception:
+        return Response(status_code=204)
+
+    if not resolved.exists():
+        return Response(status_code=204)
+
+    # Generate preview
+    generator = ThumbnailGenerator(state.config_path.parent)
+    preview = generator.get_preview(resolved, type)
+
+    if preview is None:
+        return Response(status_code=204)
+
+    return dict(preview)
+
+
 @router.delete("/api/variables/{name}/data")
 def trash_variable_data(
     name: str, force: bool = Query(False, description="Force deletion of source data")

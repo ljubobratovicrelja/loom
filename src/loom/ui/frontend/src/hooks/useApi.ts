@@ -290,5 +290,26 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, loading, error }
+  const checkPath = useCallback(async (path: string): Promise<{ exists: boolean; resolved_path: string | null }> => {
+    const signal = getSignal('checkPath')
+    try {
+      const res = await fetch(`${API_BASE}/check-path?path=${encodeURIComponent(path)}`, {
+        method: 'POST',
+        signal,
+      })
+      if (!res.ok) {
+        return { exists: false, resolved_path: null }
+      }
+      return await res.json()
+    } catch (e) {
+      if (isAbortError(e)) {
+        return { exists: false, resolved_path: null }
+      }
+      return { exists: false, resolved_path: null }
+    } finally {
+      cleanupSignal('checkPath')
+    }
+  }, [getSignal, cleanupSignal])
+
+  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error }
 }

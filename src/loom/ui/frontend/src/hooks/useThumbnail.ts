@@ -21,12 +21,14 @@ export interface ThumbnailState {
  * @param dataKey - The data node key
  * @param dataType - The data type (image, video, txt, csv, json, etc.)
  * @param exists - Whether the data file exists
+ * @param path - The path to the file (used for path-based endpoints when editing)
  * @returns ThumbnailState with loading, thumbnailUrl, textPreview, and error
  */
 export function useThumbnail(
   dataKey: string,
   dataType: string,
-  exists: boolean | undefined
+  exists: boolean | undefined,
+  path: string
 ): ThumbnailState {
   const [state, setState] = useState<ThumbnailState>({
     loading: false,
@@ -59,8 +61,8 @@ export function useThumbnail(
     const isText = dataType === 'txt' || dataType === 'csv' || dataType === 'json'
     const supportsPreview = isImageOrVideo || isText
 
-    // Build a cache key for this request
-    const cacheKey = `${dataKey}:${dataType}:${exists}`
+    // Build a cache key for this request - include path to re-fetch when path changes
+    const cacheKey = `${dataKey}:${dataType}:${exists}:${path}`
 
     // Don't fetch if:
     // - Data doesn't exist
@@ -106,9 +108,9 @@ export function useThumbnail(
 
       try {
         if (isImageOrVideo) {
-          // Fetch thumbnail as image
+          // Fetch thumbnail using path-based endpoint (works without saving config)
           const response = await fetch(
-            `${API_BASE}/thumbnail/${encodeURIComponent(dataKey)}`,
+            `${API_BASE}/thumbnail/by-path?path=${encodeURIComponent(path)}&type=${encodeURIComponent(dataType)}`,
             { signal: abortControllerRef.current!.signal }
           )
 
@@ -140,9 +142,9 @@ export function useThumbnail(
             error: null,
           })
         } else {
-          // Fetch text preview as JSON
+          // Fetch text preview using path-based endpoint (works without saving config)
           const response = await fetch(
-            `${API_BASE}/preview/${encodeURIComponent(dataKey)}`,
+            `${API_BASE}/preview/by-path?path=${encodeURIComponent(path)}&type=${encodeURIComponent(dataType)}`,
             { signal: abortControllerRef.current!.signal }
           )
 
@@ -180,7 +182,7 @@ export function useThumbnail(
     }
 
     fetchData()
-  }, [dataKey, dataType, exists])
+  }, [dataKey, dataType, exists, path])
 
   return state
 }

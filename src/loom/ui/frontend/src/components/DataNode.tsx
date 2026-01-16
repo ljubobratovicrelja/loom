@@ -20,7 +20,7 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
   const config = TYPE_CONFIG[data.type] || TYPE_CONFIG.data_folder
 
   // Fetch thumbnail/preview for existing data
-  const thumbnail = useThumbnail(data.key, data.type, data.exists)
+  const thumbnail = useThumbnail(data.key, data.type, data.exists, data.path)
 
   // Determine colors based on existence status - support both light and dark modes
   const getColors = () => {
