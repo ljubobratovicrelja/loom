@@ -121,7 +121,7 @@ def get_state() -> dict[str, Any]:
 
 @router.get("/api/variables/status")
 def get_variables_status() -> dict[str, bool]:
-    """Check which variable and data node paths exist on disk.
+    """Check which data node paths exist on disk.
 
     Returns a map of name -> exists (bool).
     Paths are resolved relative to the pipeline file's directory.
@@ -138,7 +138,7 @@ def get_variables_status() -> dict[str, bool]:
 
     result = {}
 
-    # Check all variable paths
+    # Check all data node paths (stored internally as variables for path resolution)
     for name in config.variables:
         try:
             path = config.resolve_path(f"${name}")
@@ -246,10 +246,9 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
 
 @router.delete("/api/variables/{name}/data")
 def trash_variable_data(name: str) -> dict[str, str]:
-    """Move variable or data node data to trash.
+    """Move data node data to trash.
 
-    Resolves the variable/data path and moves it to system trash.
-    Supports both variables (from variables section) and data nodes (from data section).
+    Resolves the data node path and moves it to system trash.
     """
     if not state.config_path or not state.config_path.exists():
         raise HTTPException(status_code=400, detail="No config loaded")
@@ -257,23 +256,19 @@ def trash_variable_data(name: str) -> dict[str, str]:
     with open(state.config_path) as f:
         config_data = _yaml.load(f) or {}
 
-    variables = config_data.get("variables", {})
     parameters = config_data.get("parameters", {})
     data_section = config_data.get("data", {})
 
-    # Try to find in variables first, then in data section
-    resolved: str | None = None
-    if name in variables:
-        resolved = str(variables[name])
-    elif name in data_section:
-        # Data node - get the path directly
-        data_entry = data_section[name]
-        if isinstance(data_entry, dict):
-            resolved = str(data_entry.get("path", ""))
-        else:
-            resolved = str(data_entry)
+    # Look up in data section
+    if name not in data_section:
+        raise HTTPException(status_code=404, detail=f"Data node '{name}' not found")
+
+    # Data node - get the path directly
+    data_entry = data_section[name]
+    if isinstance(data_entry, dict):
+        resolved = str(data_entry.get("path", ""))
     else:
-        raise HTTPException(status_code=404, detail=f"Variable or data '{name}' not found")
+        resolved = str(data_entry)
 
     if not resolved:
         raise HTTPException(status_code=400, detail=f"No path found for '{name}'")

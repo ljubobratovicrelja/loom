@@ -7,7 +7,6 @@ from .models import DataEntry, EditorOptions, GraphEdge, GraphNode, PipelineGrap
 
 def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     """Convert YAML pipeline to React Flow graph format."""
-    variables = data.get("variables", {})
     parameters = data.get("parameters", {})
     pipeline = data.get("pipeline", [])
     layout = data.get("layout", {})  # Saved node positions
@@ -15,13 +14,13 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
 
-    # Step 1: Identify output variables (produced by steps)
-    output_vars: dict[str, dict[str, str]] = {}  # var_name -> {step, flag}
+    # Step 1: Identify output data nodes (produced by steps)
+    output_data: dict[str, dict[str, str]] = {}  # data_name -> {step, flag}
     for step in pipeline:
         for out_flag, out_ref in step.get("outputs", {}).items():
             if out_ref.startswith("$"):
-                var_name = out_ref[1:]
-                output_vars[var_name] = {"step": step["name"], "flag": out_flag}
+                data_name = out_ref[1:]
+                output_data[data_name] = {"step": step["name"], "flag": out_flag}
 
     # Step 2: Create step nodes and track their positions
     # Use saved layout positions if available, otherwise compute default positions
@@ -55,41 +54,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
             )
         )
 
-    # Step 3: Create variable nodes with appropriate positioning
-    input_var_index = 0
-    for name, value in variables.items():
-        is_output = name in output_vars
-        node_id = f"var_{name}"
-
-        # Check if we have a saved position for this node
-        if node_id in layout:
-            saved = layout[node_id]
-            position = {"x": float(saved.get("x", 0)), "y": float(saved.get("y", 0))}
-        elif is_output:
-            # Position output variables after their producing step
-            producer = output_vars[name]
-            producer_pos = step_positions.get(producer["step"], {"x": 300, "y": 100})
-            position = {"x": producer_pos["x"] + 280, "y": producer_pos["y"] + 50}
-        else:
-            # Input-only variables stay on the left
-            position = {"x": 50, "y": 50 + input_var_index * 80}
-            input_var_index += 1
-
-        nodes.append(
-            GraphNode(
-                id=node_id,
-                type="variable",
-                position=position,
-                data={
-                    "name": name,
-                    "value": value,
-                    "isOutput": is_output,
-                    "producedBy": output_vars.get(name, {}).get("step"),
-                },
-            )
-        )
-
-    # Step 3b: Create parameter nodes (positioned above variables on left)
+    # Step 3: Create parameter nodes (positioned on left)
     for param_idx, (param_name, param_value) in enumerate(parameters.items()):
         node_id = f"param_{param_name}"
         # Check if we have a saved position for this node
@@ -143,56 +108,30 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     data_names = set(data_section.keys())
 
     # Step 4: Create edges
-    # 4a: Edges from steps to output variables/data nodes they produce
-    for var_name, producer in output_vars.items():
-        # Check if output goes to a data node or variable node
-        if var_name in data_names:
-            # Output to data node
+    # 4a: Edges from steps to output data nodes they produce
+    for data_name, producer in output_data.items():
+        if data_name in data_names:
             edges.append(
                 GraphEdge(
-                    id=f"e_{producer['step']}_data_{var_name}",
+                    id=f"e_{producer['step']}_data_{data_name}",
                     source=producer["step"],
-                    target=f"data_{var_name}",
-                    sourceHandle=producer["flag"],
-                    targetHandle="input",
-                )
-            )
-        else:
-            # Output to variable node
-            edges.append(
-                GraphEdge(
-                    id=f"e_{producer['step']}_var_{var_name}",
-                    source=producer["step"],
-                    target=f"var_{var_name}",
+                    target=f"data_{data_name}",
                     sourceHandle=producer["flag"],
                     targetHandle="input",
                 )
             )
 
-    # 4b: Edges from variables/data nodes to steps that consume them
+    # 4b: Edges from data nodes to steps that consume them
     for step in pipeline:
         step_id = step["name"]
-        for input_name, var_ref in step.get("inputs", {}).items():
-            if var_ref.startswith("$"):
-                ref_name = var_ref[1:]
-                # Check if it's a data node reference or variable reference
+        for input_name, data_ref in step.get("inputs", {}).items():
+            if data_ref.startswith("$"):
+                ref_name = data_ref[1:]
                 if ref_name in data_names:
-                    # Data node -> step edge
                     edges.append(
                         GraphEdge(
                             id=f"e_data_{ref_name}_{step_id}_{input_name}",
                             source=f"data_{ref_name}",
-                            target=step_id,
-                            sourceHandle="value",
-                            targetHandle=input_name,
-                        )
-                    )
-                else:
-                    # Variable -> step edge
-                    edges.append(
-                        GraphEdge(
-                            id=f"e_var_{ref_name}_{step_id}_{input_name}",
-                            source=f"var_{ref_name}",
                             target=step_id,
                             sourceHandle="value",
                             targetHandle=input_name,
@@ -235,7 +174,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
         )
 
     return PipelineGraph(
-        variables=variables,
+        variables={},  # Deprecated - kept for compatibility
         parameters=parameters,
         data=data_entries,
         nodes=nodes,
@@ -247,15 +186,6 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
 
 def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
     """Convert React Flow graph back to YAML format."""
-    # Extract variables from variable nodes
-    variables = {}
-    for node in graph.nodes:
-        if node.type == "variable":
-            variables[node.data["name"]] = node.data["value"]
-
-    # Also include any variables not shown as nodes
-    variables.update(graph.variables)
-
     # Extract parameters from parameter nodes
     parameters = dict(graph.parameters)  # Start with base parameters
     for node in graph.nodes:
@@ -351,7 +281,6 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
         editor["autoSave"] = True
 
     result: dict[str, Any] = {
-        "variables": variables,
         "parameters": parameters,
         "pipeline": pipeline,
         "layout": layout,
@@ -366,19 +295,9 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
 
 def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
     """Update YAML data structure in-place from graph, preserving comments."""
-    # Extract variables from graph nodes
-    variables = {}
-    for node in graph.nodes:
-        if node.type == "variable":
-            variables[node.data["name"]] = node.data["value"]
-    # Include any variables not shown as nodes
-    variables.update(graph.variables)
-
-    # Update variables in-place
-    if "variables" not in data:
-        data["variables"] = {}
-    for name, value in variables.items():
-        data["variables"][name] = value
+    # Remove deprecated variables section if present
+    if "variables" in data:
+        del data["variables"]
 
     # Extract parameters from parameter nodes and graph.parameters
     parameters = dict(graph.parameters)
