@@ -59,20 +59,28 @@ class PipelineConfig:
     def from_yaml(cls, path: Path) -> "PipelineConfig":
         """Load pipeline configuration from YAML file.
 
-        All relative paths in the pipeline (scripts, variables) are resolved
+        All relative paths in the pipeline (scripts, data nodes) are resolved
         relative to the directory containing the YAML file.
         """
         with open(path) as f:
             data = yaml.safe_load(f) or {}
 
+        # Reject pipelines with legacy 'variables' section
+        if data.get("variables"):
+            raise ValueError(
+                "The 'variables' section is deprecated. "
+                "Use typed 'data' section instead. "
+                "See examples for the new format."
+            )
+
         steps = [StepConfig.from_dict(s) for s in data.get("pipeline", [])]
 
-        # Load variables from both 'variables' section and 'data' section
+        # Load variables from 'data' section
         # Data nodes provide typed file/dir references, but for execution
         # we just need the path values to resolve $references
-        variables = dict(data.get("variables", {}))
+        variables: dict[str, str] = {}
 
-        # Merge data section: extract path from each data entry
+        # Extract path from each data entry
         for name, entry in data.get("data", {}).items():
             if isinstance(entry, dict):
                 # New format: {type: ..., path: ..., ...}
