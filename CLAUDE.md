@@ -21,6 +21,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for complete development guidelines includi
 ./scripts/test.sh               # Test Python + Frontend
 ./scripts/test.sh --coverage    # Tests with coverage
 ./scripts/build.sh              # Build frontend
+./scripts/run-examples.sh       # Run all example pipelines
 ```
 
 ## Workflow
@@ -28,4 +29,5 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for complete development guidelines includi
 1. **Before implementing**: Read relevant docs and existing code
 2. **After changes**: Run `./scripts/lint.sh`
 3. **After implementing**: Run `./scripts/test.sh`
-4. **Before committing**: Run `./scripts/check.sh`
+4. **After editing examples**: Run `./scripts/run-examples.sh`
+5. **Before committing**: Run `./scripts/check.sh`
