@@ -46,19 +46,19 @@ pipeline:
 class TestCLIBasic:
     """Basic CLI tests."""
 
-    def test_cli_missing_config_returns_error(self):
+    def test_cli_missing_config_returns_error(self) -> None:
         """Test that missing config file returns error code."""
         with patch("sys.argv", ["loom", "nonexistent.yml"]):
             result = main()
             assert result == 1
 
-    def test_cli_dry_run_succeeds(self, sample_config_file: Path):
+    def test_cli_dry_run_succeeds(self, sample_config_file: Path) -> None:
         """Test that dry run completes successfully."""
         with patch("sys.argv", ["loom", str(sample_config_file), "--dry-run"]):
             result = main()
             assert result == 0
 
-    def test_cli_help_shows_usage(self, capsys):
+    def test_cli_help_shows_usage(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that --help shows usage information."""
         with patch("sys.argv", ["loom", "--help"]):
             with pytest.raises(SystemExit) as exc_info:
@@ -72,7 +72,9 @@ class TestCLIBasic:
 class TestCLIStepSelection:
     """Tests for step selection CLI options."""
 
-    def test_cli_step_option(self, sample_config_file: Path, capsys):
+    def test_cli_step_option(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --step option selects specific steps."""
         with patch("sys.argv", ["loom", str(sample_config_file), "--step", "process", "--dry-run"]):
             result = main()
@@ -82,7 +84,9 @@ class TestCLIStepSelection:
         assert "process" in captured.out
         assert "optional_step" not in captured.out
 
-    def test_cli_include_optional(self, sample_config_file: Path, capsys):
+    def test_cli_include_optional(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --include option includes optional steps."""
         with patch(
             "sys.argv",
@@ -98,7 +102,9 @@ class TestCLIStepSelection:
 class TestCLIOverrides:
     """Tests for CLI override options."""
 
-    def test_cli_set_parameter(self, sample_config_file: Path, capsys):
+    def test_cli_set_parameter(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --set overrides parameters."""
         with patch(
             "sys.argv",
@@ -110,7 +116,9 @@ class TestCLIOverrides:
         captured = capsys.readouterr()
         assert "0.9" in captured.out
 
-    def test_cli_var_override(self, sample_config_file: Path, capsys):
+    def test_cli_var_override(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --var overrides variables."""
         with patch(
             "sys.argv",
@@ -122,7 +130,9 @@ class TestCLIOverrides:
         captured = capsys.readouterr()
         assert "new_input.txt" in captured.out
 
-    def test_cli_multiple_set_values(self, sample_config_file: Path, capsys):
+    def test_cli_multiple_set_values(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test multiple --set values."""
         with patch(
             "sys.argv",
@@ -147,7 +157,9 @@ class TestCLIOverrides:
 class TestCLIExtraArgs:
     """Tests for extra arguments option."""
 
-    def test_cli_extra_args_single_step(self, sample_config_file: Path, capsys):
+    def test_cli_extra_args_single_step(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --extra with single step adds arguments."""
         with patch(
             "sys.argv",
@@ -173,7 +185,9 @@ class TestCLIExtraArgs:
 class TestCLIFromStep:
     """Tests for --from option."""
 
-    def test_cli_from_step(self, sample_config_file: Path, capsys):
+    def test_cli_from_step(
+        self, sample_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --from runs from specified step onward."""
         # Create a config with multiple non-optional steps
         content = """
@@ -221,13 +235,13 @@ pipeline:
 class TestCLIReturnCodes:
     """Tests for CLI return codes."""
 
-    def test_cli_returns_zero_on_success(self, sample_config_file: Path):
+    def test_cli_returns_zero_on_success(self, sample_config_file: Path) -> None:
         """Test CLI returns 0 on successful dry run."""
         with patch("sys.argv", ["loom", str(sample_config_file), "--dry-run"]):
             result = main()
             assert result == 0
 
-    def test_cli_returns_one_on_missing_config(self):
+    def test_cli_returns_one_on_missing_config(self) -> None:
         """Test CLI returns 1 when config file is missing."""
         with patch("sys.argv", ["loom", "missing.yml"]):
             result = main()

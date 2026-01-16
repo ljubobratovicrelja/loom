@@ -11,7 +11,7 @@ from loom.runner.config import PipelineConfig, StepConfig
 class TestStepConfig:
     """Tests for StepConfig dataclass."""
 
-    def test_from_dict_minimal(self):
+    def test_from_dict_minimal(self) -> None:
         """Test creating StepConfig with minimal required fields."""
         data = {"name": "step1", "script": "scripts/step1.py"}
         step = StepConfig.from_dict(data)
@@ -23,7 +23,7 @@ class TestStepConfig:
         assert step.args == {}
         assert step.optional is False
 
-    def test_from_dict_full(self):
+    def test_from_dict_full(self) -> None:
         """Test creating StepConfig with all fields."""
         data = {
             "name": "process",
@@ -42,7 +42,7 @@ class TestStepConfig:
         assert step.args == {"--verbose": True, "--threshold": 0.5}
         assert step.optional is True
 
-    def test_from_dict_optional_defaults_to_false(self):
+    def test_from_dict_optional_defaults_to_false(self) -> None:
         """Test that optional defaults to False when not specified."""
         data = {"name": "step", "script": "script.py"}
         step = StepConfig.from_dict(data)
@@ -92,7 +92,7 @@ pipeline:
             f.write(sample_yaml_content)
             return Path(f.name)
 
-    def test_from_yaml_loads_variables(self, config_file: Path):
+    def test_from_yaml_loads_variables(self, config_file: Path) -> None:
         """Test that YAML loading correctly parses variables."""
         config = PipelineConfig.from_yaml(config_file)
 
@@ -100,7 +100,7 @@ pipeline:
         assert config.variables["output_csv"] == "data/output.csv"
         assert config.variables["viz_output"] == "data/viz.mp4"
 
-    def test_from_yaml_loads_parameters(self, config_file: Path):
+    def test_from_yaml_loads_parameters(self, config_file: Path) -> None:
         """Test that YAML loading correctly parses parameters."""
         config = PipelineConfig.from_yaml(config_file)
 
@@ -108,7 +108,7 @@ pipeline:
         assert config.parameters["verbose"] is True
         assert config.parameters["width"] == 1920
 
-    def test_from_yaml_loads_steps(self, config_file: Path):
+    def test_from_yaml_loads_steps(self, config_file: Path) -> None:
         """Test that YAML loading correctly parses pipeline steps."""
         config = PipelineConfig.from_yaml(config_file)
 
@@ -117,7 +117,7 @@ pipeline:
         assert config.steps[1].name == "visualize"
         assert config.steps[1].optional is True
 
-    def test_from_yaml_empty_file(self):
+    def test_from_yaml_empty_file(self) -> None:
         """Test loading an empty YAML file."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
             f.write("")
@@ -140,34 +140,34 @@ class TestPipelineConfigResolveValue:
             steps=[],
         )
 
-    def test_resolve_variable_reference(self, config: PipelineConfig):
+    def test_resolve_variable_reference(self, config: PipelineConfig) -> None:
         """Test resolving a variable reference."""
         assert config.resolve_value("$video") == "data/video.mp4"
         assert config.resolve_value("$output") == "data/out.csv"
 
-    def test_resolve_parameter_reference(self, config: PipelineConfig):
+    def test_resolve_parameter_reference(self, config: PipelineConfig) -> None:
         """Test resolving a parameter reference."""
         assert config.resolve_value("$threshold") == 0.5
         assert config.resolve_value("$verbose") is True
 
-    def test_resolve_non_reference_string(self, config: PipelineConfig):
+    def test_resolve_non_reference_string(self, config: PipelineConfig) -> None:
         """Test that non-reference strings are returned as-is."""
         assert config.resolve_value("plain_string") == "plain_string"
         assert config.resolve_value("data/file.csv") == "data/file.csv"
 
-    def test_resolve_non_string_values(self, config: PipelineConfig):
+    def test_resolve_non_string_values(self, config: PipelineConfig) -> None:
         """Test that non-string values are returned as-is."""
         assert config.resolve_value(42) == 42
         assert config.resolve_value(3.14) == 3.14
         assert config.resolve_value(True) is True
         assert config.resolve_value(None) is None
 
-    def test_resolve_unknown_reference_raises(self, config: PipelineConfig):
+    def test_resolve_unknown_reference_raises(self, config: PipelineConfig) -> None:
         """Test that unknown references raise ValueError."""
         with pytest.raises(ValueError, match="Unknown reference: \\$unknown"):
             config.resolve_value("$unknown")
 
-    def test_variable_takes_precedence_over_parameter(self):
+    def test_variable_takes_precedence_over_parameter(self) -> None:
         """Test that variable is resolved before parameter with same name."""
         config = PipelineConfig(
             variables={"name": "from_variable"},
@@ -193,13 +193,13 @@ class TestPipelineConfigStepLookup:
             ],
         )
 
-    def test_get_step_by_name_existing(self, config: PipelineConfig):
+    def test_get_step_by_name_existing(self, config: PipelineConfig) -> None:
         """Test getting an existing step by name."""
         step = config.get_step_by_name("step2")
         assert step.name == "step2"
         assert step.script == "s2.py"
 
-    def test_get_step_by_name_unknown_raises(self, config: PipelineConfig):
+    def test_get_step_by_name_unknown_raises(self, config: PipelineConfig) -> None:
         """Test that unknown step name raises ValueError."""
         with pytest.raises(ValueError, match="Unknown step: nonexistent"):
             config.get_step_by_name("nonexistent")
@@ -235,24 +235,24 @@ class TestPipelineConfigDependencies:
             ],
         )
 
-    def test_output_producers_built_correctly(self, config: PipelineConfig):
+    def test_output_producers_built_correctly(self, config: PipelineConfig) -> None:
         """Test that output producer mapping is built correctly."""
         assert config._output_producers["csv1"] == "extract"
         assert config._output_producers["csv2"] == "process"
 
-    def test_get_step_dependencies_no_deps(self, config: PipelineConfig):
+    def test_get_step_dependencies_no_deps(self, config: PipelineConfig) -> None:
         """Test step with no dependencies."""
         extract = config.get_step_by_name("extract")
         deps = config.get_step_dependencies(extract)
         assert deps == set()
 
-    def test_get_step_dependencies_single_dep(self, config: PipelineConfig):
+    def test_get_step_dependencies_single_dep(self, config: PipelineConfig) -> None:
         """Test step with a single dependency."""
         process = config.get_step_by_name("process")
         deps = config.get_step_dependencies(process)
         assert deps == {"extract"}
 
-    def test_get_step_dependencies_multiple_inputs(self, config: PipelineConfig):
+    def test_get_step_dependencies_multiple_inputs(self, config: PipelineConfig) -> None:
         """Test step with multiple inputs (only one is a dep)."""
         visualize = config.get_step_by_name("visualize")
         deps = config.get_step_dependencies(visualize)
@@ -263,7 +263,7 @@ class TestPipelineConfigDependencies:
 class TestPipelineConfigOverrides:
     """Tests for override methods."""
 
-    def test_override_variables(self):
+    def test_override_variables(self) -> None:
         """Test overriding variable values."""
         config = PipelineConfig(
             variables={"a": "original_a", "b": "original_b"},
@@ -276,7 +276,7 @@ class TestPipelineConfigOverrides:
         assert config.variables["b"] == "original_b"
         assert config.variables["c"] == "new_c"
 
-    def test_override_parameters(self):
+    def test_override_parameters(self) -> None:
         """Test overriding parameter values."""
         config = PipelineConfig(
             variables={},
@@ -330,7 +330,9 @@ pipeline:
             f.write(data_section_yaml_content)
             return Path(f.name)
 
-    def test_from_yaml_loads_data_section_as_variables(self, data_section_config_file: Path):
+    def test_from_yaml_loads_data_section_as_variables(
+        self, data_section_config_file: Path
+    ) -> None:
         """Test that data section entries are loaded into variables."""
         config = PipelineConfig.from_yaml(data_section_config_file)
 
@@ -338,7 +340,9 @@ pipeline:
         assert "gaze_csv" in config.variables
         assert "output_dir" in config.variables
 
-    def test_from_yaml_extracts_paths_from_data_entries(self, data_section_config_file: Path):
+    def test_from_yaml_extracts_paths_from_data_entries(
+        self, data_section_config_file: Path
+    ) -> None:
         """Test that path values are extracted from data entries."""
         config = PipelineConfig.from_yaml(data_section_config_file)
 
@@ -346,14 +350,14 @@ pipeline:
         assert config.variables["gaze_csv"] == "data/tracking/gaze.csv"
         assert config.variables["output_dir"] == "data/output/"
 
-    def test_from_yaml_resolves_data_references(self, data_section_config_file: Path):
+    def test_from_yaml_resolves_data_references(self, data_section_config_file: Path) -> None:
         """Test that $references to data entries can be resolved."""
         config = PipelineConfig.from_yaml(data_section_config_file)
 
         assert config.resolve_value("$video") == "data/videos/test.mp4"
         assert config.resolve_value("$gaze_csv") == "data/tracking/gaze.csv"
 
-    def test_from_yaml_data_and_variables_merged(self, tmp_path: Path):
+    def test_from_yaml_data_and_variables_merged(self, tmp_path: Path) -> None:
         """Test that data section and variables section are merged."""
         yaml_content = """
 variables:
@@ -374,7 +378,7 @@ pipeline: []
         assert config.variables["extra_var"] == "some/path.txt"
         assert config.variables["video"] == "data/video.mp4"
 
-    def test_from_yaml_data_section_string_fallback(self, tmp_path: Path):
+    def test_from_yaml_data_section_string_fallback(self, tmp_path: Path) -> None:
         """Test that string values in data section are handled as paths."""
         yaml_content = """
 data:
@@ -388,7 +392,7 @@ pipeline: []
 
         assert config.variables["simple_path"] == "data/simple.csv"
 
-    def test_from_yaml_data_section_empty_path(self, tmp_path: Path):
+    def test_from_yaml_data_section_empty_path(self, tmp_path: Path) -> None:
         """Test that data entries without path get empty string."""
         yaml_content = """
 data:
@@ -407,7 +411,7 @@ pipeline: []
 class TestPipelineConfigPathResolution:
     """Tests for path resolution relative to pipeline file."""
 
-    def test_base_dir_set_from_yaml_path(self, tmp_path: Path):
+    def test_base_dir_set_from_yaml_path(self, tmp_path: Path) -> None:
         """Test that base_dir is set to the pipeline file's directory."""
         subdir = tmp_path / "project" / "pipelines"
         subdir.mkdir(parents=True)
@@ -418,7 +422,7 @@ class TestPipelineConfigPathResolution:
 
         assert config.base_dir == subdir.resolve()
 
-    def test_resolve_path_makes_relative_paths_absolute(self, tmp_path: Path):
+    def test_resolve_path_makes_relative_paths_absolute(self, tmp_path: Path) -> None:
         """Test that resolve_path makes relative paths absolute."""
         subdir = tmp_path / "project"
         subdir.mkdir()
@@ -435,7 +439,7 @@ pipeline: []
         assert resolved.is_absolute()
         assert resolved == subdir / "data" / "output.csv"
 
-    def test_resolve_path_preserves_absolute_paths(self, tmp_path: Path):
+    def test_resolve_path_preserves_absolute_paths(self, tmp_path: Path) -> None:
         """Test that resolve_path doesn't modify absolute paths."""
         config_file = tmp_path / "pipeline.yml"
         config_file.write_text("""
@@ -449,7 +453,7 @@ pipeline: []
 
         assert resolved == Path("/absolute/path/output.csv")
 
-    def test_resolve_path_with_parameter_reference(self, tmp_path: Path):
+    def test_resolve_path_with_parameter_reference(self, tmp_path: Path) -> None:
         """Test that resolve_path works with parameter references."""
         config_file = tmp_path / "pipeline.yml"
         config_file.write_text("""
@@ -468,7 +472,7 @@ pipeline: []
         assert resolved.is_absolute()
         assert "models" in str(resolved)
 
-    def test_resolve_script_path_relative(self, tmp_path: Path):
+    def test_resolve_script_path_relative(self, tmp_path: Path) -> None:
         """Test that resolve_script_path makes relative script paths absolute."""
         subdir = tmp_path / "project"
         subdir.mkdir()
@@ -482,7 +486,7 @@ pipeline: []
         assert resolved.is_absolute()
         assert resolved == subdir / "tasks" / "process.py"
 
-    def test_resolve_script_path_absolute(self, tmp_path: Path):
+    def test_resolve_script_path_absolute(self, tmp_path: Path) -> None:
         """Test that resolve_script_path preserves absolute paths."""
         config_file = tmp_path / "pipeline.yml"
         config_file.write_text("pipeline: []")
@@ -493,13 +497,13 @@ pipeline: []
 
         assert resolved == Path("/usr/local/bin/script.py")
 
-    def test_base_dir_default_is_cwd(self):
+    def test_base_dir_default_is_cwd(self) -> None:
         """Test that base_dir defaults to cwd when not loading from file."""
         config = PipelineConfig(variables={}, parameters={}, steps=[])
 
         assert config.base_dir == Path.cwd()
 
-    def test_resolve_path_with_data_section(self, tmp_path: Path):
+    def test_resolve_path_with_data_section(self, tmp_path: Path) -> None:
         """Test path resolution with data section entries."""
         subdir = tmp_path / "project"
         subdir.mkdir()
@@ -522,7 +526,7 @@ pipeline: []
 class TestStepConfigTaskField:
     """Tests for task field support in StepConfig."""
 
-    def test_from_dict_with_task_field(self):
+    def test_from_dict_with_task_field(self) -> None:
         """Test creating StepConfig with 'task' field (new format)."""
         data = {"name": "step1", "task": "tasks/step1.py"}
         step = StepConfig.from_dict(data)
@@ -530,7 +534,7 @@ class TestStepConfigTaskField:
         assert step.name == "step1"
         assert step.script == "tasks/step1.py"
 
-    def test_from_dict_with_script_field(self):
+    def test_from_dict_with_script_field(self) -> None:
         """Test creating StepConfig with 'script' field (legacy format)."""
         data = {"name": "step1", "script": "scripts/step1.py"}
         step = StepConfig.from_dict(data)
@@ -538,14 +542,14 @@ class TestStepConfigTaskField:
         assert step.name == "step1"
         assert step.script == "scripts/step1.py"
 
-    def test_from_dict_task_takes_precedence(self):
+    def test_from_dict_task_takes_precedence(self) -> None:
         """Test that 'task' field takes precedence over 'script'."""
         data = {"name": "step1", "task": "tasks/step1.py", "script": "scripts/step1.py"}
         step = StepConfig.from_dict(data)
 
         assert step.script == "tasks/step1.py"
 
-    def test_from_dict_missing_task_and_script_raises(self):
+    def test_from_dict_missing_task_and_script_raises(self) -> None:
         """Test that missing both 'task' and 'script' raises KeyError."""
         data = {"name": "step1"}
         with pytest.raises(KeyError, match="task.*script"):

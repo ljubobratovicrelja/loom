@@ -1,15 +1,12 @@
 """Tests for editor server HTTP endpoints and validation logic."""
 
-import os
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from loom.ui.server import (
-    ValidationWarning,
     _get_running_step,
     _is_step_running,
     _register_running_step,
@@ -19,7 +16,6 @@ from loom.ui.server import (
     app,
     configure,
 )
-
 
 # =============================================================================
 # Tests for _validate_pipeline()
@@ -71,9 +67,7 @@ class TestValidatePipeline:
         }
         task_schemas = {
             "tasks/extract_gaze.py": {
-                "inputs": {
-                    "video": {"type": "video", "description": "Input video file"}
-                }
+                "inputs": {"video": {"type": "video", "description": "Input video file"}}
             }
         }
 
@@ -101,9 +95,7 @@ class TestValidatePipeline:
         }
         task_schemas = {
             "tasks/extract_gaze.py": {
-                "outputs": {
-                    "--output": {"type": "csv", "description": "Output CSV"}
-                }
+                "outputs": {"--output": {"type": "csv", "description": "Output CSV"}}
             }
         }
 
@@ -126,15 +118,9 @@ class TestValidatePipeline:
                 }
             ],
             "variables": {"input_video": "/path/to/video.mp4"},
-            "data": {
-                "input_video": {"type": "video", "path": "/path/to/video.mp4"}
-            },
+            "data": {"input_video": {"type": "video", "path": "/path/to/video.mp4"}},
         }
-        task_schemas = {
-            "tasks/extract_gaze.py": {
-                "inputs": {"video": {"type": "video"}}
-            }
-        }
+        task_schemas = {"tasks/extract_gaze.py": {"inputs": {"video": {"type": "video"}}}}
 
         warnings = _validate_pipeline(yaml_data, task_schemas)
 
@@ -154,9 +140,7 @@ class TestValidatePipeline:
         }
         task_schemas = {
             "tasks/process.py": {
-                "inputs": {
-                    "data": {"description": "Input data (no type specified)"}
-                }
+                "inputs": {"data": {"description": "Input data (no type specified)"}}
             }
         }
 
@@ -176,11 +160,7 @@ class TestValidatePipeline:
             ],
             "variables": {},
         }
-        task_schemas = {
-            "tasks/process.py": {
-                "inputs": {"video": {"type": "video"}}
-            }
-        }
+        task_schemas = {"tasks/process.py": {"inputs": {"video": {"type": "video"}}}}
 
         warnings = _validate_pipeline(yaml_data, task_schemas)
 
@@ -647,12 +627,15 @@ class TestSaveConfig:
         configure(config_path=None)
         client = TestClient(app)
 
-        response = client.post("/api/config", json={
-            "variables": {},
-            "parameters": {},
-            "nodes": [],
-            "edges": [],
-        })
+        response = client.post(
+            "/api/config",
+            json={
+                "variables": {},
+                "parameters": {},
+                "nodes": [],
+                "edges": [],
+            },
+        )
 
         assert response.status_code == 400
 
@@ -662,12 +645,15 @@ class TestSaveConfig:
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.post("/api/config", json={
-            "variables": {"input": "/path"},
-            "parameters": {},
-            "nodes": [],
-            "edges": [],
-        })
+        response = client.post(
+            "/api/config",
+            json={
+                "variables": {"input": "/path"},
+                "parameters": {},
+                "nodes": [],
+                "edges": [],
+            },
+        )
 
         assert response.status_code == 200
         assert config.exists()
@@ -684,19 +670,22 @@ pipeline: []
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.post("/api/config", json={
-            "variables": {"input": "new_path"},
-            "parameters": {},
-            "nodes": [
-                {
-                    "id": "var_input",
-                    "type": "variable",
-                    "position": {"x": 50, "y": 50},
-                    "data": {"name": "input", "value": "new_path"},
-                }
-            ],
-            "edges": [],
-        })
+        response = client.post(
+            "/api/config",
+            json={
+                "variables": {"input": "new_path"},
+                "parameters": {},
+                "nodes": [
+                    {
+                        "id": "var_input",
+                        "type": "variable",
+                        "position": {"x": 50, "y": 50},
+                        "data": {"name": "input", "value": "new_path"},
+                    }
+                ],
+                "edges": [],
+            },
+        )
 
         assert response.status_code == 200
         content = config.read_text()
@@ -907,6 +896,7 @@ class TestRunStatus:
     def test_run_status_idle(self) -> None:
         """Should return idle status when nothing is running."""
         from loom.ui.server import _execution_state
+
         _execution_state["status"] = "idle"
         _execution_state["current_step"] = None
 
@@ -921,6 +911,7 @@ class TestRunStatus:
     def test_run_status_running(self) -> None:
         """Should return running status with current step."""
         from loom.ui.server import _execution_state
+
         _execution_state["status"] = "running"
         _execution_state["current_step"] = "extract_features"
 

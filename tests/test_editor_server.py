@@ -201,8 +201,14 @@ class TestLayoutSerialization:
                     id="step1",
                     type="step",
                     position={"x": 150, "y": 250},
-                    data={"name": "step1", "task": "tasks/test.py", "inputs": {},
-                          "outputs": {}, "args": {}, "optional": False},
+                    data={
+                        "name": "step1",
+                        "task": "tasks/test.py",
+                        "inputs": {},
+                        "outputs": {},
+                        "args": {},
+                        "optional": False,
+                    },
                 ),
                 GraphNode(
                     id="var_input",
@@ -245,7 +251,7 @@ class TestEditorOptionsSerialization:
     def test_yaml_to_graph_defaults_editor_options(self) -> None:
         """Without editor section, defaults should be used."""
         # Arrange
-        yaml_data = {
+        yaml_data: dict[str, object] = {
             "variables": {},
             "parameters": {},
             "pipeline": [],
@@ -335,6 +341,7 @@ class TestDataSectionParsing:
     def test_yaml_to_graph_creates_data_nodes(self) -> None:
         """Data section entries should become data nodes."""
         import yaml
+
         data = yaml.safe_load(SAMPLE_YAML_WITH_DATA)
         graph = yaml_to_graph(data)
 
@@ -349,6 +356,7 @@ class TestDataSectionParsing:
     def test_yaml_to_graph_data_nodes_have_correct_types(self) -> None:
         """Data nodes should have correct type information."""
         import yaml
+
         data = yaml.safe_load(SAMPLE_YAML_WITH_DATA)
         graph = yaml_to_graph(data)
 
@@ -376,8 +384,12 @@ class TestDataSectionRoundTrip:
                     id="data_video",
                     type="data",
                     position={"x": 50, "y": 50},
-                    data={"name": "video", "type": "video", "path": "data/test.mp4",
-                          "description": "Test video"},
+                    data={
+                        "name": "video",
+                        "type": "video",
+                        "path": "data/test.mp4",
+                        "description": "Test video",
+                    },
                 ),
                 GraphNode(
                     id="data_output",
@@ -400,6 +412,7 @@ class TestDataSectionRoundTrip:
     def test_data_section_roundtrip(self) -> None:
         """Data section should survive yaml -> graph -> yaml roundtrip."""
         import yaml
+
         data = yaml.safe_load(SAMPLE_YAML_WITH_DATA)
 
         graph = yaml_to_graph(data)

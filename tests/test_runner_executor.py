@@ -14,47 +14,47 @@ from loom.runner.executor import PipelineExecutor, parse_key_value_args
 class TestParseKeyValueArgs:
     """Tests for parse_key_value_args function."""
 
-    def test_parse_string_value(self):
+    def test_parse_string_value(self) -> None:
         """Test parsing string values."""
         result = parse_key_value_args(["name=hello"])
         assert result == {"name": "hello"}
 
-    def test_parse_integer_value(self):
+    def test_parse_integer_value(self) -> None:
         """Test parsing integer values."""
         result = parse_key_value_args(["count=42"])
         assert result == {"count": 42}
 
-    def test_parse_float_value(self):
+    def test_parse_float_value(self) -> None:
         """Test parsing float values."""
         result = parse_key_value_args(["threshold=0.75"])
         assert result == {"threshold": 0.75}
 
-    def test_parse_boolean_true(self):
+    def test_parse_boolean_true(self) -> None:
         """Test parsing boolean true values."""
         result = parse_key_value_args(["enabled=true", "active=True", "on=TRUE"])
         assert result == {"enabled": True, "active": True, "on": True}
 
-    def test_parse_boolean_false(self):
+    def test_parse_boolean_false(self) -> None:
         """Test parsing boolean false values."""
         result = parse_key_value_args(["disabled=false", "off=False"])
         assert result == {"disabled": False, "off": False}
 
-    def test_parse_multiple_values(self):
+    def test_parse_multiple_values(self) -> None:
         """Test parsing multiple key=value pairs."""
         result = parse_key_value_args(["a=1", "b=hello", "c=3.14", "d=true"])
         assert result == {"a": 1, "b": "hello", "c": 3.14, "d": True}
 
-    def test_parse_value_with_equals_sign(self):
+    def test_parse_value_with_equals_sign(self) -> None:
         """Test parsing values that contain equals signs."""
         result = parse_key_value_args(["expr=a=b"])
         assert result == {"expr": "a=b"}
 
-    def test_parse_empty_list(self):
+    def test_parse_empty_list(self) -> None:
         """Test parsing empty list."""
         result = parse_key_value_args([])
         assert result == {}
 
-    def test_parse_invalid_format_raises(self):
+    def test_parse_invalid_format_raises(self) -> None:
         """Test that invalid format raises ValueError."""
         with pytest.raises(ValueError, match="Invalid format: invalid"):
             parse_key_value_args(["invalid"])
@@ -72,7 +72,7 @@ class TestPipelineExecutorBuildCommand:
             steps=[],
         )
 
-    def test_build_command_basic(self, config: PipelineConfig):
+    def test_build_command_basic(self, config: PipelineConfig) -> None:
         """Test building a basic command with script only."""
         step = StepConfig(name="test", script="scripts/test.py")
         executor = PipelineExecutor(config)
@@ -82,7 +82,7 @@ class TestPipelineExecutorBuildCommand:
         # Script path is resolved relative to base_dir (cwd by default)
         assert Path(cmd[1]).name == "test.py"
 
-    def test_build_command_with_inputs(self, config: PipelineConfig):
+    def test_build_command_with_inputs(self, config: PipelineConfig) -> None:
         """Test building command with positional inputs."""
         step = StepConfig(
             name="test",
@@ -96,7 +96,7 @@ class TestPipelineExecutorBuildCommand:
         assert Path(cmd[2]).is_absolute()
         assert Path(cmd[2]).name == "video.mp4"
 
-    def test_build_command_with_outputs(self, config: PipelineConfig):
+    def test_build_command_with_outputs(self, config: PipelineConfig) -> None:
         """Test building command with output flags."""
         step = StepConfig(
             name="test",
@@ -112,7 +112,7 @@ class TestPipelineExecutorBuildCommand:
         assert Path(cmd[idx + 1]).is_absolute()
         assert Path(cmd[idx + 1]).name == "out.csv"
 
-    def test_build_command_with_args(self, config: PipelineConfig):
+    def test_build_command_with_args(self, config: PipelineConfig) -> None:
         """Test building command with various argument types."""
         step = StepConfig(
             name="test",
@@ -127,7 +127,7 @@ class TestPipelineExecutorBuildCommand:
         assert "--count" in cmd
         assert "10" in cmd
 
-    def test_build_command_with_boolean_flag_true(self, config: PipelineConfig):
+    def test_build_command_with_boolean_flag_true(self, config: PipelineConfig) -> None:
         """Test that boolean True args add the flag."""
         step = StepConfig(
             name="test",
@@ -143,7 +143,7 @@ class TestPipelineExecutorBuildCommand:
         if idx + 1 < len(cmd):
             assert not cmd[idx + 1].startswith("True")
 
-    def test_build_command_with_boolean_flag_false(self, config: PipelineConfig):
+    def test_build_command_with_boolean_flag_false(self, config: PipelineConfig) -> None:
         """Test that boolean False args don't add the flag."""
         config.parameters["disabled"] = False
         step = StepConfig(
@@ -156,7 +156,7 @@ class TestPipelineExecutorBuildCommand:
 
         assert "--disabled" not in cmd
 
-    def test_build_command_with_extra_args(self, config: PipelineConfig):
+    def test_build_command_with_extra_args(self, config: PipelineConfig) -> None:
         """Test building command with extra arguments."""
         step = StepConfig(name="test", script="scripts/test.py")
         executor = PipelineExecutor(config)
@@ -167,7 +167,7 @@ class TestPipelineExecutorBuildCommand:
         assert "--count" in cmd
         assert "5" in cmd
 
-    def test_build_command_full(self, config: PipelineConfig):
+    def test_build_command_full(self, config: PipelineConfig) -> None:
         """Test building a complete command with all components."""
         step = StepConfig(
             name="full",
@@ -191,7 +191,7 @@ class TestPipelineExecutorBuildCommand:
 class TestPipelineExecutorPathResolution:
     """Tests for path resolution in build_command from a YAML file."""
 
-    def test_build_command_resolves_paths_from_yaml(self, tmp_path: Path):
+    def test_build_command_resolves_paths_from_yaml(self, tmp_path: Path) -> None:
         """Test that build_command resolves all paths relative to pipeline file."""
         # Create a pipeline in a subdirectory
         project_dir = tmp_path / "project"
@@ -231,7 +231,7 @@ pipeline:
         assert output_path.is_absolute()
         assert output_path == project_dir / "data" / "output.csv"
 
-    def test_build_command_from_different_cwd(self, tmp_path: Path):
+    def test_build_command_from_different_cwd(self, tmp_path: Path) -> None:
         """Test that paths are correct even when cwd differs from pipeline dir."""
         import os
 
@@ -290,7 +290,7 @@ class TestPipelineExecutorGetStepsToRun:
             ],
         )
 
-    def test_get_all_non_optional_steps(self, config: PipelineConfig):
+    def test_get_all_non_optional_steps(self, config: PipelineConfig) -> None:
         """Test getting all non-optional steps by default."""
         executor = PipelineExecutor(config)
         steps = executor._get_steps_to_run()
@@ -298,7 +298,7 @@ class TestPipelineExecutorGetStepsToRun:
         names = [s.name for s in steps]
         assert names == ["step1", "step2", "step4"]
 
-    def test_get_specific_steps(self, config: PipelineConfig):
+    def test_get_specific_steps(self, config: PipelineConfig) -> None:
         """Test getting specific steps by name."""
         executor = PipelineExecutor(config)
         steps = executor._get_steps_to_run(steps=["step2", "step4"])
@@ -306,7 +306,7 @@ class TestPipelineExecutorGetStepsToRun:
         names = [s.name for s in steps]
         assert names == ["step2", "step4"]
 
-    def test_get_steps_from_step(self, config: PipelineConfig):
+    def test_get_steps_from_step(self, config: PipelineConfig) -> None:
         """Test getting steps from a specific step onward."""
         executor = PipelineExecutor(config)
         steps = executor._get_steps_to_run(from_step="step2")
@@ -314,7 +314,7 @@ class TestPipelineExecutorGetStepsToRun:
         names = [s.name for s in steps]
         assert names == ["step2", "step4"]
 
-    def test_get_steps_include_optional(self, config: PipelineConfig):
+    def test_get_steps_include_optional(self, config: PipelineConfig) -> None:
         """Test including optional steps."""
         executor = PipelineExecutor(config)
         steps = executor._get_steps_to_run(include_optional=["step3", "step5"])
@@ -322,7 +322,7 @@ class TestPipelineExecutorGetStepsToRun:
         names = [s.name for s in steps]
         assert names == ["step1", "step2", "step3", "step4", "step5"]
 
-    def test_get_steps_from_with_optional(self, config: PipelineConfig):
+    def test_get_steps_from_with_optional(self, config: PipelineConfig) -> None:
         """Test from_step combined with include_optional."""
         executor = PipelineExecutor(config)
         steps = executor._get_steps_to_run(from_step="step3", include_optional=["step3"])
@@ -330,7 +330,7 @@ class TestPipelineExecutorGetStepsToRun:
         names = [s.name for s in steps]
         assert names == ["step3", "step4"]
 
-    def test_get_specific_optional_step(self, config: PipelineConfig):
+    def test_get_specific_optional_step(self, config: PipelineConfig) -> None:
         """Test getting a specific optional step by name."""
         executor = PipelineExecutor(config)
         steps = executor._get_steps_to_run(steps=["step3"])
@@ -355,14 +355,14 @@ class TestPipelineExecutorCanRunStep:
             ],
         )
 
-    def test_can_run_step_no_dependencies(self, config: PipelineConfig):
+    def test_can_run_step_no_dependencies(self, config: PipelineConfig) -> None:
         """Test step with no dependencies can always run."""
         executor = PipelineExecutor(config)
         step1 = config.get_step_by_name("step1")
 
         assert executor._can_run_step(step1) is True
 
-    def test_can_run_step_dependency_not_run(self, config: PipelineConfig):
+    def test_can_run_step_dependency_not_run(self, config: PipelineConfig) -> None:
         """Test step can run if dependency wasn't run yet."""
         executor = PipelineExecutor(config)
         step2 = config.get_step_by_name("step2")
@@ -370,7 +370,7 @@ class TestPipelineExecutorCanRunStep:
         # step1 not in results means it wasn't run
         assert executor._can_run_step(step2) is True
 
-    def test_can_run_step_dependency_succeeded(self, config: PipelineConfig):
+    def test_can_run_step_dependency_succeeded(self, config: PipelineConfig) -> None:
         """Test step can run if dependency succeeded."""
         executor = PipelineExecutor(config)
         executor._results["step1"] = True
@@ -378,7 +378,7 @@ class TestPipelineExecutorCanRunStep:
 
         assert executor._can_run_step(step2) is True
 
-    def test_cannot_run_step_dependency_failed(self, config: PipelineConfig):
+    def test_cannot_run_step_dependency_failed(self, config: PipelineConfig) -> None:
         """Test step cannot run if dependency failed."""
         executor = PipelineExecutor(config)
         executor._results["step1"] = False
@@ -386,7 +386,7 @@ class TestPipelineExecutorCanRunStep:
 
         assert executor._can_run_step(step2) is False
 
-    def test_cannot_run_step_transitive_dependency_failed(self, config: PipelineConfig):
+    def test_cannot_run_step_transitive_dependency_failed(self, config: PipelineConfig) -> None:
         """Test step cannot run if transitive dependency failed."""
         executor = PipelineExecutor(config)
         executor._results["step1"] = True
@@ -415,7 +415,9 @@ class TestPipelineExecutorDryRun:
             ],
         )
 
-    def test_dry_run_does_not_execute(self, config: PipelineConfig, capsys):
+    def test_dry_run_does_not_execute(
+        self, config: PipelineConfig, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run doesn't actually execute commands."""
         executor = PipelineExecutor(config, dry_run=True)
         step = config.steps[0]
@@ -426,7 +428,7 @@ class TestPipelineExecutorDryRun:
         captured = capsys.readouterr()
         assert "[DRY RUN]" in captured.out
 
-    def test_dry_run_pipeline_marks_success(self, config: PipelineConfig):
+    def test_dry_run_pipeline_marks_success(self, config: PipelineConfig) -> None:
         """Test that dry run marks steps as successful."""
         executor = PipelineExecutor(config, dry_run=True)
         results = executor.run_pipeline()
@@ -437,7 +439,7 @@ class TestPipelineExecutorDryRun:
 class TestPipelineExecutorEnsureOutputDirs:
     """Tests for output directory creation."""
 
-    def test_ensure_output_dirs_creates_parent(self):
+    def test_ensure_output_dirs_creates_parent(self) -> None:
         """Test that parent directories are created for outputs."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config = PipelineConfig(
@@ -472,7 +474,7 @@ class TestPipelineExecutorRunPipeline:
             ],
         )
 
-    def test_run_pipeline_dry_run_all_steps(self, config: PipelineConfig):
+    def test_run_pipeline_dry_run_all_steps(self, config: PipelineConfig) -> None:
         """Test running full pipeline in dry run mode."""
         executor = PipelineExecutor(config, dry_run=True)
         results = executor.run_pipeline()
@@ -480,7 +482,7 @@ class TestPipelineExecutorRunPipeline:
         assert len(results) == 3
         assert all(results.values())
 
-    def test_run_pipeline_skips_after_failure(self, config: PipelineConfig):
+    def test_run_pipeline_skips_after_failure(self, config: PipelineConfig) -> None:
         """Test that dependent steps are skipped after a failure."""
         executor = PipelineExecutor(config, dry_run=True)
 
@@ -493,7 +495,7 @@ class TestPipelineExecutorRunPipeline:
         # step2 should be skipped because step1 failed
         assert results["step2"] is False
 
-    def test_run_pipeline_empty_returns_empty(self, config: PipelineConfig):
+    def test_run_pipeline_empty_returns_empty(self, config: PipelineConfig) -> None:
         """Test that empty step selection returns empty results."""
         executor = PipelineExecutor(config, dry_run=True)
         results = executor.run_pipeline(from_step="nonexistent_step")
@@ -502,7 +504,9 @@ class TestPipelineExecutorRunPipeline:
         assert results == {}
 
     @patch("loom.runner.executor.subprocess.run")
-    def test_run_pipeline_actual_execution(self, mock_run, config: PipelineConfig):
+    def test_run_pipeline_actual_execution(
+        self, mock_run: MagicMock, config: PipelineConfig
+    ) -> None:
         """Test actual execution calls subprocess correctly."""
         mock_run.return_value = MagicMock(returncode=0)
 
@@ -519,7 +523,9 @@ class TestPipelineExecutorRunPipeline:
             assert results["step1"] is True
 
     @patch("loom.runner.executor.subprocess.run")
-    def test_run_pipeline_handles_failure(self, mock_run, config: PipelineConfig):
+    def test_run_pipeline_handles_failure(
+        self, mock_run: MagicMock, config: PipelineConfig
+    ) -> None:
         """Test that pipeline handles step failure correctly."""
         mock_run.return_value = MagicMock(returncode=1)
 

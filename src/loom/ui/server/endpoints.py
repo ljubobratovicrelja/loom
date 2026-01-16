@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from ruamel.yaml import YAML
-from send2trash import send2trash
+from send2trash import send2trash  # type: ignore[import-untyped]
 
 from . import state
 from .graph import update_yaml_from_graph, yaml_to_graph

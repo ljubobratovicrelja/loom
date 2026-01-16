@@ -173,7 +173,8 @@ def parse_frontmatter(docstring: str) -> dict | None:
         return None
 
     try:
-        return yaml.safe_load(match.group(1))
+        result = yaml.safe_load(match.group(1))
+        return dict(result) if result else None
     except yaml.YAMLError:
         return None
 
@@ -279,7 +280,7 @@ def list_task_schemas(tasks_dir: Path) -> list[TaskSchema]:
     Returns:
         List of TaskSchema objects.
     """
-    schemas = []
+    schemas: list[TaskSchema] = []
     if not tasks_dir.exists():
         return schemas
 

@@ -46,7 +46,7 @@ def build_step_command(config_path: Path, step_name: str) -> list[str]:
     config = PipelineConfig.from_yaml(config_path)
     executor = PipelineExecutor(config, dry_run=True)
     step = config.get_step_by_name(step_name)
-    return executor.build_command(step)  # type: ignore[no-any-return]
+    return executor.build_command(step)
 
 
 def _get_steps_to_produce_variable(

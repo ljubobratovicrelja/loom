@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from loom.ui.task_schema import (
     ArgSchema,
     InputOutputSchema,
@@ -42,6 +40,7 @@ def main():
     pass
 ''')
         result = extract_docstring(task_file)
+        assert result is not None
         assert "Short description." in result
         assert "More details here." in result
 
@@ -287,13 +286,9 @@ class TestTaskSchemaToDict:
             path="tasks/test_task.py",
             description="Test description",
             inputs={
-                "video": InputOutputSchema(
-                    name="video", description="Input video", type="video"
-                )
+                "video": InputOutputSchema(name="video", description="Input video", type="video")
             },
-            outputs={
-                "-o": InputOutputSchema(name="-o", description="Output file")
-            },
+            outputs={"-o": InputOutputSchema(name="-o", description="Output file")},
             args={
                 "--threshold": ArgSchema(
                     name="--threshold",

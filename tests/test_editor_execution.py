@@ -103,7 +103,7 @@ def variables_section_config(tmp_path: Path) -> Path:
 class TestBuildStepCommand:
     """Tests for build_step_command function."""
 
-    def test_build_command_with_data_section(self, data_section_config: Path):
+    def test_build_command_with_data_section(self, data_section_config: Path) -> None:
         """Test building command from config with data section."""
         cmd = build_step_command(data_section_config, "extract_gaze")
 
@@ -117,7 +117,7 @@ class TestBuildStepCommand:
         assert "--threshold" in cmd
         assert "50.0" in cmd
 
-    def test_build_command_with_variables_section(self, variables_section_config: Path):
+    def test_build_command_with_variables_section(self, variables_section_config: Path) -> None:
         """Test building command from config with variables section."""
         cmd = build_step_command(variables_section_config, "process")
 
@@ -129,7 +129,7 @@ class TestBuildStepCommand:
         assert "-o" in cmd
         assert any("output.csv" in c for c in cmd)
 
-    def test_build_command_resolves_boolean_flags(self, data_section_config: Path):
+    def test_build_command_resolves_boolean_flags(self, data_section_config: Path) -> None:
         """Test that boolean True args add the flag without value."""
         cmd = build_step_command(data_section_config, "detect_fixations")
 
@@ -139,12 +139,12 @@ class TestBuildStepCommand:
         if verbose_idx + 1 < len(cmd):
             assert cmd[verbose_idx + 1] != "True"
 
-    def test_build_command_unknown_step_raises(self, data_section_config: Path):
+    def test_build_command_unknown_step_raises(self, data_section_config: Path) -> None:
         """Test that unknown step name raises ValueError."""
         with pytest.raises(ValueError, match="Unknown step"):
             build_step_command(data_section_config, "nonexistent_step")
 
-    def test_build_command_step_with_spaces_in_name(self, tmp_path: Path):
+    def test_build_command_step_with_spaces_in_name(self, tmp_path: Path) -> None:
         """Test building command for step with spaces in name."""
         yaml_content = """\
 data:
@@ -173,7 +173,7 @@ pipeline:
 class TestBuildPipelineCommands:
     """Tests for build_pipeline_commands function."""
 
-    def test_mode_all_returns_non_optional_steps(self, data_section_config: Path):
+    def test_mode_all_returns_non_optional_steps(self, data_section_config: Path) -> None:
         """Test that 'all' mode returns all non-optional steps."""
         commands = build_pipeline_commands(data_section_config, "all")
 
@@ -182,7 +182,7 @@ class TestBuildPipelineCommands:
         assert "detect_fixations" in step_names
         assert "visualize" not in step_names  # Optional step excluded
 
-    def test_mode_step_returns_single_step(self, data_section_config: Path):
+    def test_mode_step_returns_single_step(self, data_section_config: Path) -> None:
         """Test that 'step' mode returns only the specified step."""
         commands = build_pipeline_commands(
             data_section_config, "step", step_name="detect_fixations"
@@ -191,7 +191,7 @@ class TestBuildPipelineCommands:
         assert len(commands) == 1
         assert commands[0][0] == "detect_fixations"
 
-    def test_mode_from_step_returns_step_and_subsequent(self, data_section_config: Path):
+    def test_mode_from_step_returns_step_and_subsequent(self, data_section_config: Path) -> None:
         """Test that 'from_step' mode returns step and all subsequent."""
         commands = build_pipeline_commands(
             data_section_config, "from_step", step_name="detect_fixations"
@@ -201,7 +201,7 @@ class TestBuildPipelineCommands:
         assert "extract_gaze" not in step_names
         assert "detect_fixations" in step_names
 
-    def test_mode_to_variable_returns_required_steps(self, tmp_path: Path):
+    def test_mode_to_variable_returns_required_steps(self, tmp_path: Path) -> None:
         """Test that 'to_variable' mode returns steps needed to produce variable."""
         # Use tmp_path for outputs so they definitely don't exist
         yaml_content = f"""\
@@ -243,17 +243,17 @@ pipeline:
         assert "extract_gaze" in step_names
         assert "detect_fixations" in step_names
 
-    def test_mode_step_requires_step_name(self, data_section_config: Path):
+    def test_mode_step_requires_step_name(self, data_section_config: Path) -> None:
         """Test that 'step' mode raises if step_name not provided."""
         with pytest.raises(ValueError, match="step_name required"):
             build_pipeline_commands(data_section_config, "step")
 
-    def test_mode_to_variable_requires_variable_name(self, data_section_config: Path):
+    def test_mode_to_variable_requires_variable_name(self, data_section_config: Path) -> None:
         """Test that 'to_variable' mode raises if variable_name not provided."""
         with pytest.raises(ValueError, match="variable_name required"):
             build_pipeline_commands(data_section_config, "to_variable")
 
-    def test_commands_have_correct_structure(self, data_section_config: Path):
+    def test_commands_have_correct_structure(self, data_section_config: Path) -> None:
         """Test that returned commands are tuples of (name, cmd_list)."""
         commands = build_pipeline_commands(data_section_config, "all")
 
@@ -267,7 +267,7 @@ pipeline:
 class TestValidateParallelExecution:
     """Tests for validate_parallel_execution function."""
 
-    def test_no_conflicts_is_valid(self, data_section_config: Path):
+    def test_no_conflicts_is_valid(self, data_section_config: Path) -> None:
         """Test that steps with no output conflicts are valid."""
         # extract_gaze and detect_fixations have different outputs
         is_valid, error = validate_parallel_execution(
@@ -277,7 +277,7 @@ class TestValidateParallelExecution:
         assert is_valid is True
         assert error == ""
 
-    def test_output_conflict_is_invalid(self, tmp_path: Path):
+    def test_output_conflict_is_invalid(self, tmp_path: Path) -> None:
         """Test that steps with output conflicts are invalid."""
         yaml_content = """\
 data:
@@ -308,7 +308,7 @@ pipeline:
 class TestBuildParallelCommands:
     """Tests for build_parallel_commands function."""
 
-    def test_returns_commands_for_specified_steps(self, data_section_config: Path):
+    def test_returns_commands_for_specified_steps(self, data_section_config: Path) -> None:
         """Test that parallel commands are built for specified steps."""
         commands = build_parallel_commands(
             data_section_config, ["extract_gaze", "detect_fixations"]
@@ -319,7 +319,7 @@ class TestBuildParallelCommands:
         assert "extract_gaze" in step_names
         assert "detect_fixations" in step_names
 
-    def test_includes_optional_steps_when_specified(self, data_section_config: Path):
+    def test_includes_optional_steps_when_specified(self, data_section_config: Path) -> None:
         """Test that optional steps can be included in parallel execution."""
         commands = build_parallel_commands(data_section_config, ["extract_gaze", "visualize"])
 
@@ -330,7 +330,7 @@ class TestBuildParallelCommands:
 class TestGetStepOutputDirs:
     """Tests for get_step_output_dirs function."""
 
-    def test_returns_parent_directories(self, data_section_config: Path):
+    def test_returns_parent_directories(self, data_section_config: Path) -> None:
         """Test that parent directories of outputs are returned."""
         dirs = get_step_output_dirs(data_section_config, "extract_gaze")
 
@@ -338,7 +338,7 @@ class TestGetStepOutputDirs:
         dir_strs = [str(d) for d in dirs]
         assert any("data/tracking" in d for d in dir_strs)
 
-    def test_returns_unique_directories(self, tmp_path: Path):
+    def test_returns_unique_directories(self, tmp_path: Path) -> None:
         """Test that duplicate directories are not returned."""
         yaml_content = """\
 data:

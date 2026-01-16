@@ -228,7 +228,7 @@ def parse_key_value_args(args: list[str]) -> dict[str, Any]:
     Returns:
         Dict of parsed key-value pairs.
     """
-    result = {}
+    result: dict[str, Any] = {}
     for arg in args:
         if "=" not in arg:
             raise ValueError(f"Invalid format: {arg}. Expected key=value")

@@ -170,7 +170,7 @@ async def _run_single_step(
         cancelled = False
         ws_closed = False
 
-        async def listen_for_cancel_step():
+        async def listen_for_cancel_step() -> None:
             nonlocal cancelled, ws_closed
             try:
                 while True:
@@ -296,7 +296,7 @@ async def _run_parallel_steps(
     # Track cancellation per step
     cancelled_steps: set[str] = set()
 
-    async def listen_for_cancel_parallel():
+    async def listen_for_cancel_parallel() -> None:
         """Listen for per-step cancel messages."""
         try:
             while True:
@@ -544,7 +544,7 @@ async def _run_sequential_pipeline(
             cancelled = False
 
             # Task to listen for cancel messages
-            async def listen_for_cancel():
+            async def listen_for_cancel() -> None:
                 nonlocal cancelled
                 try:
                     while True:
