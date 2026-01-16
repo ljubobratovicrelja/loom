@@ -27,12 +27,15 @@ class CleanResult:
 def get_cleanable_paths(
     config: "PipelineConfig",
     include_thumbnails: bool = True,
+    include_source: bool = False,
 ) -> list[tuple[str, Path, bool]]:
     """Get list of paths that would be cleaned.
 
     Args:
         config: Pipeline configuration.
         include_thumbnails: Whether to include .loom-thumbnails directory.
+        include_source: Whether to include source data (not produced by any step).
+            Default is False to protect original input data from accidental deletion.
 
     Returns:
         List of tuples (name, path, exists) for each cleanable path.
@@ -41,6 +44,10 @@ def get_cleanable_paths(
 
     # Collect all data node paths
     for name in config.variables:
+        # Skip source data unless explicitly requested
+        if not include_source and config.is_source_data(name):
+            continue
+
         try:
             path = config.resolve_path(f"${name}")
             paths.append((name, path, path.exists()))
@@ -60,6 +67,7 @@ def clean_pipeline_data(
     config: "PipelineConfig",
     permanent: bool = False,
     include_thumbnails: bool = True,
+    include_source: bool = False,
 ) -> list[CleanResult]:
     """Clean all data node files from the pipeline.
 
@@ -67,12 +75,16 @@ def clean_pipeline_data(
         config: Pipeline configuration.
         permanent: If True, permanently delete files. If False, move to trash.
         include_thumbnails: Whether to include .loom-thumbnails directory.
+        include_source: Whether to include source data (not produced by any step).
+            Default is False to protect original input data from accidental deletion.
 
     Returns:
         List of CleanResult objects describing what happened to each path.
     """
     results: list[CleanResult] = []
-    paths = get_cleanable_paths(config, include_thumbnails=include_thumbnails)
+    paths = get_cleanable_paths(
+        config, include_thumbnails=include_thumbnails, include_source=include_source
+    )
 
     for name, path, exists in paths:
         if not exists:

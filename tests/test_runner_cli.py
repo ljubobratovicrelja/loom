@@ -263,11 +263,18 @@ class TestCLIClean:
 
     @pytest.fixture
     def clean_config_file(self, tmp_path: Path) -> Path:
-        """Create a config file with data files for clean testing."""
+        """Create a config file with data files for clean testing.
+
+        This fixture creates a pipeline with:
+        - input.txt: source data (not produced by any step)
+        - output.csv: generated data (produced by 'process' step)
+        - intermediate.txt: generated data (produced by 'process' step)
+        """
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "input.txt").write_text("input data")
         (data_dir / "output.csv").write_text("col1,col2\n1,2")
+        (data_dir / "intermediate.txt").write_text("intermediate")
 
         config = tmp_path / "pipeline.yml"
         config.write_text(f"""
@@ -278,13 +285,23 @@ data:
   output:
     type: csv
     path: {data_dir}/output.csv
+  intermediate:
+    type: txt
+    path: {data_dir}/intermediate.txt
   missing:
     type: txt
     path: {data_dir}/missing.txt
 
 parameters: {{}}
 
-pipeline: []
+pipeline:
+  - name: process
+    task: tasks/process.py
+    inputs:
+      data: $input
+    outputs:
+      result: $output
+      temp: $intermediate
 """)
         return config
 
@@ -297,16 +314,17 @@ pipeline: []
                 result = main()
 
         assert result == 0
-        # Should have trashed 2 existing files
+        # Should have trashed 2 existing generated files (output.csv and intermediate.txt)
+        # Source data (input.txt) should be protected
         assert mock_trash.call_count == 2
 
         captured = capsys.readouterr()
         assert "Moved to trash" in captured.out
 
-    def test_clean_permanent_flag(
+    def test_clean_protects_source_data(
         self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --clean --permanent permanently deletes files."""
+        """Test --clean does not delete source data by default."""
         data_dir = clean_config_file.parent / "data"
         input_file = data_dir / "input.txt"
         output_file = data_dir / "output.csv"
@@ -318,8 +336,28 @@ pipeline: []
             result = main()
 
         assert result == 0
-        assert not input_file.exists()
+        # Source data (input.txt) should still exist
+        assert input_file.exists()
+        # Generated data (output.csv) should be deleted
         assert not output_file.exists()
+
+    def test_clean_permanent_flag(
+        self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean --permanent permanently deletes generated files."""
+        data_dir = clean_config_file.parent / "data"
+        output_file = data_dir / "output.csv"
+        intermediate_file = data_dir / "intermediate.txt"
+
+        assert output_file.exists()
+        assert intermediate_file.exists()
+
+        with patch("sys.argv", ["loom", str(clean_config_file), "--clean", "--permanent", "-y"]):
+            result = main()
+
+        assert result == 0
+        assert not output_file.exists()
+        assert not intermediate_file.exists()
 
         captured = capsys.readouterr()
         assert "Permanently deleted" in captured.out
@@ -334,6 +372,7 @@ pipeline: []
                     result = main()
 
         assert result == 0
+        # Should trash 2 generated files (output.csv and intermediate.txt)
         assert mock_trash.call_count == 2
 
     def test_clean_cancelled_on_no(
@@ -354,7 +393,7 @@ pipeline: []
     def test_clean_no_files_to_clean(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --clean with no existing files."""
+        """Test --clean with no existing generated files."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
 data:
@@ -364,7 +403,11 @@ data:
 
 parameters: {}
 
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $missing
 """)
 
         with patch("sys.argv", ["loom", str(config), "--clean", "-y"]):
@@ -377,11 +420,18 @@ pipeline: []
     def test_clean_shows_file_list(
         self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --clean shows list of files to be cleaned."""
+        """Test --clean shows list of generated files to be cleaned."""
         with patch("sys.argv", ["loom", str(clean_config_file), "--clean"]):
             with patch("builtins.input", return_value="n"):
                 main()
 
         captured = capsys.readouterr()
-        assert "input" in captured.out
+        # Should show generated data
         assert "output" in captured.out
+        assert "intermediate" in captured.out
+        # Should NOT show source data
+        assert (
+            "input" not in captured.out
+            or "input" in captured.out
+            and "protected" in captured.out.lower()
+        )

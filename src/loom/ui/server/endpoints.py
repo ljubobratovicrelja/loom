@@ -321,11 +321,16 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
 
 
 @router.delete("/api/variables/{name}/data")
-def trash_variable_data(name: str) -> dict[str, str]:
+def trash_variable_data(
+    name: str, force: bool = Query(False, description="Force deletion of source data")
+) -> dict[str, str]:
     """Move data node data to trash.
 
     Resolves the data node path and moves it to system trash.
     Paths are resolved relative to the pipeline file's directory.
+
+    Source data (input files not produced by any step) is protected by default.
+    Use force=true to override this protection.
     """
     from loom.runner import PipelineConfig
 
@@ -340,6 +345,13 @@ def trash_variable_data(name: str) -> dict[str, str]:
     # Check if this is a known data node
     if name not in config.variables:
         raise HTTPException(status_code=404, detail=f"Data node '{name}' not found")
+
+    # Protect source data unless force is specified
+    if config.is_source_data(name) and not force:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot delete source data '{name}'. Use force=true to override.",
+        )
 
     # Get the raw path value and resolve any embedded parameter references
     resolved = config.variables[name]
@@ -362,10 +374,14 @@ def trash_variable_data(name: str) -> dict[str, str]:
 
 
 @router.get("/api/clean/preview")
-def preview_clean() -> dict[str, Any]:
+def preview_clean(
+    include_source: bool = Query(False, description="Include source data in clean preview"),
+) -> dict[str, Any]:
     """Preview what files would be cleaned.
 
     Returns a list of data node paths that would be affected by a clean operation.
+    Source data (input files not produced by any step) is excluded by default
+    and shown separately in the skipped_source list.
     """
     from loom.runner import PipelineConfig, get_cleanable_paths
 
@@ -377,11 +393,26 @@ def preview_clean() -> dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
 
-    paths = get_cleanable_paths(config)
+    paths = get_cleanable_paths(config, include_source=include_source)
+
+    # Also collect the source data that would be skipped
+    skipped_source: list[dict[str, Any]] = []
+    if not include_source:
+        for name in config.variables:
+            if config.is_source_data(name):
+                try:
+                    path = config.resolve_path(f"${name}")
+                    skipped_source.append(
+                        {"name": name, "path": str(path), "exists": path.exists()}
+                    )
+                except (ValueError, OSError):
+                    pass
+
     return {
         "paths": [
             {"name": name, "path": str(path), "exists": exists} for name, path, exists in paths
-        ]
+        ],
+        "skipped_source": skipped_source,
     }
 
 
@@ -389,10 +420,13 @@ def preview_clean() -> dict[str, Any]:
 def clean_all_data(
     mode: str = Query("trash", description="Clean mode: 'trash' or 'permanent'"),
     include_thumbnails: bool = Query(True, description="Include thumbnail cache"),
+    include_source: bool = Query(False, description="Include source data (dangerous!)"),
 ) -> dict[str, Any]:
     """Clean all data node files.
 
     Removes all data node files, either by moving to trash or permanent deletion.
+    Source data (input files not produced by any step) is protected by default.
+    Use include_source=true to include source data in the clean operation.
     """
     from loom.runner import PipelineConfig, clean_pipeline_data
 
@@ -406,7 +440,10 @@ def clean_all_data(
 
     permanent = mode == "permanent"
     results = clean_pipeline_data(
-        config, permanent=permanent, include_thumbnails=include_thumbnails
+        config,
+        permanent=permanent,
+        include_thumbnails=include_thumbnails,
+        include_source=include_source,
     )
 
     return {

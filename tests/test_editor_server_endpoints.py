@@ -465,6 +465,27 @@ pipeline: []
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
+    def test_trash_source_data_returns_403(self, tmp_path: Path) -> None:
+        """Should return 403 when trying to delete source data without force."""
+        config = tmp_path / "pipeline.yml"
+        data_file = tmp_path / "input.txt"
+        data_file.write_text("source data")
+
+        config.write_text(f"""
+data:
+  input:
+    type: txt
+    path: {data_file}
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.delete("/api/variables/input/data")
+
+        assert response.status_code == 403
+        assert "Cannot delete source data" in response.json()["detail"]
+
     def test_trash_path_not_exists_returns_404(self, tmp_path: Path) -> None:
         """Should return 404 when data node path doesn't exist on disk."""
         config = tmp_path / "pipeline.yml"
@@ -473,7 +494,11 @@ data:
   mydata:
     type: txt
     path: nonexistent_file.txt
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $mydata
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -484,7 +509,7 @@ pipeline: []
         assert "does not exist" in response.json()["detail"]
 
     def test_trash_variable_success(self, tmp_path: Path) -> None:
-        """Should trash data node file successfully."""
+        """Should trash generated data node file successfully."""
         config = tmp_path / "pipeline.yml"
         data_file = tmp_path / "data.txt"
         data_file.write_text("test data")
@@ -494,7 +519,11 @@ data:
   mydata:
     type: txt
     path: {data_file}
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $mydata
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -506,8 +535,30 @@ pipeline: []
         assert response.json()["status"] == "ok"
         mock_trash.assert_called_once_with(str(data_file))
 
+    def test_trash_source_data_with_force(self, tmp_path: Path) -> None:
+        """Should trash source data when force=true."""
+        config = tmp_path / "pipeline.yml"
+        data_file = tmp_path / "input.txt"
+        data_file.write_text("source data")
+
+        config.write_text(f"""
+data:
+  input:
+    type: txt
+    path: {data_file}
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
+            response = client.delete("/api/variables/input/data?force=true")
+
+        assert response.status_code == 200
+        mock_trash.assert_called_once_with(str(data_file))
+
     def test_trash_data_node_success(self, tmp_path: Path) -> None:
-        """Should trash data node path successfully."""
+        """Should trash generated data node path successfully."""
         config = tmp_path / "pipeline.yml"
         data_file = tmp_path / "video.mp4"
         data_file.write_text("fake video")
@@ -517,7 +568,11 @@ data:
   video:
     type: video
     path: {data_file}
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $video
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -543,7 +598,11 @@ data:
   result:
     type: csv
     path: $output_dir/result.csv
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $result
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -573,7 +632,11 @@ data:
   output:
     type: csv
     path: data/output.csv
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $output
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -1286,21 +1349,29 @@ class TestCleanPreview:
         assert response.status_code == 400
         assert "No config loaded" in response.json()["detail"]
 
-    def test_preview_returns_paths(self, tmp_path: Path) -> None:
-        """Should return list of cleanable paths."""
+    def test_preview_returns_generated_data(self, tmp_path: Path) -> None:
+        """Should return list of cleanable generated paths, excluding source data."""
         config = tmp_path / "pipeline.yml"
-        data_file = tmp_path / "data.txt"
-        data_file.write_text("test data")
+        input_file = tmp_path / "input.txt"
+        output_file = tmp_path / "output.txt"
+        input_file.write_text("source data")
+        output_file.write_text("generated data")
 
         config.write_text(f"""
 data:
-  mydata:
+  input:
     type: txt
-    path: {data_file}
-  missing:
+    path: {input_file}
+  output:
     type: txt
-    path: {tmp_path}/nonexistent.txt
-pipeline: []
+    path: {output_file}
+pipeline:
+  - name: process
+    task: tasks/process.py
+    inputs:
+      data: $input
+    outputs:
+      result: $output
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -1310,13 +1381,40 @@ pipeline: []
         assert response.status_code == 200
         data = response.json()
         assert "paths" in data
+        assert "skipped_source" in data
 
-        # Find the existing file
+        # Generated data should be in paths
+        paths_by_name = {p["name"]: p for p in data["paths"]}
+        assert "output" in paths_by_name
+        assert paths_by_name["output"]["exists"] is True
+
+        # Source data should be in skipped_source
+        skipped_by_name = {p["name"]: p for p in data["skipped_source"]}
+        assert "input" in skipped_by_name
+        assert skipped_by_name["input"]["exists"] is True
+
+    def test_preview_with_include_source(self, tmp_path: Path) -> None:
+        """Should include source data when include_source=true."""
+        config = tmp_path / "pipeline.yml"
+        data_file = tmp_path / "data.txt"
+        data_file.write_text("test data")
+
+        config.write_text(f"""
+data:
+  mydata:
+    type: txt
+    path: {data_file}
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/clean/preview?include_source=true")
+
+        assert response.status_code == 200
+        data = response.json()
         paths_by_name = {p["name"]: p for p in data["paths"]}
         assert "mydata" in paths_by_name
-        assert paths_by_name["mydata"]["exists"] is True
-        assert "missing" in paths_by_name
-        assert paths_by_name["missing"]["exists"] is False
 
     def test_preview_includes_thumbnails(self, tmp_path: Path) -> None:
         """Should include .loom-thumbnails in preview."""
@@ -1353,7 +1451,7 @@ class TestCleanAllData:
         assert "No config loaded" in response.json()["detail"]
 
     def test_clean_trash_mode(self, tmp_path: Path) -> None:
-        """Should clean data in trash mode."""
+        """Should clean generated data in trash mode."""
         config = tmp_path / "pipeline.yml"
         data_file = tmp_path / "data.txt"
         data_file.write_text("test data")
@@ -1363,7 +1461,11 @@ data:
   mydata:
     type: txt
     path: {data_file}
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $mydata
 """)
         configure(config_path=config)
         client = TestClient(app)
@@ -1378,7 +1480,7 @@ pipeline: []
         mock_trash.assert_called_once()
 
     def test_clean_permanent_mode(self, tmp_path: Path) -> None:
-        """Should permanently delete files in permanent mode."""
+        """Should permanently delete generated files in permanent mode."""
         config = tmp_path / "pipeline.yml"
         data_file = tmp_path / "data.txt"
         data_file.write_text("test data")
@@ -1388,7 +1490,11 @@ data:
   mydata:
     type: txt
     path: {data_file}
-pipeline: []
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      out: $mydata
 """)
         configure(config_path=config)
         client = TestClient(app)
