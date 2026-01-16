@@ -17,6 +17,7 @@ class StepConfig:
     outputs: dict[str, str] = field(default_factory=dict)
     args: dict[str, Any] = field(default_factory=dict)
     optional: bool = False
+    disabled: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StepConfig":
@@ -32,6 +33,7 @@ class StepConfig:
             outputs=data.get("outputs", {}),
             args=data.get("args", {}),
             optional=data.get("optional", False),
+            disabled=data.get("disabled", False),
         )
 
 

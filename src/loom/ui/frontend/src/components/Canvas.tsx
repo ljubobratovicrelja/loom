@@ -519,6 +519,7 @@ export default function Canvas({
             }
             if (node.type === 'step') {
               const stepData = node.data as StepData
+              if (stepData.disabled) return '#4b5563' // gray-600 for disabled
               if (stepData.executionState === 'running') return '#22d3ee' // cyan
               if (stepData.executionState === 'completed') return '#22c55e' // green
               if (stepData.executionState === 'failed') return '#ef4444' // red

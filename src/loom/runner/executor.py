@@ -137,6 +137,10 @@ class PipelineExecutor:
             if not started:
                 continue
 
+            # Skip disabled steps
+            if step.disabled:
+                continue
+
             # Skip optional steps unless explicitly included
             if step.optional and step.name not in include_optional:
                 continue

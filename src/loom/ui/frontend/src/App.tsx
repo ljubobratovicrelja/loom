@@ -707,6 +707,7 @@ export default function App() {
         outputs,
         args,
         optional: false,
+        disabled: false,
         inputTypes: Object.keys(inputTypes).length > 0 ? inputTypes : undefined,
         outputTypes: Object.keys(outputTypes).length > 0 ? outputTypes : undefined,
       },

@@ -30,6 +30,7 @@ const TYPE_ICONS: Record<DataType, ReactNode> = {
 function StepNode({ data, selected }: NodeProps<StepNodeType>) {
   const inputNames = Object.keys(data.inputs || {})
   const outputNames = Object.keys(data.outputs || {})
+  const isDisabled = data.disabled === true
 
   // Get color for input based on type
   const getInputColor = (name: string) => {
@@ -121,10 +122,12 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
         bg-slate-800 rounded-lg shadow-lg min-w-[200px] border-2 transition-all duration-300
         ${getBorderClass()}
         ${data.optional ? 'border-dashed' : ''}
+        ${isDisabled ? 'opacity-50' : ''}
       `}
     >
       {/* Header */}
       <div className={`px-3 py-2 rounded-t-md flex items-center gap-2 transition-colors duration-300 ${
+        isDisabled ? 'bg-slate-600' :
         data.executionState === 'running' ? 'bg-cyan-900/50' :
         data.executionState === 'completed' ? 'bg-green-900/30' :
         data.executionState === 'failed' ? 'bg-red-900/30' :
@@ -137,13 +140,16 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
           )}
         </div>
         <span className="text-white font-medium text-sm">{data.name}</span>
-        {data.executionState === 'completed' && (
+        {isDisabled && (
+          <span className="ml-auto text-slate-400 text-xs">DISABLED</span>
+        )}
+        {!isDisabled && data.executionState === 'completed' && (
           <span className="ml-auto text-green-400 text-xs">&#10003;</span>
         )}
-        {data.executionState === 'failed' && (
+        {!isDisabled && data.executionState === 'failed' && (
           <span className="ml-auto text-red-400 text-xs">&#10007;</span>
         )}
-        {freshnessBadge && (
+        {!isDisabled && freshnessBadge && (
           <span className={`ml-auto text-xs ${freshnessBadge.className}`} title={freshnessBadge.title}>
             {freshnessBadge.text}
           </span>

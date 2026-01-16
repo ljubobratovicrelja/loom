@@ -21,6 +21,7 @@ export interface StepData {
   outputs: Record<string, string>
   args: Record<string, unknown>
   optional: boolean
+  disabled?: boolean
   executionState?: StepExecutionState
   freshnessStatus?: FreshnessStatus
   // Type information from task schema (populated on load)

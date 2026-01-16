@@ -464,6 +464,18 @@ export default function PropertiesPanel({
               </label>
             </div>
 
+            <div>
+              <label className="flex items-center gap-2 text-slate-400 text-sm">
+                <input
+                  type="checkbox"
+                  checked={(editData.disabled as boolean) || false}
+                  onChange={(e) => handleChange('disabled', e.target.checked)}
+                  className="rounded"
+                />
+                Disabled (skip during execution)
+              </label>
+            </div>
+
             {/* Inputs */}
             <div>
               <label className="block text-slate-400 text-xs mb-2">Inputs</label>

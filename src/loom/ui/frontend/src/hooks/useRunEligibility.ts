@@ -3,7 +3,7 @@ import type { Node, Edge } from '@xyflow/react'
 import type { StepExecutionState, StepData } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 
-export type BlockReason = 'running' | 'upstream_running' | 'downstream_running' | 'output_conflict'
+export type BlockReason = 'running' | 'upstream_running' | 'downstream_running' | 'output_conflict' | 'disabled' | 'incomplete'
 
 export interface RunEligibility {
   canRun: boolean
@@ -44,6 +44,29 @@ export function useRunEligibility(
       const stepId = node.id
       const stepData = node.data as StepData
       const _stepName = stepData.name  // Kept for debugging
+
+      // Check if step is disabled
+      if (stepData.disabled) {
+        result.set(stepId, {
+          canRun: false,
+          reason: 'disabled',
+        })
+        continue
+      }
+
+      // Check if step is incomplete (missing required connections)
+      const hasInputTypes = stepData.inputTypes && Object.keys(stepData.inputTypes).length > 0
+      const hasOutputTypes = stepData.outputTypes && Object.keys(stepData.outputTypes).length > 0
+      const hasInputs = Object.keys(stepData.inputs).length > 0
+      const hasOutputs = Object.keys(stepData.outputs).length > 0
+
+      if ((hasInputTypes && !hasInputs) || (hasOutputTypes && !hasOutputs)) {
+        result.set(stepId, {
+          canRun: false,
+          reason: 'incomplete',
+        })
+        continue
+      }
 
       // Check if this step is currently running
       if (runningSteps.has(stepId)) {
@@ -138,6 +161,10 @@ export function getBlockReasonMessage(eligibility: RunEligibility): string | nul
       return `Downstream step running: ${eligibility.blockedBy?.join(', ')}`
     case 'output_conflict':
       return `Output conflict with: ${eligibility.blockedBy?.join(', ')}`
+    case 'disabled':
+      return 'This step is disabled'
+    case 'incomplete':
+      return 'This step has unconnected inputs or outputs'
     default:
       return 'Cannot run at this time'
   }

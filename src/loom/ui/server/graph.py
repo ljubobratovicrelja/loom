@@ -50,6 +50,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                     "outputs": step.get("outputs", {}),
                     "args": step.get("args", {}),
                     "optional": step.get("optional", False),
+                    "disabled": step.get("disabled", False),
                 },
             )
         )
@@ -298,6 +299,8 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
             step["args"] = args
         if node.data.get("optional"):
             step["optional"] = True
+        if node.data.get("disabled"):
+            step["disabled"] = True
 
         pipeline.append(step)
 
@@ -462,6 +465,8 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
 
         if node.data.get("optional"):
             step_data["optional"] = True
+        if node.data.get("disabled"):
+            step_data["disabled"] = True
         graph_steps[step_name] = step_data
 
     # Update pipeline steps in-place, preserving order
@@ -496,6 +501,11 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
                 step["optional"] = True
             elif "optional" in step:
                 del step["optional"]
+            # Update disabled
+            if graph_step.get("disabled"):
+                step["disabled"] = True
+            elif "disabled" in step:
+                del step["disabled"]
 
     # Add any new steps from the graph
     for name, graph_step in graph_steps.items():
