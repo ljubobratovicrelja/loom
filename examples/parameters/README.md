@@ -1,5 +1,7 @@
 # Parameters Example
 
+![screenshot](media/screenshot.png)
+
 Using parameters for configuration and overriding them at runtime with `--set`.
 
 ## What It Does

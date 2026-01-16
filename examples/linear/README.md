@@ -1,5 +1,7 @@
 # Linear Pipeline
 
+![screenshot](media/screenshot.png)
+
 The simplest pipeline pattern: A → B → C.
 
 ```

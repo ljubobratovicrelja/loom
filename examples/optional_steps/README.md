@@ -1,5 +1,7 @@
 # Optional Steps Example
 
+![screenshot](media/screenshot.png)
+
 Using optional steps for debug output and visualization that you don't always need.
 
 ## What It Does

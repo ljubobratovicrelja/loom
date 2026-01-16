@@ -1,5 +1,7 @@
 # Curve Fitting Example
 
+![screenshot](media/screenshot.png)
+
 This example demonstrates non-linear curve fitting with visualization steps.
 
 ## Overview

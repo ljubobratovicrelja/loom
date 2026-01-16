@@ -1,5 +1,7 @@
 # Parallel Pipeline (Hyperparameter Search)
 
+![screenshot](media/screenshot.png)
+
 Running the same processing with different parameter configurations to compare results.
 
 ```

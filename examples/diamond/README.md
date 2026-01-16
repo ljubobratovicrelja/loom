@@ -1,5 +1,7 @@
 # Diamond Pipeline
 
+![screenshot](media/screenshot.png)
+
 Branching and merging: one input feeds two parallel processing paths that combine at the end.
 
 ```
