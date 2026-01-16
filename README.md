@@ -1,4 +1,4 @@
-# Loom
+![Loom Banner](media/banner.svg)
 
 A lightweight visual pipeline runner for research.
 
