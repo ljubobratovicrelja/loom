@@ -554,6 +554,37 @@ pipeline: []
         assert response.status_code == 200
         mock_trash.assert_called_once()
 
+    def test_trash_resolves_relative_paths_to_pipeline_dir(self, tmp_path: Path) -> None:
+        """Should resolve relative paths relative to pipeline.yml directory."""
+        # Create pipeline in a subdirectory
+        pipeline_dir = tmp_path / "project"
+        pipeline_dir.mkdir()
+        config = pipeline_dir / "pipeline.yml"
+
+        # Create data file relative to pipeline
+        data_dir = pipeline_dir / "data"
+        data_dir.mkdir()
+        data_file = data_dir / "output.csv"
+        data_file.write_text("test data")
+
+        # Use a relative path in the config
+        config.write_text("""
+data:
+  output:
+    type: csv
+    path: data/output.csv
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
+            response = client.delete("/api/variables/output/data")
+
+        assert response.status_code == 200
+        # Verify it resolved the path relative to pipeline.yml, not cwd
+        mock_trash.assert_called_once_with(str(data_file))
+
 
 class TestGetVariablesStatus:
     """Tests for GET /api/variables/status endpoint."""

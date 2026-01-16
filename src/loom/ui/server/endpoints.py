@@ -249,41 +249,38 @@ def trash_variable_data(name: str) -> dict[str, str]:
     """Move data node data to trash.
 
     Resolves the data node path and moves it to system trash.
+    Paths are resolved relative to the pipeline file's directory.
     """
+    from loom.runner import PipelineConfig
+
     if not state.config_path or not state.config_path.exists():
         raise HTTPException(status_code=400, detail="No config loaded")
 
-    with open(state.config_path) as f:
-        config_data = _yaml.load(f) or {}
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
 
-    parameters = config_data.get("parameters", {})
-    data_section = config_data.get("data", {})
-
-    # Look up in data section
-    if name not in data_section:
+    # Check if this is a known data node
+    if name not in config.variables:
         raise HTTPException(status_code=404, detail=f"Data node '{name}' not found")
 
-    # Data node - get the path directly
-    data_entry = data_section[name]
-    if isinstance(data_entry, dict):
-        resolved = str(data_entry.get("path", ""))
-    else:
-        resolved = str(data_entry)
-
-    if not resolved:
-        raise HTTPException(status_code=400, detail=f"No path found for '{name}'")
-
-    # Resolve parameter references
-    for param_name, param_value in parameters.items():
+    # Get the raw path value and resolve any embedded parameter references
+    resolved = config.variables[name]
+    for param_name, param_value in config.parameters.items():
         resolved = resolved.replace(f"${param_name}", str(param_value))
 
+    # Make relative paths absolute relative to pipeline directory
     path = Path(resolved)
+    if not path.is_absolute():
+        path = config.base_dir / path
+
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Path does not exist: {resolved}")
+        raise HTTPException(status_code=404, detail=f"Path does not exist: {path}")
 
     try:
         send2trash(str(path))
-        return {"status": "ok", "message": f"Moved to trash: {resolved}"}
+        return {"status": "ok", "message": f"Moved to trash: {path}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trash: {e}")
 
