@@ -303,9 +303,13 @@ class TestGetStepsFreshness:
         # Create a pipeline with outputs that don't exist
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  input: input.txt
-  output: nonexistent_output.txt
+data:
+  input:
+    type: txt
+    path: input.txt
+  output:
+    type: txt
+    path: nonexistent_output.txt
 
 pipeline:
   - name: process
@@ -331,8 +335,10 @@ pipeline:
         """Steps without outputs should be marked 'no_outputs'."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  input: input.txt
+data:
+  input:
+    type: txt
+    path: input.txt
 
 pipeline:
   - name: validate
@@ -355,9 +361,13 @@ pipeline:
         """Outputs newer than inputs should be marked 'fresh'."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  input: input.txt
-  output: output.txt
+data:
+  input:
+    type: txt
+    path: input.txt
+  output:
+    type: txt
+    path: output.txt
 
 pipeline:
   - name: process
@@ -389,9 +399,13 @@ pipeline:
         """Outputs older than inputs should be marked 'stale'."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  input: input.txt
-  output: output.txt
+data:
+  input:
+    type: txt
+    path: input.txt
+  output:
+    type: txt
+    path: output.txt
 
 pipeline:
   - name: process
@@ -433,12 +447,14 @@ class TestTrashVariableData:
         assert response.status_code == 400
         assert "No config loaded" in response.json()["detail"]
 
-    def test_trash_variable_not_found_returns_404(self, tmp_path: Path) -> None:
-        """Should return 404 when variable doesn't exist."""
+    def test_trash_data_not_found_returns_404(self, tmp_path: Path) -> None:
+        """Should return 404 when data node doesn't exist."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  existing: /some/path
+data:
+  existing:
+    type: csv
+    path: /some/path
 pipeline: []
 """)
         configure(config_path=config)
@@ -450,37 +466,41 @@ pipeline: []
         assert "not found" in response.json()["detail"]
 
     def test_trash_path_not_exists_returns_404(self, tmp_path: Path) -> None:
-        """Should return 404 when variable path doesn't exist on disk."""
+        """Should return 404 when data node path doesn't exist on disk."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  myvar: nonexistent_file.txt
+data:
+  mydata:
+    type: txt
+    path: nonexistent_file.txt
 pipeline: []
 """)
         configure(config_path=config)
         client = TestClient(app)
 
-        response = client.delete("/api/variables/myvar/data")
+        response = client.delete("/api/variables/mydata/data")
 
         assert response.status_code == 404
         assert "does not exist" in response.json()["detail"]
 
     def test_trash_variable_success(self, tmp_path: Path) -> None:
-        """Should trash variable file successfully."""
+        """Should trash data node file successfully."""
         config = tmp_path / "pipeline.yml"
         data_file = tmp_path / "data.txt"
         data_file.write_text("test data")
 
         config.write_text(f"""
-variables:
-  myvar: {data_file}
+data:
+  mydata:
+    type: txt
+    path: {data_file}
 pipeline: []
 """)
         configure(config_path=config)
         client = TestClient(app)
 
         with patch("loom.ui.server.endpoints.send2trash") as mock_trash:
-            response = client.delete("/api/variables/myvar/data")
+            response = client.delete("/api/variables/mydata/data")
 
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
@@ -509,7 +529,7 @@ pipeline: []
         mock_trash.assert_called_once_with(str(data_file))
 
     def test_trash_resolves_parameter_references(self, tmp_path: Path) -> None:
-        """Should resolve $param references in variable paths."""
+        """Should resolve $param references in data node paths."""
         config = tmp_path / "pipeline.yml"
         data_dir = tmp_path / "output"
         data_dir.mkdir()
@@ -519,8 +539,10 @@ pipeline: []
         config.write_text(f"""
 parameters:
   output_dir: {data_dir}
-variables:
-  result: $output_dir/result.csv
+data:
+  result:
+    type: csv
+    path: $output_dir/result.csv
 pipeline: []
 """)
         configure(config_path=config)
@@ -553,9 +575,13 @@ class TestGetVariablesStatus:
         existing_file.write_text("content")
 
         config.write_text(f"""
-variables:
-  existing: {existing_file}
-  missing: {tmp_path}/nonexistent.txt
+data:
+  existing:
+    type: txt
+    path: {existing_file}
+  missing:
+    type: txt
+    path: {tmp_path}/nonexistent.txt
 pipeline: []
 """)
         configure(config_path=config)
@@ -599,8 +625,10 @@ class TestGetConfig:
         """Should return graph for valid config."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  input: data/input.txt
+data:
+  input:
+    type: txt
+    path: data/input.txt
 pipeline:
   - name: process
     task: tasks/process.py
@@ -614,7 +642,7 @@ pipeline:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data["nodes"]) == 2  # 1 step + 1 variable
+        assert len(data["nodes"]) == 2  # 1 step + 1 data node
         step_nodes = [n for n in data["nodes"] if n["type"] == "step"]
         assert step_nodes[0]["data"]["name"] == "process"
 
@@ -648,8 +676,9 @@ class TestSaveConfig:
         response = client.post(
             "/api/config",
             json={
-                "variables": {"input": "/path"},
+                "variables": {},
                 "parameters": {},
+                "data": {"input": {"type": "txt", "path": "/path"}},
                 "nodes": [],
                 "edges": [],
             },
@@ -662,9 +691,11 @@ class TestSaveConfig:
         """Should preserve comments when updating existing file."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""# Important comment
-variables:
-  # Variable comment
-  input: old_path
+data:
+  # Data comment
+  input:
+    type: txt
+    path: old_path
 pipeline: []
 """)
         configure(config_path=config)
@@ -673,14 +704,20 @@ pipeline: []
         response = client.post(
             "/api/config",
             json={
-                "variables": {"input": "new_path"},
+                "variables": {},
                 "parameters": {},
+                "data": {"input": {"type": "txt", "path": "new_path"}},
                 "nodes": [
                     {
-                        "id": "var_input",
-                        "type": "variable",
+                        "id": "data_input",
+                        "type": "data",
                         "position": {"x": 50, "y": 50},
-                        "data": {"name": "input", "value": "new_path"},
+                        "data": {
+                            "key": "input",
+                            "name": "input",
+                            "type": "txt",
+                            "path": "new_path",
+                        },
                     }
                 ],
                 "edges": [],
@@ -722,8 +759,10 @@ class TestValidateConfig:
         """Should return no warnings for valid pipeline without type mismatches."""
         config = tmp_path / "pipeline.yml"
         config.write_text("""
-variables:
-  input_video: /path/to/video.mp4
+data:
+  input_video:
+    type: video
+    path: /path/to/video.mp4
 
 pipeline:
   - name: process
@@ -747,8 +786,10 @@ pipeline:
         """Should validate a specific config file via path query param."""
         config = tmp_path / "other.yml"
         config.write_text("""
-variables:
-  input: /path/to/input
+data:
+  input:
+    type: txt
+    path: /path/to/input
 pipeline: []
 """)
         # Set a different default config

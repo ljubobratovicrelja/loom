@@ -13,9 +13,13 @@ from loom.runner.cli import main
 def sample_config_file() -> Path:
     """Create a sample config file for CLI testing."""
     content = """
-variables:
-  input: data/input.txt
-  output: data/output.txt
+data:
+  input:
+    type: txt
+    path: data/input.txt
+  output:
+    type: txt
+    path: data/output.txt
 
 parameters:
   threshold: 0.5
@@ -191,10 +195,16 @@ class TestCLIFromStep:
         """Test --from runs from specified step onward."""
         # Create a config with multiple non-optional steps
         content = """
-variables:
-  a: a.txt
-  b: b.txt
-  c: c.txt
+data:
+  a:
+    type: txt
+    path: a.txt
+  b:
+    type: txt
+    path: b.txt
+  c:
+    type: txt
+    path: c.txt
 
 parameters: {}
 

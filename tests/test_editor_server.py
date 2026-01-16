@@ -18,12 +18,18 @@ SAMPLE_YAML_CONTENT = """\
 # Pipeline configuration file
 # This comment should be preserved
 
-variables:
+data:
   # Source video file
-  video: data/videos/test.mp4
+  video:
+    type: video
+    path: data/videos/test.mp4
   # Output files
-  gaze_csv: data/tracking/gaze.csv
-  fixations_csv: data/tracking/fixations.csv
+  gaze_csv:
+    type: csv
+    path: data/tracking/gaze.csv
+  fixations_csv:
+    type: csv
+    path: data/tracking/fixations.csv
 
 parameters:
   # Video dimensions
@@ -123,12 +129,12 @@ class TestLayoutSerialization:
         """Saved positions in layout section should be applied to nodes."""
         # Arrange
         yaml_data = {
-            "variables": {"input": "/path/to/input"},
+            "data": {"input": {"type": "csv", "path": "/path/to/input"}},
             "parameters": {"lr": 0.001},
             "pipeline": [{"name": "step1", "task": "tasks/test.py"}],
             "layout": {
                 "step1": {"x": 100, "y": 200},
-                "var_input": {"x": 50, "y": 75},
+                "data_input": {"x": 50, "y": 75},
                 "param_lr": {"x": 25, "y": -50},
             },
         }
@@ -139,14 +145,14 @@ class TestLayoutSerialization:
         # Assert
         positions = {node.id: node.position for node in graph.nodes}
         assert positions["step1"] == {"x": 100.0, "y": 200.0}
-        assert positions["var_input"] == {"x": 50.0, "y": 75.0}
+        assert positions["data_input"] == {"x": 50.0, "y": 75.0}
         assert positions["param_lr"] == {"x": 25.0, "y": -50.0}
 
     def test_yaml_to_graph_computes_defaults_without_layout(self) -> None:
         """Without layout section, default positions should be computed."""
         # Arrange
         yaml_data = {
-            "variables": {"input": "/path/to/input"},
+            "data": {"input": {"type": "csv", "path": "/path/to/input"}},
             "parameters": {},
             "pipeline": [{"name": "step1", "task": "tasks/test.py"}],
         }
@@ -157,13 +163,13 @@ class TestLayoutSerialization:
         # Assert - positions should be non-zero defaults
         positions = {node.id: node.position for node in graph.nodes}
         assert positions["step1"]["x"] == 300  # Default step x position
-        assert positions["var_input"]["x"] == 50  # Default input variable x
+        assert positions["data_input"]["x"] == 50  # Default data node x
 
     def test_yaml_to_graph_sets_has_layout_true_when_layout_exists(self) -> None:
         """hasLayout should be True when layout section exists in YAML."""
         # Arrange
         yaml_data = {
-            "variables": {"input": "/path"},
+            "data": {"input": {"type": "csv", "path": "/path"}},
             "parameters": {},
             "pipeline": [{"name": "step1", "task": "tasks/test.py"}],
             "layout": {"step1": {"x": 100, "y": 200}},
@@ -179,7 +185,7 @@ class TestLayoutSerialization:
         """hasLayout should be False when no layout section in YAML."""
         # Arrange
         yaml_data = {
-            "variables": {"input": "/path"},
+            "data": {"input": {"type": "csv", "path": "/path"}},
             "parameters": {},
             "pipeline": [{"name": "step1", "task": "tasks/test.py"}],
         }
@@ -194,8 +200,9 @@ class TestLayoutSerialization:
         """Node positions should be written to layout section."""
         # Arrange
         graph = PipelineGraph(
-            variables={"input": "/path"},
+            variables={},
             parameters={},
+            data={"input": DataEntry(type="csv", path="/path")},
             nodes=[
                 GraphNode(
                     id="step1",
@@ -211,10 +218,10 @@ class TestLayoutSerialization:
                     },
                 ),
                 GraphNode(
-                    id="var_input",
-                    type="variable",
+                    id="data_input",
+                    type="data",
                     position={"x": 50, "y": 100},
-                    data={"name": "input", "value": "/path"},
+                    data={"key": "input", "name": "input", "type": "csv", "path": "/path"},
                 ),
             ],
             edges=[],
@@ -226,7 +233,7 @@ class TestLayoutSerialization:
         # Assert
         assert "layout" in yaml_out
         assert yaml_out["layout"]["step1"] == {"x": 150, "y": 250}
-        assert yaml_out["layout"]["var_input"] == {"x": 50, "y": 100}
+        assert yaml_out["layout"]["data_input"] == {"x": 50, "y": 100}
 
 
 class TestEditorOptionsSerialization:
@@ -236,7 +243,7 @@ class TestEditorOptionsSerialization:
         """Editor options in YAML should be read into graph."""
         # Arrange
         yaml_data = {
-            "variables": {},
+            "data": {},
             "parameters": {},
             "pipeline": [],
             "editor": {"autoSave": True},
@@ -252,7 +259,7 @@ class TestEditorOptionsSerialization:
         """Without editor section, defaults should be used."""
         # Arrange
         yaml_data: dict[str, object] = {
-            "variables": {},
+            "data": {},
             "parameters": {},
             "pipeline": [],
         }

@@ -63,7 +63,7 @@ pipeline:
       --output: data/viz/output.mp4
 """
 
-# Sample YAML with variables section (legacy format)
+# Sample YAML with variables section (legacy format - should be rejected)
 SAMPLE_YAML_WITH_VARIABLES = """\
 variables:
   video: data/videos/test.mp4
@@ -94,7 +94,7 @@ def data_section_config(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def variables_section_config(tmp_path: Path) -> Path:
-    """Create a config file with variables section."""
+    """Create a config file with deprecated variables section."""
     config_file = tmp_path / "pipeline.yml"
     config_file.write_text(SAMPLE_YAML_WITH_VARIABLES)
     return config_file
@@ -117,17 +117,12 @@ class TestBuildStepCommand:
         assert "--threshold" in cmd
         assert "50.0" in cmd
 
-    def test_build_command_with_variables_section(self, variables_section_config: Path) -> None:
-        """Test building command from config with variables section."""
-        cmd = build_step_command(variables_section_config, "process")
-
-        assert cmd[0] == sys.executable
-        # Script and paths are now resolved to absolute paths
-        assert Path(cmd[1]).name == "process.py"
-        assert Path(cmd[1]).is_absolute()
-        assert any("test.mp4" in c for c in cmd)
-        assert "-o" in cmd
-        assert any("output.csv" in c for c in cmd)
+    def test_build_command_with_variables_section_raises_error(
+        self, variables_section_config: Path
+    ) -> None:
+        """Test that building command from config with variables section raises error."""
+        with pytest.raises(ValueError, match="variables.*deprecated"):
+            build_step_command(variables_section_config, "process")
 
     def test_build_command_resolves_boolean_flags(self, data_section_config: Path) -> None:
         """Test that boolean True args add the flag without value."""

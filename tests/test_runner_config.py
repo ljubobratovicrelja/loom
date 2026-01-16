@@ -56,10 +56,16 @@ class TestPipelineConfig:
     def sample_yaml_content(self) -> str:
         """Sample YAML content for testing."""
         return """
-variables:
-  video: data/video.mp4
-  output_csv: data/output.csv
-  viz_output: data/viz.mp4
+data:
+  video:
+    type: video
+    path: data/video.mp4
+  output_csv:
+    type: csv
+    path: data/output.csv
+  viz_output:
+    type: video
+    path: data/viz.mp4
 
 parameters:
   threshold: 0.5
@@ -92,8 +98,8 @@ pipeline:
             f.write(sample_yaml_content)
             return Path(f.name)
 
-    def test_from_yaml_loads_variables(self, config_file: Path) -> None:
-        """Test that YAML loading correctly parses variables."""
+    def test_from_yaml_loads_data_as_variables(self, config_file: Path) -> None:
+        """Test that YAML loading correctly parses data section into variables."""
         config = PipelineConfig.from_yaml(config_file)
 
         assert config.variables["video"] == "data/video.mp4"
@@ -357,8 +363,8 @@ pipeline:
         assert config.resolve_value("$video") == "data/videos/test.mp4"
         assert config.resolve_value("$gaze_csv") == "data/tracking/gaze.csv"
 
-    def test_from_yaml_data_and_variables_merged(self, tmp_path: Path) -> None:
-        """Test that data section and variables section are merged."""
+    def test_from_yaml_rejects_variables_section(self, tmp_path: Path) -> None:
+        """Test that variables section is rejected with an error."""
         yaml_content = """
 variables:
   extra_var: some/path.txt
@@ -372,11 +378,9 @@ pipeline: []
 """
         config_file = tmp_path / "pipeline.yml"
         config_file.write_text(yaml_content)
-        config = PipelineConfig.from_yaml(config_file)
 
-        # Both should be accessible
-        assert config.variables["extra_var"] == "some/path.txt"
-        assert config.variables["video"] == "data/video.mp4"
+        with pytest.raises(ValueError, match="variables.*deprecated"):
+            PipelineConfig.from_yaml(config_file)
 
     def test_from_yaml_data_section_string_fallback(self, tmp_path: Path) -> None:
         """Test that string values in data section are handled as paths."""
@@ -428,8 +432,10 @@ class TestPipelineConfigPathResolution:
         subdir.mkdir()
         config_file = subdir / "pipeline.yml"
         config_file.write_text("""
-variables:
-  output: data/output.csv
+data:
+  output:
+    type: csv
+    path: data/output.csv
 pipeline: []
 """)
         config = PipelineConfig.from_yaml(config_file)
@@ -443,8 +449,10 @@ pipeline: []
         """Test that resolve_path doesn't modify absolute paths."""
         config_file = tmp_path / "pipeline.yml"
         config_file.write_text("""
-variables:
-  output: /absolute/path/output.csv
+data:
+  output:
+    type: csv
+    path: /absolute/path/output.csv
 pipeline: []
 """)
         config = PipelineConfig.from_yaml(config_file)
@@ -459,14 +467,16 @@ pipeline: []
         config_file.write_text("""
 parameters:
   model_name: bert
-variables:
-  output: models/$model_name/weights.pt
+data:
+  output:
+    type: json
+    path: models/$model_name/weights.pt
 pipeline: []
 """)
         config = PipelineConfig.from_yaml(config_file)
 
-        # Note: $model_name in variable value won't be expanded by resolve_path
-        # since variable values are literal strings. This tests the path resolution.
+        # Note: $model_name in data path value won't be expanded by resolve_path
+        # since path values are literal strings. This tests the path resolution.
         resolved = config.resolve_path("$output")
 
         assert resolved.is_absolute()

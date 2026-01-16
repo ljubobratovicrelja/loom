@@ -198,9 +198,13 @@ class TestPipelineExecutorPathResolution:
         project_dir.mkdir()
         config_file = project_dir / "pipeline.yml"
         config_file.write_text("""
-variables:
-  input_video: data/input.mp4
-  output_csv: data/output.csv
+data:
+  input_video:
+    type: video
+    path: data/input.mp4
+  output_csv:
+    type: csv
+    path: data/output.csv
 
 pipeline:
   - name: extract
@@ -240,8 +244,10 @@ pipeline:
         project_dir.mkdir()
         config_file = project_dir / "pipeline.yml"
         config_file.write_text("""
-variables:
-  output: results/out.csv
+data:
+  output:
+    type: csv
+    path: results/out.csv
 
 pipeline:
   - name: process
