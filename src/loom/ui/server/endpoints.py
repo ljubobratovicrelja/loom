@@ -290,8 +290,18 @@ def trash_variable_data(name: str) -> dict[str, str]:
 
 @router.post("/api/open-path")
 def open_path(path: str = Query(...)) -> dict[str, str]:
-    """Open a file or folder with the system's default application."""
+    """Open a file or folder with the system's default application.
+
+    The path can be absolute or relative. Relative paths are resolved
+    relative to the config file's directory.
+    """
+    # Start with the path as given
     resolved_path = Path(path)
+
+    # If relative and config is loaded, resolve relative to config directory
+    if not resolved_path.is_absolute() and state.config_path:
+        resolved_path = state.config_path.parent / path
+
     if not resolved_path.exists():
         raise HTTPException(status_code=404, detail=f"Path not found: {path}")
 

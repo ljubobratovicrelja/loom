@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder } from 'lucide-react'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText } from 'lucide-react'
 import type { DataNode as DataNodeType, DataType } from '../types/pipeline'
 
 // Type configuration with icons and labels
@@ -9,6 +9,7 @@ const TYPE_CONFIG: Record<DataType, { icon: ReactNode; label: string }> = {
   video: { icon: <Video className="w-4 h-4" />, label: 'Video' },
   csv: { icon: <Table2 className="w-4 h-4" />, label: 'CSV' },
   json: { icon: <Braces className="w-4 h-4" />, label: 'JSON' },
+  txt: { icon: <FileText className="w-4 h-4" />, label: 'Text' },
   image_directory: { icon: <FolderOpen className="w-4 h-4" />, label: 'Img Dir' },
   data_folder: { icon: <Folder className="w-4 h-4" />, label: 'Folder' },
 }
