@@ -3,19 +3,19 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder } from 'lucide-react'
 import type { StepNode as StepNodeType, DataType } from '../types/pipeline'
 
-// Color configuration for data types
+// Color configuration for data types - support both light and dark modes
 const TYPE_COLORS: Record<DataType, { bg: string; border: string; text: string }> = {
-  video: { bg: '!bg-rose-400', border: '!border-rose-400', text: 'text-rose-400' },
-  image: { bg: '!bg-amber-400', border: '!border-amber-400', text: 'text-amber-400' },
-  csv: { bg: '!bg-emerald-400', border: '!border-emerald-400', text: 'text-emerald-400' },
-  json: { bg: '!bg-sky-400', border: '!border-sky-400', text: 'text-sky-400' },
-  image_directory: { bg: '!bg-orange-400', border: '!border-orange-400', text: 'text-orange-400' },
-  data_folder: { bg: '!bg-teal-400', border: '!border-teal-400', text: 'text-teal-400' },
+  video: { bg: '!bg-rose-400', border: '!border-rose-400', text: 'text-rose-500 dark:text-rose-400' },
+  image: { bg: '!bg-amber-400', border: '!border-amber-400', text: 'text-amber-500 dark:text-amber-400' },
+  csv: { bg: '!bg-emerald-400', border: '!border-emerald-400', text: 'text-emerald-500 dark:text-emerald-400' },
+  json: { bg: '!bg-sky-400', border: '!border-sky-400', text: 'text-sky-500 dark:text-sky-400' },
+  image_directory: { bg: '!bg-orange-400', border: '!border-orange-400', text: 'text-orange-500 dark:text-orange-400' },
+  data_folder: { bg: '!bg-teal-400', border: '!border-teal-400', text: 'text-teal-500 dark:text-teal-400' },
 }
 
 // Default color for untyped inputs/outputs
-const DEFAULT_INPUT_COLOR = { bg: '!bg-blue-400', border: '!border-blue-400', text: 'text-blue-400' }
-const DEFAULT_OUTPUT_COLOR = { bg: '!bg-green-400', border: '!border-green-400', text: 'text-green-400' }
+const DEFAULT_INPUT_COLOR = { bg: '!bg-blue-400', border: '!border-blue-400', text: 'text-blue-500 dark:text-blue-400' }
+const DEFAULT_OUTPUT_COLOR = { bg: '!bg-green-400', border: '!border-green-400', text: 'text-green-500 dark:text-green-400' }
 
 // Type icons using Lucide icons
 const TYPE_ICONS: Record<DataType, ReactNode> = {
@@ -65,7 +65,7 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
     if (selected) {
       return 'border-blue-500'
     }
-    return 'border-slate-600'
+    return 'border-slate-400 dark:border-slate-600'
   }
 
   // Determine status indicator color
@@ -119,7 +119,7 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
   return (
     <div
       className={`
-        bg-slate-800 rounded-lg shadow-lg min-w-[200px] border-2 transition-all duration-300
+        bg-white dark:bg-slate-800 rounded-lg shadow-lg min-w-[200px] border-2 transition-all duration-300
         ${getBorderClass()}
         ${data.optional ? 'border-dashed' : ''}
         ${isDisabled ? 'opacity-50' : ''}
@@ -127,11 +127,11 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
     >
       {/* Header */}
       <div className={`px-3 py-2 rounded-t-md flex items-center gap-2 transition-colors duration-300 ${
-        isDisabled ? 'bg-slate-600' :
-        data.executionState === 'running' ? 'bg-cyan-900/50' :
-        data.executionState === 'completed' ? 'bg-green-900/30' :
-        data.executionState === 'failed' ? 'bg-red-900/30' :
-        'bg-slate-700'
+        isDisabled ? 'bg-slate-300 dark:bg-slate-600' :
+        data.executionState === 'running' ? 'bg-cyan-100 dark:bg-cyan-900/50' :
+        data.executionState === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
+        data.executionState === 'failed' ? 'bg-red-100 dark:bg-red-900/30' :
+        'bg-slate-200 dark:bg-slate-700'
       }`}>
         <div className="relative">
           <div className={`w-2 h-2 rounded-full ${getStatusIndicator()}`} />
@@ -139,15 +139,15 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
             <div className="absolute inset-0 w-2 h-2 rounded-full bg-cyan-400" />
           )}
         </div>
-        <span className="text-white font-medium text-sm">{data.name}</span>
+        <span className="text-slate-900 dark:text-white font-medium text-sm">{data.name}</span>
         {isDisabled && (
-          <span className="ml-auto text-slate-400 text-xs">DISABLED</span>
+          <span className="ml-auto text-slate-500 dark:text-slate-400 text-xs">DISABLED</span>
         )}
         {!isDisabled && data.executionState === 'completed' && (
-          <span className="ml-auto text-green-400 text-xs">&#10003;</span>
+          <span className="ml-auto text-green-500 dark:text-green-400 text-xs">&#10003;</span>
         )}
         {!isDisabled && data.executionState === 'failed' && (
-          <span className="ml-auto text-red-400 text-xs">&#10007;</span>
+          <span className="ml-auto text-red-500 dark:text-red-400 text-xs">&#10007;</span>
         )}
         {!isDisabled && freshnessBadge && (
           <span className={`ml-auto text-xs ${freshnessBadge.className}`} title={freshnessBadge.title}>
@@ -171,7 +171,7 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
                 className={colors.bg}
                 style={{ top: 'auto', position: 'relative', transform: 'none' }}
               />
-              <span className={`ml-2 flex items-center gap-1 ${inputType ? colors.text : 'text-slate-400'}`}>
+              <span className={`ml-2 flex items-center gap-1 ${inputType ? colors.text : 'text-slate-500 dark:text-slate-400'}`}>
                 {inputType && <span className="flex-shrink-0">{TYPE_ICONS[inputType]}</span>}
                 {name}
               </span>
@@ -191,10 +191,10 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
                 className={connected ? '!bg-purple-400' : '!bg-transparent !border-2 !border-purple-400'}
                 style={{ top: 'auto', position: 'relative', transform: 'none' }}
               />
-              <span className={`ml-2 ${connected ? 'text-purple-400' : 'text-purple-400/60'}`}>
+              <span className={`ml-2 ${connected ? 'text-purple-500 dark:text-purple-400' : 'text-purple-400/60'}`}>
                 {argKey.replace(/^-+/, '')}
                 {!connected && argValue !== undefined && argValue !== '' && (
-                  <span className="text-slate-500 ml-1 text-[10px]">= {String(argValue)}</span>
+                  <span className="text-slate-400 dark:text-slate-500 ml-1 text-[10px]">= {String(argValue)}</span>
                 )}
               </span>
             </div>
@@ -207,7 +207,7 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
           const colors = getOutputColor(flag)
           return (
             <div key={`output-${flag}`} className="flex items-center justify-end py-1 relative">
-              <span className={`mr-2 flex items-center gap-1 ${outputType ? colors.text : 'text-slate-400'}`}>
+              <span className={`mr-2 flex items-center gap-1 ${outputType ? colors.text : 'text-slate-500 dark:text-slate-400'}`}>
                 {flag.replace(/^-+/, '')}
                 {outputType && <span className="flex-shrink-0">{TYPE_ICONS[outputType]}</span>}
               </span>

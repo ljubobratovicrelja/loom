@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light/Dark theme CSS custom properties */
+:root {
+  /* Light mode (default) */
+  --color-surface-primary: theme('colors.slate.50');
+  --color-surface-secondary: theme('colors.slate.100');
+  --color-surface-card: theme('colors.white');
+  --color-surface-hover: theme('colors.slate.200');
+  --color-text-primary: theme('colors.slate.900');
+  --color-text-secondary: theme('colors.slate.700');
+  --color-text-muted: theme('colors.slate.500');
+  --color-border: theme('colors.slate.300');
+  --color-border-secondary: theme('colors.slate.200');
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode */
+    --color-surface-primary: theme('colors.slate.950');
+    --color-surface-secondary: theme('colors.slate.900');
+    --color-surface-card: theme('colors.slate.800');
+    --color-surface-hover: theme('colors.slate.700');
+    --color-text-primary: theme('colors.white');
+    --color-text-secondary: theme('colors.slate.200');
+    --color-text-muted: theme('colors.slate.400');
+    --color-border: theme('colors.slate.700');
+    --color-border-secondary: theme('colors.slate.600');
+  }
+}
+
 html,
 body,
 #root {

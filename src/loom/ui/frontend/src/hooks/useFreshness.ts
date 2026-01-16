@@ -100,15 +100,15 @@ export function getFreshnessLabel(status: FreshnessStatus): string {
 export function getFreshnessColorClasses(status: FreshnessStatus): string {
   switch (status) {
     case 'fresh':
-      return 'bg-green-500/20 text-green-400 border-green-500/30'
+      return 'bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30'
     case 'stale':
-      return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+      return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
     case 'missing':
-      return 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+      return 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30'
     case 'no_outputs':
       return 'bg-slate-600/20 text-slate-500 border-slate-600/30'
     default:
-      return 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+      return 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30'
   }
 }
 

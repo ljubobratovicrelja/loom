@@ -22,39 +22,39 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
   // Fetch thumbnail/preview for existing data
   const thumbnail = useThumbnail(data.key, data.type, data.exists)
 
-  // Determine colors based on existence status
+  // Determine colors based on existence status - support both light and dark modes
   const getColors = () => {
     if (data.exists === true) {
       // Data exists - teal theme
       return {
-        bg: 'bg-teal-900/80',
-        border: selected ? 'border-teal-400' : 'border-teal-600',
+        bg: 'bg-teal-100 dark:bg-teal-900/80',
+        border: selected ? 'border-teal-400' : 'border-teal-400 dark:border-teal-600',
         handle: '!bg-teal-400',
-        dollar: 'text-teal-300',
-        value: 'text-teal-400',
-        badge: 'bg-teal-800 text-teal-300',
+        dollar: 'text-teal-600 dark:text-teal-300',
+        value: 'text-teal-600 dark:text-teal-400',
+        badge: 'bg-teal-200 dark:bg-teal-800 text-teal-700 dark:text-teal-300',
         shadow: 'shadow-teal-500/20',
       }
     } else if (data.exists === false) {
       // Data doesn't exist - grey/muted theme
       return {
-        bg: 'bg-slate-800',
-        border: selected ? 'border-slate-400' : 'border-slate-600',
+        bg: 'bg-slate-200 dark:bg-slate-800',
+        border: selected ? 'border-slate-400' : 'border-slate-400 dark:border-slate-600',
         handle: '!bg-slate-400',
-        dollar: 'text-slate-400',
-        value: 'text-slate-500',
-        badge: 'bg-slate-700 text-slate-400',
+        dollar: 'text-slate-500 dark:text-slate-400',
+        value: 'text-slate-400 dark:text-slate-500',
+        badge: 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
         shadow: '',
       }
     } else {
       // Unknown status - default teal
       return {
-        bg: 'bg-teal-900',
-        border: selected ? 'border-teal-400' : 'border-teal-700',
+        bg: 'bg-teal-50 dark:bg-teal-900',
+        border: selected ? 'border-teal-400' : 'border-teal-400 dark:border-teal-700',
         handle: '!bg-teal-400',
-        dollar: 'text-teal-300',
-        value: 'text-teal-400',
-        badge: 'bg-teal-800 text-teal-300',
+        dollar: 'text-teal-600 dark:text-teal-300',
+        value: 'text-teal-500 dark:text-teal-400',
+        badge: 'bg-teal-200 dark:bg-teal-800 text-teal-700 dark:text-teal-300',
         shadow: '',
       }
     }
@@ -80,7 +80,7 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
       <div className="px-3 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm flex-shrink-0">{config.icon}</span>
-          <span className="text-white font-medium text-sm truncate">{data.name}</span>
+          <span className="text-slate-900 dark:text-white font-medium text-sm truncate">{data.name}</span>
         </div>
         <Handle
           type="source"
@@ -93,7 +93,7 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
       {data.exists && (thumbnail.thumbnailUrl || thumbnail.textPreview || thumbnail.loading) && (
         <div className="px-3 pb-2">
           {thumbnail.loading && (
-            <div className="bg-slate-700/50 rounded h-[60px] animate-pulse" />
+            <div className="bg-slate-300/50 dark:bg-slate-700/50 rounded h-[60px] animate-pulse" />
           )}
           {thumbnail.thumbnailUrl && (
             <img
@@ -103,12 +103,12 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
             />
           )}
           {thumbnail.textPreview && (
-            <div className="bg-slate-800/80 rounded p-1.5 font-mono text-[9px] leading-tight text-slate-300 overflow-hidden">
+            <div className="bg-slate-200/80 dark:bg-slate-800/80 rounded p-1.5 font-mono text-[9px] leading-tight text-slate-600 dark:text-slate-300 overflow-hidden">
               {thumbnail.textPreview.lines.map((line, i) => (
                 <div key={i} className="truncate">{line || '\u00A0'}</div>
               ))}
               {thumbnail.textPreview.truncated && (
-                <div className="text-slate-500">...</div>
+                <div className="text-slate-400 dark:text-slate-500">...</div>
               )}
             </div>
           )}
@@ -120,10 +120,10 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
           {config.label}
         </span>
         {data.exists === true && (
-          <span className="text-teal-400 text-xs">&#10003;</span>
+          <span className="text-teal-500 dark:text-teal-400 text-xs">&#10003;</span>
         )}
         {data.exists === false && (
-          <span className="text-slate-500 text-xs">&#9675;</span>
+          <span className="text-slate-400 dark:text-slate-500 text-xs">&#9675;</span>
         )}
       </div>
       <div className={`px-3 pb-2 text-xs ${colors.value} truncate max-w-[180px]`} title={data.path}>

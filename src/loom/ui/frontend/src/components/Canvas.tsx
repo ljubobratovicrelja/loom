@@ -544,7 +544,7 @@ export default function Canvas({
   return (
     <div
       ref={reactFlowWrapper}
-      className="flex-1 bg-slate-950"
+      className="flex-1 bg-slate-100 dark:bg-slate-950"
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
@@ -574,10 +574,10 @@ export default function Canvas({
           reconnectable: true,
         }}
       >
-        <Background color="#334155" gap={20} />
-        <Controls className="!bg-slate-800 !border-slate-700 !rounded-lg [&>button]:!bg-slate-700 [&>button]:!border-slate-600 [&>button:hover]:!bg-slate-600" />
+        <Background className="!bg-slate-100 dark:[&]:!bg-slate-950" color="#94a3b8" gap={20} />
+        <Controls className="!bg-white dark:!bg-slate-800 !border-slate-300 dark:!border-slate-700 !rounded-lg [&>button]:!bg-slate-100 dark:[&>button]:!bg-slate-700 [&>button]:!border-slate-300 dark:[&>button]:!border-slate-600 [&>button:hover]:!bg-slate-200 dark:[&>button:hover]:!bg-slate-600 [&>button]:!text-slate-700 dark:[&>button]:!text-white" />
         <MiniMap
-          className="!bg-slate-900 !border-slate-700"
+          className="!bg-slate-200 dark:!bg-slate-900 !border-slate-300 dark:!border-slate-700"
           nodeColor={(node) => {
             if (node.type === 'data') {
               const dataData = node.data as DataNodeData
@@ -594,7 +594,7 @@ export default function Canvas({
               if (stepData.executionState === 'running') return '#22d3ee' // cyan
               if (stepData.executionState === 'completed') return '#22c55e' // green
               if (stepData.executionState === 'failed') return '#ef4444' // red
-              return '#334155'
+              return '#475569' // slate-600 (darker for better visibility on light bg)
             }
             return '#64748b'
           }}

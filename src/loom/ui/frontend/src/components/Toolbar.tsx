@@ -48,27 +48,27 @@ export default function Toolbar({
   parallelEligibility,
 }: ToolbarProps) {
   return (
-    <div className="h-12 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4">
+    <div className="h-12 bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <svg viewBox="0 0 32 32" className="w-6 h-6">
             <ellipse cx="16" cy="16" rx="14" ry="10" fill="none" stroke="#3b82f6" strokeWidth="2"/>
             <circle cx="16" cy="16" r="6" fill="#3b82f6"/>
-            <circle cx="16" cy="16" r="3" fill="#0f172a"/>
+            <circle cx="16" cy="16" r="3" className="fill-slate-100 dark:fill-slate-900"/>
             <circle cx="14" cy="14" r="1.5" fill="#60a5fa"/>
             <circle cx="4" cy="16" r="2" fill="#22c55e"/>
             <circle cx="28" cy="16" r="2" fill="#22c55e"/>
           </svg>
-          <h1 className="text-white font-semibold">Loom</h1>
+          <h1 className="text-slate-900 dark:text-white font-semibold">Loom</h1>
         </div>
         {configPath && (
-          <span className="text-slate-400 text-sm">
+          <span className="text-slate-500 dark:text-slate-400 text-sm">
             {configPath}
             {hasChanges && <span className="text-yellow-500 ml-1">*</span>}
           </span>
         )}
         {!configPath && (
-          <span className="text-slate-500 text-sm italic">New pipeline</span>
+          <span className="text-slate-400 dark:text-slate-500 text-sm italic">New pipeline</span>
         )}
       </div>
 
@@ -85,7 +85,7 @@ export default function Toolbar({
         />
 
         {/* Divider */}
-        <div className="w-px h-6 bg-slate-700" />
+        <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
 
         {/* Undo/Redo buttons */}
         <div className="flex items-center gap-1">
@@ -93,10 +93,10 @@ export default function Toolbar({
             onClick={onUndo}
             disabled={!canUndo}
             className={`
-              px-2 py-1.5 text-white text-sm rounded transition-colors
+              px-2 py-1.5 text-slate-700 dark:text-white text-sm rounded transition-colors
               ${canUndo
-                ? 'bg-slate-700 hover:bg-slate-600'
-                : 'bg-slate-800 cursor-not-allowed opacity-50'}
+                ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
+                : 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50'}
             `}
             title="Undo (Cmd+Z)"
           >
@@ -109,10 +109,10 @@ export default function Toolbar({
             onClick={onRedo}
             disabled={!canRedo}
             className={`
-              px-2 py-1.5 text-white text-sm rounded transition-colors
+              px-2 py-1.5 text-slate-700 dark:text-white text-sm rounded transition-colors
               ${canRedo
-                ? 'bg-slate-700 hover:bg-slate-600'
-                : 'bg-slate-800 cursor-not-allowed opacity-50'}
+                ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
+                : 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50'}
             `}
             title="Redo (Cmd+Shift+Z)"
           >
@@ -124,12 +124,12 @@ export default function Toolbar({
         </div>
 
         {/* Divider */}
-        <div className="w-px h-6 bg-slate-700" />
+        <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
 
         {/* Terminal toggle */}
         <button
           onClick={onToggleTerminal}
-          className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors"
+          className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-sm rounded transition-colors"
         >
           Terminal
         </button>
@@ -140,7 +140,7 @@ export default function Toolbar({
           className={`
             px-4 py-1.5 text-white text-sm rounded transition-colors
             ${!configPath
-              ? 'bg-slate-700 cursor-not-allowed opacity-50'
+              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
               : 'bg-orange-600 hover:bg-orange-500'}
           `}
         >
@@ -149,18 +149,18 @@ export default function Toolbar({
 
         <button
           onClick={onExport}
-          className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors"
+          className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-sm rounded transition-colors"
         >
           Export YAML
         </button>
 
         {/* Skip confirmation checkbox */}
-        <label className="flex items-center gap-1.5 text-slate-400 text-sm cursor-pointer select-none">
+        <label className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-sm cursor-pointer select-none">
           <input
             type="checkbox"
             checked={skipSaveConfirmation}
             onChange={(e) => onSkipSaveConfirmationChange(e.target.checked)}
-            className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            className="w-3.5 h-3.5 rounded border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
           />
           Auto-save
         </label>
@@ -171,7 +171,7 @@ export default function Toolbar({
           className={`
             px-4 py-1.5 text-white text-sm rounded transition-colors
             ${saving || !configPath
-              ? 'bg-slate-700 cursor-not-allowed opacity-50'
+              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
               : 'bg-blue-600 hover:bg-blue-500'}
           `}
         >

@@ -1295,7 +1295,7 @@ export default function App() {
       : undefined
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950">
+    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       <Toolbar
         configPath={configPath}
         onSave={handleSave}
@@ -1321,47 +1321,47 @@ export default function App() {
 
       {/* Validation suggestions banner */}
       {showWarnings && validationWarnings.length > 0 && (
-        <div className="bg-slate-800/80 border-b border-slate-700 px-4 py-2">
+        <div className="bg-slate-200/80 dark:bg-slate-800/80 border-b border-slate-300 dark:border-slate-700 px-4 py-2">
           <div className="flex items-start gap-3">
-            <Info className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
+            <Info className="w-4 h-4 text-sky-500 dark:text-sky-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-slate-200 text-sm font-medium">
+                <span className="text-slate-700 dark:text-slate-200 text-sm font-medium">
                   Type Suggestions ({validationWarnings.length})
                 </span>
-                <span className="text-slate-400 text-xs">
+                <span className="text-slate-500 dark:text-slate-400 text-xs">
                   - Consider using typed data nodes for better validation
                 </span>
                 {validationWarnings.length > 3 && (
                   <button
                     onClick={() => setExpandWarnings(!expandWarnings)}
-                    className="text-sky-400 hover:text-sky-300 text-xs ml-2"
+                    className="text-sky-500 hover:text-sky-400 dark:text-sky-400 dark:hover:text-sky-300 text-xs ml-2"
                   >
                     {expandWarnings ? 'Show less' : 'Show all'}
                   </button>
                 )}
-                <span className="text-slate-500 text-xs ml-auto">
+                <span className="text-slate-400 dark:text-slate-500 text-xs ml-auto">
                   (Full list in browser console)
                 </span>
               </div>
               <div className="space-y-1 max-h-48 overflow-y-auto">
                 {(expandWarnings ? validationWarnings : validationWarnings.slice(0, 3)).map((warning, index) => (
-                  <div key={index} className="text-slate-300 text-xs flex items-start gap-2">
+                  <div key={index} className="text-slate-600 dark:text-slate-300 text-xs flex items-start gap-2">
                     {warning.level === 'error' ? (
-                      <XCircle className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />
+                      <XCircle className="w-3 h-3 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
                     ) : warning.level === 'warning' ? (
-                      <AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <AlertTriangle className="w-3 h-3 text-amber-500 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                     ) : (
-                      <Info className="w-3 h-3 text-sky-400 mt-0.5 flex-shrink-0" />
+                      <Info className="w-3 h-3 text-sky-500 dark:text-sky-400 mt-0.5 flex-shrink-0" />
                     )}
                     <span>
-                      {warning.step && <span className="text-slate-400 font-medium">[{warning.step}]</span>}{' '}
+                      {warning.step && <span className="text-slate-500 dark:text-slate-400 font-medium">[{warning.step}]</span>}{' '}
                       {warning.message}
                     </span>
                   </div>
                 ))}
                 {!expandWarnings && validationWarnings.length > 3 && (
-                  <div className="text-slate-500 text-xs">
+                  <div className="text-slate-400 dark:text-slate-500 text-xs">
                     ...and {validationWarnings.length - 3} more
                   </div>
                 )}
@@ -1369,7 +1369,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setShowWarnings(false)}
-              className="text-slate-400 hover:text-slate-200 transition-colors"
+              className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
               title="Dismiss"
             >
               <X className="w-4 h-4" />
@@ -1397,7 +1397,7 @@ export default function App() {
               pipelinesLoading={pipelinesLoading}
             />
             <div
-              className="w-1 bg-slate-800 hover:bg-blue-600 cursor-ew-resize transition-colors"
+              className="w-1 bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors"
               onMouseDown={handleSidebarResize}
             />
           </div>
@@ -1419,7 +1419,7 @@ export default function App() {
           {/* Right sidebar with resize handle */}
           <div style={{ width: propertiesWidth }} className="flex-shrink-0 flex">
             <div
-              className="w-1 bg-slate-800 hover:bg-blue-600 cursor-ew-resize transition-colors z-10"
+              className="w-1 bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors z-10"
               onMouseDown={handlePropertiesResize}
             />
             <PropertiesPanel

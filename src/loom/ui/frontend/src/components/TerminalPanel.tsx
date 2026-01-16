@@ -181,61 +181,61 @@ export default function TerminalPanel({
       {!visible && (
         <button
           onClick={onToggle}
-          className="h-8 bg-slate-900 border-t border-slate-700
-                     flex items-center px-4 text-slate-400 text-sm hover:bg-slate-800
+          className="h-8 bg-slate-200 dark:bg-slate-900 border-t border-slate-300 dark:border-slate-700
+                     flex items-center px-4 text-slate-500 dark:text-slate-400 text-sm hover:bg-slate-300 dark:hover:bg-slate-800
                      transition-colors w-full"
         >
           <span className="mr-2">&#9650;</span>
           Terminal
           {status === 'running' && (
-            <span className="ml-2 text-green-400 animate-pulse">&#9679; Running</span>
+            <span className="ml-2 text-green-500 dark:text-green-400 animate-pulse">&#9679; Running</span>
           )}
         </button>
       )}
 
       {/* Full terminal panel - always rendered but hidden when collapsed */}
       <div
-        className="bg-slate-950 border-t border-slate-700 flex flex-col"
+        className="bg-slate-100 dark:bg-slate-950 border-t border-slate-300 dark:border-slate-700 flex flex-col"
         style={{ height: visible ? height : 0, overflow: 'hidden' }}
       >
         {/* Resize handle */}
         <div
-          className="h-1 bg-slate-800 cursor-ns-resize hover:bg-blue-600 transition-colors"
+          className="h-1 bg-slate-300 dark:bg-slate-800 cursor-ns-resize hover:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
           onMouseDown={handleMouseDown}
         />
 
         {/* Header */}
-        <div className="h-9 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4 shrink-0">
+        <div className="h-9 bg-slate-200 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-4">
-            <span className="text-white text-sm font-medium">
+            <span className="text-slate-900 dark:text-white text-sm font-medium">
               {showStepOutput ? (
-                <>Terminal: <span className="text-cyan-400">{activeTerminalStep}</span></>
+                <>Terminal: <span className="text-cyan-500 dark:text-cyan-400">{activeTerminalStep}</span></>
               ) : (
                 'Terminal'
               )}
             </span>
             {/* Show step-specific status when viewing step output */}
             {showStepOutput && activeStepStatus === 'running' && (
-              <span className="text-cyan-400 text-xs animate-pulse">&#9679; Running</span>
+              <span className="text-cyan-500 dark:text-cyan-400 text-xs animate-pulse">&#9679; Running</span>
             )}
             {showStepOutput && activeStepStatus === 'completed' && (
-              <span className="text-green-400 text-xs">&#10003; Completed</span>
+              <span className="text-green-500 dark:text-green-400 text-xs">&#10003; Completed</span>
             )}
             {showStepOutput && activeStepStatus === 'failed' && (
-              <span className="text-red-400 text-xs">&#10007; Failed</span>
+              <span className="text-red-500 dark:text-red-400 text-xs">&#10007; Failed</span>
             )}
             {/* Show global status when not viewing step output */}
             {!showStepOutput && status === 'running' && (
-              <span className="text-green-400 text-xs animate-pulse">&#9679; Running</span>
+              <span className="text-green-500 dark:text-green-400 text-xs animate-pulse">&#9679; Running</span>
             )}
             {!showStepOutput && status === 'completed' && (
-              <span className="text-green-400 text-xs">&#10003; Completed</span>
+              <span className="text-green-500 dark:text-green-400 text-xs">&#10003; Completed</span>
             )}
             {!showStepOutput && status === 'failed' && (
-              <span className="text-red-400 text-xs">&#10007; Failed</span>
+              <span className="text-red-500 dark:text-red-400 text-xs">&#10007; Failed</span>
             )}
             {!showStepOutput && status === 'cancelled' && (
-              <span className="text-yellow-400 text-xs">&#9632; Cancelled</span>
+              <span className="text-yellow-500 dark:text-yellow-400 text-xs">&#9632; Cancelled</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -243,7 +243,7 @@ export default function TerminalPanel({
             {showStepOutput && activeStepStatus === 'running' && onCancelStep && activeTerminalStep && (
               <button
                 onClick={() => onCancelStep(activeTerminalStep)}
-                className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded transition-colors"
+                className="px-2 py-1 bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600 text-white text-xs rounded transition-colors"
               >
                 Cancel
               </button>
@@ -252,7 +252,7 @@ export default function TerminalPanel({
             {!showStepOutput && status === 'running' && (
               <button
                 onClick={cancel}
-                className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded transition-colors"
+                className="px-2 py-1 bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600 text-white text-xs rounded transition-colors"
               >
                 Cancel
               </button>
@@ -266,13 +266,13 @@ export default function TerminalPanel({
                   clear()
                 }
               }}
-              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs rounded transition-colors"
+              className="px-2 py-1 bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-xs rounded transition-colors"
             >
               Clear
             </button>
             <button
               onClick={onToggle}
-              className="text-slate-400 hover:text-white text-sm px-2 transition-colors"
+              className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm px-2 transition-colors"
             >
               &#9660;
             </button>
@@ -283,13 +283,13 @@ export default function TerminalPanel({
         {showStepOutput && (
           <div
             ref={stepOutputRef}
-            className="flex-1 p-2 overflow-auto bg-slate-950 font-mono text-sm text-slate-200"
+            className="flex-1 p-2 overflow-auto bg-slate-50 dark:bg-slate-950 font-mono text-sm text-slate-700 dark:text-slate-200"
             style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
           >
             {activeStepOutput ? (
               renderAnsiText(activeStepOutput)
             ) : (
-              <span className="text-slate-500">Waiting for output...</span>
+              <span className="text-slate-400 dark:text-slate-500">Waiting for output...</span>
             )}
           </div>
         )}

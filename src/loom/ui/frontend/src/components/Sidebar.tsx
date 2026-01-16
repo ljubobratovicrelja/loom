@@ -102,9 +102,9 @@ export default function Sidebar({
   }
 
   return (
-    <div className="flex-1 bg-slate-900 border-r border-slate-700 flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-slate-700 shrink-0">
-        <h2 className="text-white font-semibold text-sm uppercase tracking-wide">Add Nodes</h2>
+    <div className="flex-1 bg-slate-100 dark:bg-slate-900 border-r border-slate-300 dark:border-slate-700 flex flex-col overflow-hidden">
+      <div className="p-4 border-b border-slate-300 dark:border-slate-700 shrink-0">
+        <h2 className="text-slate-900 dark:text-white font-semibold text-sm uppercase tracking-wide">Add Nodes</h2>
       </div>
 
       {/* Pipeline Browser (workspace mode only) */}
@@ -119,14 +119,14 @@ export default function Sidebar({
       )}
 
       {/* Data Types Palette */}
-      <div className="p-3 border-t border-slate-700 shrink-0">
-        <h3 className="text-slate-400 text-xs uppercase tracking-wide mb-2">Data Types</h3>
+      <div className="p-3 border-t border-slate-300 dark:border-slate-700 shrink-0">
+        <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide mb-2">Data Types</h3>
         <div className="grid grid-cols-2 gap-1">
           {DATA_TYPES.map((dt) => (
             <button
               key={dt.type}
               onClick={() => onAddData(dt.type)}
-              className="px-2 py-2 bg-teal-900/50 hover:bg-teal-800/50 text-teal-300 text-xs rounded text-left transition-colors flex items-center gap-1"
+              className="px-2 py-2 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/50 dark:hover:bg-teal-800/50 text-teal-700 dark:text-teal-300 text-xs rounded text-left transition-colors flex items-center gap-1"
             >
               <span>{dt.icon}</span>
               <span>{dt.label}</span>
@@ -138,32 +138,32 @@ export default function Sidebar({
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto">
         {/* Tasks */}
-        <div className="p-3 border-t border-slate-700">
-          <h3 className="text-slate-400 text-xs uppercase tracking-wide mb-2">Tasks</h3>
+        <div className="p-3 border-t border-slate-300 dark:border-slate-700">
+          <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide mb-2">Tasks</h3>
           <div className="space-y-1">
             {tasks.map((task) => (
               <button
                 key={task.name}
                 onClick={() => onAddTask(task)}
-                className="w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded text-left transition-colors"
+                className="w-full px-3 py-2 bg-white hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded text-left transition-colors"
               >
                 {task.name}
               </button>
             ))}
             {tasks.length === 0 && (
-              <p className="text-slate-500 text-xs">No tasks found</p>
+              <p className="text-slate-400 dark:text-slate-500 text-xs">No tasks found</p>
             )}
           </div>
         </div>
 
         {/* Parameters */}
-        <div className="p-3 border-t border-slate-700">
+        <div className="p-3 border-t border-slate-300 dark:border-slate-700">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-slate-400 text-xs uppercase tracking-wide">Parameters</h3>
+            <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Parameters</h3>
             {!addingParam && (
               <button
                 onClick={() => setAddingParam(true)}
-                className="text-purple-400 hover:text-purple-300 text-xs"
+                className="text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300 text-xs"
                 title="Add parameter"
               >
                 + Add
@@ -173,7 +173,7 @@ export default function Sidebar({
 
           {/* Add new parameter form */}
           {addingParam && (
-            <div className="bg-slate-800 rounded p-2 mb-2 border border-purple-500/50">
+            <div className="bg-white dark:bg-slate-800 rounded p-2 mb-2 border border-purple-500/50">
               <input
                 type="text"
                 value={newParamName}
@@ -181,7 +181,7 @@ export default function Sidebar({
                 onKeyDown={handleNewParamKeyDown}
                 placeholder="name"
                 autoFocus
-                className="w-full px-2 py-1 mb-1 bg-slate-700 border border-slate-600 rounded text-white text-xs font-mono focus:outline-none focus:border-purple-500"
+                className="w-full px-2 py-1 mb-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:border-purple-500"
               />
               <input
                 type="text"
@@ -189,7 +189,7 @@ export default function Sidebar({
                 onChange={(e) => setNewParamValue(e.target.value)}
                 onKeyDown={handleNewParamKeyDown}
                 placeholder="value"
-                className="w-full px-2 py-1 mb-2 bg-slate-700 border border-slate-600 rounded text-white text-xs font-mono focus:outline-none focus:border-purple-500"
+                className="w-full px-2 py-1 mb-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:border-purple-500"
               />
               <div className="flex gap-1">
                 <button
@@ -204,7 +204,7 @@ export default function Sidebar({
                     setNewParamName('')
                     setNewParamValue('')
                   }}
-                  className="flex-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs rounded"
+                  className="flex-1 px-2 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-xs rounded"
                 >
                   Cancel
                 </button>
@@ -216,7 +216,7 @@ export default function Sidebar({
             {Object.entries(parameters).map(([name, value]) => (
               <div
                 key={name}
-                className="bg-slate-800 rounded p-2 cursor-grab active:cursor-grabbing hover:bg-slate-700 transition-colors"
+                className="bg-white dark:bg-slate-800 rounded p-2 cursor-grab active:cursor-grabbing hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 draggable
                 onDragStart={(e) => {
                   e.dataTransfer.setData(
@@ -227,8 +227,8 @@ export default function Sidebar({
                 }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-purple-300 text-xs font-medium">${name}</div>
-                  <span className="text-purple-500 text-[10px]" title="Drag to canvas">
+                  <div className="text-purple-600 dark:text-purple-300 text-xs font-medium">${name}</div>
+                  <span className="text-purple-400 dark:text-purple-500 text-[10px]" title="Drag to canvas">
                     &#8943;&#8943;
                   </span>
                 </div>
@@ -240,12 +240,12 @@ export default function Sidebar({
                     onBlur={() => handleSaveEdit(name)}
                     onKeyDown={(e) => handleKeyDown(e, name)}
                     autoFocus
-                    className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs font-mono focus:outline-none focus:border-purple-500"
+                    className="w-full px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:border-purple-500"
                   />
                 ) : (
                   <div
                     onClick={() => handleStartEdit(name, value)}
-                    className="text-slate-300 text-xs font-mono truncate cursor-pointer hover:text-white"
+                    className="text-slate-600 dark:text-slate-300 text-xs font-mono truncate cursor-pointer hover:text-slate-900 dark:hover:text-white"
                     title="Click to edit"
                   >
                     {String(value)}
@@ -254,7 +254,7 @@ export default function Sidebar({
               </div>
             ))}
             {Object.keys(parameters).length === 0 && !addingParam && (
-              <p className="text-slate-500 text-xs">No parameters defined</p>
+              <p className="text-slate-400 dark:text-slate-500 text-xs">No parameters defined</p>
             )}
           </div>
         </div>
