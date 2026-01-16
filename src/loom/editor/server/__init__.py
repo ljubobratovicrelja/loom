@@ -17,8 +17,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import state
-from .endpoints import FRONTEND_DIR, router, _yaml
-from .terminal import terminal_websocket
+from .endpoints import FRONTEND_DIR, _yaml, router
+
+# Re-export graph conversion functions (used by tests)
+from .graph import graph_to_yaml, yaml_to_graph
+
+# Re-export the internal update function with underscore prefix for tests
+from .graph import update_yaml_from_graph as _update_yaml_from_graph
 
 # Re-export models (used by tests and other modules)
 from .models import (
@@ -33,26 +38,35 @@ from .models import (
     ValidationWarning,
 )
 
-# Re-export graph conversion functions (used by tests)
-from .graph import graph_to_yaml, yaml_to_graph
-
-# Re-export the internal update function with underscore prefix for tests
-from .graph import update_yaml_from_graph as _update_yaml_from_graph
-
-# Re-export validation function (used by tests)
-from .validation import validate_pipeline as _validate_pipeline
-
 # Re-export state management (used by tests)
 from .state import (
     config_path as _config_path,
+)
+from .state import (
     execution_state as _execution_state,
+)
+from .state import (
     get_running_step as _get_running_step,
+)
+from .state import (
     is_step_running as _is_step_running,
+)
+from .state import (
     register_running_step as _register_running_step,
+)
+from .state import (
     running_steps as _running_steps,
+)
+from .state import (
     tasks_dir as _tasks_dir,
+)
+from .state import (
     unregister_running_step as _unregister_running_step,
 )
+from .terminal import terminal_websocket
+
+# Re-export validation function (used by tests)
+from .validation import validate_pipeline as _validate_pipeline
 
 # Create FastAPI app
 app = FastAPI(title="Loom Pipeline Editor")

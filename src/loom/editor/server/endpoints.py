@@ -13,7 +13,7 @@ from ruamel.yaml import YAML
 from send2trash import send2trash
 
 from . import state
-from .graph import graph_to_yaml, update_yaml_from_graph, yaml_to_graph
+from .graph import update_yaml_from_graph, yaml_to_graph
 from .models import ExecutionStatus, PipelineGraph, ValidationResult
 from .validation import validate_pipeline
 
