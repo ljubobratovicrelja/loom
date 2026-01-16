@@ -45,10 +45,10 @@ for pipeline in "$EXAMPLES_DIR"/*/pipeline.yml; do
 
     if loom pipeline.yml; then
         echo -e "${GREEN}$example_name: passed${NC}"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     else
         echo -e "${RED}$example_name: FAILED${NC}"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
     cd "$ROOT_DIR"
 done
