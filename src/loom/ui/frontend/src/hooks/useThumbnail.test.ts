@@ -32,7 +32,7 @@ describe('useThumbnail hook', () => {
       // When exists is false, no fetch should be made
       // This test validates the condition: exists !== true
       const exists = false
-      const _dataType = 'image' // eslint-disable-line @typescript-eslint/no-unused-vars
+      const _dataType = 'image'
 
       // Simulate the hook logic
       if (exists !== true) {
@@ -44,7 +44,7 @@ describe('useThumbnail hook', () => {
     it('should not fetch when exists is undefined', () => {
       // When exists is undefined, no fetch should be made
       const exists = undefined
-      const _dataType = 'image' // eslint-disable-line @typescript-eslint/no-unused-vars
+      const _dataType = 'image'
 
       if (exists !== true) {
         expect(fetchMock).not.toHaveBeenCalled()
