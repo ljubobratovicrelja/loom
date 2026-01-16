@@ -23,7 +23,7 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="Output text path")
     args = parser.parse_args()
 
-    with open(args.top_words, "r") as f:
+    with open(args.top_words) as f:
         data = json.load(f)
 
     words = data["words"]
@@ -35,11 +35,7 @@ def main():
     max_word_len = max(len(w["word"]) for w in words)
     bar_width = 40
 
-    lines = [
-        "TOP WORDS",
-        "=" * (max_word_len + bar_width + 10),
-        ""
-    ]
+    lines = ["TOP WORDS", "=" * (max_word_len + bar_width + 10), ""]
 
     for item in words:
         word = item["word"]

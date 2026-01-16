@@ -36,7 +36,7 @@ def compute_column_stats(values):
         "min": round(min(values), 2),
         "max": round(max(values), 2),
         "mean": round(mean, 2),
-        "std": round(std, 2)
+        "std": round(std, 2),
     }
 
 
@@ -50,7 +50,7 @@ def main():
     temperatures = []
     humidities = []
 
-    with open(args.data, "r") as f:
+    with open(args.data) as f:
         reader = csv.DictReader(f)
         for row in reader:
             temperatures.append(float(row["temperature"]))
@@ -58,7 +58,7 @@ def main():
 
     stats = {
         "temperature": compute_column_stats(temperatures),
-        "humidity": compute_column_stats(humidities)
+        "humidity": compute_column_stats(humidities),
     }
 
     with open(args.output, "w") as f:

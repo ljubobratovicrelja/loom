@@ -1,10 +1,22 @@
-variables:
-  input_txt: data/sample.txt
-  normalized_txt: data/normalized.txt
-  frequencies_json: data/frequencies.json
-  top_words_json: data/top_words.json
-  debug_dump: data/debug_dump.txt
-  chart_txt: data/chart.txt
+data:
+  input_txt:
+    type: txt
+    path: data/sample.txt
+  normalized_txt:
+    type: txt
+    path: data/normalized.txt
+  frequencies_json:
+    type: json
+    path: data/frequencies.json
+  top_words_json:
+    type: json
+    path: data/top_words.json
+  debug_dump:
+    type: txt
+    path: data/debug_dump.txt
+  chart_txt:
+    type: txt
+    path: data/chart.txt
 
 parameters:
   top_n: 10

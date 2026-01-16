@@ -25,13 +25,13 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="Output text path")
     args = parser.parse_args()
 
-    with open(args.text, "r") as f:
+    with open(args.text) as f:
         text = f.read()
 
     # Normalize
     text = text.lower()
     text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation
-    text = re.sub(r"\s+", " ", text)      # Normalize whitespace
+    text = re.sub(r"\s+", " ", text)  # Normalize whitespace
     text = text.strip()
 
     with open(args.output, "w") as f:

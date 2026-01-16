@@ -29,17 +29,17 @@ def main():
     parser.add_argument("--top", type=int, default=10, help="Number of top words")
     args = parser.parse_args()
 
-    with open(args.frequencies, "r") as f:
+    with open(args.frequencies) as f:
         data = json.load(f)
 
     frequencies = data["frequencies"]
     sorted_words = sorted(frequencies.items(), key=lambda x: x[1], reverse=True)
-    top = sorted_words[:args.top]
+    top = sorted_words[: args.top]
 
     result = {
         "top_n": args.top,
         "total_unique": data["unique_words"],
-        "words": [{"word": w, "count": c} for w, c in top]
+        "words": [{"word": w, "count": c} for w, c in top],
     }
 
     with open(args.output, "w") as f:

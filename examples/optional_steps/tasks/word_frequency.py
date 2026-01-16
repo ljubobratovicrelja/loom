@@ -26,7 +26,7 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="Output JSON path")
     args = parser.parse_args()
 
-    with open(args.text, "r") as f:
+    with open(args.text) as f:
         text = f.read()
 
     words = text.split()
@@ -35,7 +35,7 @@ def main():
     result = {
         "total_words": len(words),
         "unique_words": len(counts),
-        "frequencies": dict(counts.most_common())
+        "frequencies": dict(counts.most_common()),
     }
 
     with open(args.output, "w") as f:

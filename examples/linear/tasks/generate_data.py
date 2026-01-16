@@ -49,11 +49,13 @@ def main():
         humidity = base_humidity - (temp - base_temp) * 2 + random.gauss(0, 2)
         humidity = max(20, min(80, humidity))  # Clamp to realistic range
 
-        rows.append({
-            "timestamp": timestamp.isoformat(),
-            "temperature": round(temp, 2),
-            "humidity": round(humidity, 2)
-        })
+        rows.append(
+            {
+                "timestamp": timestamp.isoformat(),
+                "temperature": round(temp, 2),
+                "humidity": round(humidity, 2),
+            }
+        )
 
     with open(args.output, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["timestamp", "temperature", "humidity"])

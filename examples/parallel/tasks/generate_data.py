@@ -20,8 +20,8 @@ args:
 
 import argparse
 import csv
-import random
 import math
+import random
 
 
 def main():
@@ -46,16 +46,20 @@ def main():
         # Ground truth: positive if original signal was positive
         true_label = 1 if raw_score > 0 else 0
 
-        rows.append({
-            "id": i,
-            "feature_a": round(feature_a, 4),
-            "feature_b": round(feature_b, 4),
-            "score": round(score, 4),
-            "true_label": true_label
-        })
+        rows.append(
+            {
+                "id": i,
+                "feature_a": round(feature_a, 4),
+                "feature_b": round(feature_b, 4),
+                "score": round(score, 4),
+                "true_label": true_label,
+            }
+        )
 
     with open(args.output, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "feature_a", "feature_b", "score", "true_label"])
+        writer = csv.DictWriter(
+            f, fieldnames=["id", "feature_a", "feature_b", "score", "true_label"]
+        )
         writer.writeheader()
         writer.writerows(rows)
 

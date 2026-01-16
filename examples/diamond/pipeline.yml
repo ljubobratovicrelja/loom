@@ -1,14 +1,24 @@
-variables:
+data:
   # Input
-  raw_csv: data/raw.csv
+  raw_csv:
+    type: csv
+    path: data/raw.csv
 
   # Intermediate
-  validated_csv: data/validated.csv
-  stats_json: data/stats.json
-  clean_csv: data/clean.csv
+  validated_csv:
+    type: csv
+    path: data/validated.csv
+  stats_json:
+    type: json
+    path: data/stats.json
+  clean_csv:
+    type: csv
+    path: data/clean.csv
 
   # Output
-  final_report: data/final_report.json
+  final_report:
+    type: json
+    path: data/final_report.json
 
 parameters:
   outlier_threshold: 1.5  # IQR multiplier for outlier detection

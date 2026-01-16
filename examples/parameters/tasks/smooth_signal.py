@@ -45,7 +45,7 @@ def main():
     # Read signal
     times = []
     values = []
-    with open(args.signal, "r") as f:
+    with open(args.signal) as f:
         reader = csv.DictReader(f)
         for row in reader:
             times.append(float(row["time"]))
@@ -59,11 +59,9 @@ def main():
         writer = csv.DictWriter(f, fieldnames=["time", "value", "original"])
         writer.writeheader()
         for t, orig, smooth in zip(times, values, smoothed):
-            writer.writerow({
-                "time": round(t, 4),
-                "value": round(smooth, 4),
-                "original": round(orig, 4)
-            })
+            writer.writerow(
+                {"time": round(t, 4), "value": round(smooth, 4), "original": round(orig, 4)}
+            )
 
     print(f"Smoothed {len(values)} points (window={args.window}) -> {args.output}")
 

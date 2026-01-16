@@ -1,15 +1,20 @@
-variables:
+data:
   # Shared input
-  dataset: data/dataset.csv
-
-  # Parallel outputs (one per configuration)
-  results_low: data/results_low.json
-  results_mid: data/results_mid.json
-  results_high: data/results_high.json
-
-  # Aggregated comparison
-  comparison: data/comparison.json
-
+  dataset:
+    type: csv
+    path: data/dataset.csv
+  results_low:
+    type: json
+    path: data/results_low.json
+  results_mid:
+    type: json
+    path: data/results_mid.json
+  results_high:
+    type: json
+    path: data/results_high.json
+  comparison:
+    type: json
+    path: data/comparison.json
 parameters:
   num_samples: 500
 
@@ -77,19 +82,19 @@ layout:
   compare_results:
     x: 1980
     y: 345
-  var_dataset:
+  data_dataset:
     x: 885
     y: 290
-  var_results_low:
+  data_results_low:
     x: 1650
     y: 90
-  var_results_mid:
+  data_results_mid:
     x: 1650
     y: 395
-  var_results_high:
+  data_results_high:
     x: 1650
     y: 710
-  var_comparison:
+  data_comparison:
     x: 2380
     y: 385
   param_num_samples:

@@ -26,7 +26,7 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="Output text path")
     args = parser.parse_args()
 
-    with open(args.stats, "r") as f:
+    with open(args.stats) as f:
         stats = json.load(f)
 
     lines = [

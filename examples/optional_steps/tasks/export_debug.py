@@ -27,7 +27,7 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="Output text path")
     args = parser.parse_args()
 
-    with open(args.frequencies, "r") as f:
+    with open(args.frequencies) as f:
         data = json.load(f)
 
     lines = [
@@ -48,12 +48,14 @@ def main():
     for word, count in by_freq:
         lines.append(f"  {count:4d}  {word}")
 
-    lines.extend([
-        "",
-        "-" * 60,
-        "ALPHABETICAL",
-        "-" * 60,
-    ])
+    lines.extend(
+        [
+            "",
+            "-" * 60,
+            "ALPHABETICAL",
+            "-" * 60,
+        ]
+    )
 
     by_alpha = sorted(data["frequencies"].items())
     for word, count in by_alpha:

@@ -36,7 +36,7 @@ def main():
     # Load all results
     results = []
     for path in [args.result_low, args.result_mid, args.result_high]:
-        with open(path, "r") as f:
+        with open(path) as f:
             results.append(json.load(f))
 
     # Find best configuration by F1 score
@@ -45,22 +45,14 @@ def main():
     # Build comparison
     comparison = {
         "configurations": [
-            {
-                "name": r["config_name"],
-                "threshold": r["threshold"],
-                **r["metrics"]
-            }
-            for r in results
+            {"name": r["config_name"], "threshold": r["threshold"], **r["metrics"]} for r in results
         ],
         "best_config": {
             "name": best["config_name"],
             "threshold": best["threshold"],
-            "f1_score": best["metrics"]["f1_score"]
+            "f1_score": best["metrics"]["f1_score"],
         },
-        "summary": {
-            "total_configs": len(results),
-            "metric_compared": "f1_score"
-        }
+        "summary": {"total_configs": len(results), "metric_compared": "f1_score"},
     }
 
     with open(args.output, "w") as f:
@@ -69,16 +61,20 @@ def main():
     # Print comparison table
     print("\nConfiguration Comparison:")
     print("-" * 65)
-    print(f"{'Config':<10} {'Threshold':>10} {'Accuracy':>10} {'Precision':>10} {'Recall':>10} {'F1':>10}")
+    print(
+        f"{'Config':<10} {'Threshold':>10} {'Accuracy':>10} {'Precision':>10} {'Recall':>10} {'F1':>10}"
+    )
     print("-" * 65)
 
     for r in results:
         m = r["metrics"]
         marker = " *" if r["config_name"] == best["config_name"] else ""
-        print(f"{r['config_name']:<10} {r['threshold']:>10.2f} {m['accuracy']:>10.1%} {m['precision']:>10.1%} {m['recall']:>10.1%} {m['f1_score']:>10.4f}{marker}")
+        print(
+            f"{r['config_name']:<10} {r['threshold']:>10.2f} {m['accuracy']:>10.1%} {m['precision']:>10.1%} {m['recall']:>10.1%} {m['f1_score']:>10.4f}{marker}"
+        )
 
     print("-" * 65)
-    print(f"* Best configuration by F1 score")
+    print("* Best configuration by F1 score")
     print(f"\n-> {args.output}")
 
 

@@ -54,7 +54,9 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"Generated {args.points} points (freq={args.frequency}, noise={args.noise}) -> {args.output}")
+    print(
+        f"Generated {args.points} points (freq={args.frequency}, noise={args.noise}) -> {args.output}"
+    )
 
 
 if __name__ == "__main__":

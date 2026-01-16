@@ -28,7 +28,7 @@ def main():
 
     # Group measurements by category
     by_category = {}
-    with open(args.data, "r") as f:
+    with open(args.data) as f:
         reader = csv.DictReader(f)
         for row in reader:
             cat = row["category"]
@@ -45,7 +45,7 @@ def main():
             "min": round(min(values), 2),
             "max": round(max(values), 2),
             "mean": round(sum(values) / len(values), 2),
-            "sum": round(sum(values), 2)
+            "sum": round(sum(values), 2),
         }
 
     # Overall stats
@@ -54,7 +54,7 @@ def main():
         "count": len(all_values),
         "min": round(min(all_values), 2),
         "max": round(max(all_values), 2),
-        "mean": round(sum(all_values) / len(all_values), 2)
+        "mean": round(sum(all_values) / len(all_values), 2),
     }
 
     with open(args.output, "w") as f:

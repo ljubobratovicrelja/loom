@@ -40,14 +40,16 @@ def main():
 
     # Read data
     rows = []
-    with open(args.data, "r") as f:
+    with open(args.data) as f:
         reader = csv.DictReader(f)
         for row in reader:
-            rows.append({
-                "id": int(row["id"]),
-                "score": float(row["score"]),
-                "true_label": int(row["true_label"])
-            })
+            rows.append(
+                {
+                    "id": int(row["id"]),
+                    "score": float(row["score"]),
+                    "true_label": int(row["true_label"]),
+                }
+            )
 
     # Classify and compute metrics
     tp = fp = tn = fn = 0
@@ -57,13 +59,15 @@ def main():
         predicted = 1 if row["score"] >= args.threshold else 0
         actual = row["true_label"]
 
-        predictions.append({
-            "id": row["id"],
-            "score": row["score"],
-            "predicted": predicted,
-            "actual": actual,
-            "correct": predicted == actual
-        })
+        predictions.append(
+            {
+                "id": row["id"],
+                "score": row["score"],
+                "predicted": predicted,
+                "actual": actual,
+                "correct": predicted == actual,
+            }
+        )
 
         if predicted == 1 and actual == 1:
             tp += 1
@@ -88,14 +92,14 @@ def main():
             "accuracy": round(accuracy, 4),
             "precision": round(precision, 4),
             "recall": round(recall, 4),
-            "f1_score": round(f1, 4)
+            "f1_score": round(f1, 4),
         },
         "confusion_matrix": {
             "true_positive": tp,
             "false_positive": fp,
             "true_negative": tn,
-            "false_negative": fn
-        }
+            "false_negative": fn,
+        },
     }
 
     with open(args.output, "w") as f:

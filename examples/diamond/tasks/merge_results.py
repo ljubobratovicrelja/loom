@@ -33,13 +33,13 @@ def main():
     args = parser.parse_args()
 
     # Load stats
-    with open(args.stats, "r") as f:
+    with open(args.stats) as f:
         stats = json.load(f)
 
     # Count clean data by category
     clean_counts = {}
     clean_rows = []
-    with open(args.clean_data, "r") as f:
+    with open(args.clean_data) as f:
         reader = csv.DictReader(f)
         for row in reader:
             clean_rows.append(row)
@@ -52,9 +52,9 @@ def main():
         "summary": {
             "original_count": stats.get("_overall", {}).get("count", 0),
             "clean_count": len(clean_rows),
-            "outliers_removed": stats.get("_overall", {}).get("count", 0) - len(clean_rows)
+            "outliers_removed": stats.get("_overall", {}).get("count", 0) - len(clean_rows),
         },
-        "by_category": {}
+        "by_category": {},
     }
 
     for cat in sorted(stats.keys()):
@@ -63,7 +63,7 @@ def main():
         report["by_category"][cat] = {
             "original_stats": stats[cat],
             "clean_count": clean_counts.get(cat, 0),
-            "outliers_removed": stats[cat]["count"] - clean_counts.get(cat, 0)
+            "outliers_removed": stats[cat]["count"] - clean_counts.get(cat, 0),
         }
 
     with open(args.output, "w") as f:

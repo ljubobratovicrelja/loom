@@ -45,7 +45,7 @@ def main():
     # Load data and group by category
     rows = []
     by_category = {}
-    with open(args.data, "r") as f:
+    with open(args.data) as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(row)

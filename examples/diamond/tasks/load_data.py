@@ -30,7 +30,7 @@ def main():
     rows = []
     errors = []
 
-    with open(args.raw, "r") as f:
+    with open(args.raw) as f:
         reader = csv.DictReader(f)
 
         # Check columns

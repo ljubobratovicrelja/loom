@@ -45,7 +45,7 @@ def main():
     # Read signal
     times = []
     values = []
-    with open(args.signal, "r") as f:
+    with open(args.signal) as f:
         reader = csv.DictReader(f)
         for row in reader:
             times.append(float(row["time"]))
@@ -60,13 +60,9 @@ def main():
         "total_points": len(values),
         "peak_count": len(peak_indices),
         "peaks": [
-            {
-                "index": i,
-                "time": round(times[i], 4),
-                "value": round(values[i], 4)
-            }
+            {"index": i, "time": round(times[i], 4), "value": round(values[i], 4)}
             for i in peak_indices
-        ]
+        ],
     }
 
     with open(args.output, "w") as f:

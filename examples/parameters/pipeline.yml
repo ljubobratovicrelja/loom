@@ -1,7 +1,13 @@
-variables:
-  signal_csv: data/signal.csv
-  smoothed_csv: data/smoothed.csv
-  peaks_json: data/peaks.json
+data:
+  signal_csv:
+    type: csv
+    path: data/signal.csv
+  smoothed_csv:
+    type: csv
+    path: data/smoothed.csv
+  peaks_json:
+    type: json
+    path: data/peaks.json
 
 parameters:
   # Signal generation
