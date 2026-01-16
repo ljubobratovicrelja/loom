@@ -256,3 +256,132 @@ class TestCLIReturnCodes:
         with patch("sys.argv", ["loom", "missing.yml"]):
             result = main()
             assert result == 1
+
+
+class TestCLIClean:
+    """Tests for --clean CLI option."""
+
+    @pytest.fixture
+    def clean_config_file(self, tmp_path: Path) -> Path:
+        """Create a config file with data files for clean testing."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "input.txt").write_text("input data")
+        (data_dir / "output.csv").write_text("col1,col2\n1,2")
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text(f"""
+data:
+  input:
+    type: txt
+    path: {data_dir}/input.txt
+  output:
+    type: csv
+    path: {data_dir}/output.csv
+  missing:
+    type: txt
+    path: {data_dir}/missing.txt
+
+parameters: {{}}
+
+pipeline: []
+""")
+        return config
+
+    def test_clean_with_yes_flag(
+        self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean -y skips confirmation prompt."""
+        with patch("sys.argv", ["loom", str(clean_config_file), "--clean", "-y"]):
+            with patch("loom.runner.clean.send2trash") as mock_trash:
+                result = main()
+
+        assert result == 0
+        # Should have trashed 2 existing files
+        assert mock_trash.call_count == 2
+
+        captured = capsys.readouterr()
+        assert "Moved to trash" in captured.out
+
+    def test_clean_permanent_flag(
+        self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean --permanent permanently deletes files."""
+        data_dir = clean_config_file.parent / "data"
+        input_file = data_dir / "input.txt"
+        output_file = data_dir / "output.csv"
+
+        assert input_file.exists()
+        assert output_file.exists()
+
+        with patch("sys.argv", ["loom", str(clean_config_file), "--clean", "--permanent", "-y"]):
+            result = main()
+
+        assert result == 0
+        assert not input_file.exists()
+        assert not output_file.exists()
+
+        captured = capsys.readouterr()
+        assert "Permanently deleted" in captured.out
+
+    def test_clean_with_confirmation(
+        self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean prompts for confirmation."""
+        with patch("sys.argv", ["loom", str(clean_config_file), "--clean"]):
+            with patch("builtins.input", return_value="y"):
+                with patch("loom.runner.clean.send2trash") as mock_trash:
+                    result = main()
+
+        assert result == 0
+        assert mock_trash.call_count == 2
+
+    def test_clean_cancelled_on_no(
+        self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean can be cancelled by answering 'n'."""
+        with patch("sys.argv", ["loom", str(clean_config_file), "--clean"]):
+            with patch("builtins.input", return_value="n"):
+                with patch("loom.runner.clean.send2trash") as mock_trash:
+                    result = main()
+
+        assert result == 0
+        mock_trash.assert_not_called()
+
+        captured = capsys.readouterr()
+        assert "Cancelled" in captured.out
+
+    def test_clean_no_files_to_clean(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean with no existing files."""
+        config = tmp_path / "pipeline.yml"
+        config.write_text("""
+data:
+  missing:
+    type: txt
+    path: nonexistent.txt
+
+parameters: {}
+
+pipeline: []
+""")
+
+        with patch("sys.argv", ["loom", str(config), "--clean", "-y"]):
+            result = main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "No data files to clean" in captured.out
+
+    def test_clean_shows_file_list(
+        self, clean_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --clean shows list of files to be cleaned."""
+        with patch("sys.argv", ["loom", str(clean_config_file), "--clean"]):
+            with patch("builtins.input", return_value="n"):
+                main()
+
+        captured = capsys.readouterr()
+        assert "input" in captured.out
+        assert "output" in captured.out

@@ -153,6 +153,30 @@ export interface ValidationResult {
   warnings: ValidationWarning[]
 }
 
+// Clean types
+export interface CleanPreviewPath {
+  name: string
+  path: string
+  exists: boolean
+}
+
+export interface CleanPreview {
+  paths: CleanPreviewPath[]
+}
+
+export interface CleanResultItem {
+  path: string
+  success: boolean
+  action: 'trashed' | 'deleted' | 'skipped'
+  error: string | null
+}
+
+export interface CleanResult {
+  results: CleanResultItem[]
+  cleaned_count: number
+  failed_count: number
+}
+
 // Re-export types from hooks for convenience
 export type { FreshnessInfo } from '../hooks/useFreshness'
 export type { BlockReason, RunEligibility } from '../hooks/useRunEligibility'

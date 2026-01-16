@@ -38,6 +38,11 @@ for pipeline in "$EXAMPLES_DIR"/*/pipeline.yml; do
     echo -e "${BLUE}--- Running: $example_name ---${NC}"
 
     cd "$example_dir"
+
+    # Clean data before running to ensure fresh execution
+    echo "Cleaning existing data..."
+    loom pipeline.yml --clean -y 2>/dev/null || true
+
     if loom pipeline.yml; then
         echo -e "${GREEN}$example_name: passed${NC}"
         ((PASSED++))

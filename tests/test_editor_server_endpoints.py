@@ -994,3 +994,153 @@ class TestRunStatus:
         data = response.json()
         assert data["status"] == "running"
         assert data["current_step"] == "extract_features"
+
+
+class TestCleanPreview:
+    """Tests for GET /api/clean/preview endpoint."""
+
+    def test_preview_no_config_returns_400(self) -> None:
+        """Should return 400 when no config loaded."""
+        configure(config_path=None)
+        client = TestClient(app)
+
+        response = client.get("/api/clean/preview")
+
+        assert response.status_code == 400
+        assert "No config loaded" in response.json()["detail"]
+
+    def test_preview_returns_paths(self, tmp_path: Path) -> None:
+        """Should return list of cleanable paths."""
+        config = tmp_path / "pipeline.yml"
+        data_file = tmp_path / "data.txt"
+        data_file.write_text("test data")
+
+        config.write_text(f"""
+data:
+  mydata:
+    type: txt
+    path: {data_file}
+  missing:
+    type: txt
+    path: {tmp_path}/nonexistent.txt
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/clean/preview")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "paths" in data
+
+        # Find the existing file
+        paths_by_name = {p["name"]: p for p in data["paths"]}
+        assert "mydata" in paths_by_name
+        assert paths_by_name["mydata"]["exists"] is True
+        assert "missing" in paths_by_name
+        assert paths_by_name["missing"]["exists"] is False
+
+    def test_preview_includes_thumbnails(self, tmp_path: Path) -> None:
+        """Should include .loom-thumbnails in preview."""
+        config = tmp_path / "pipeline.yml"
+        config.write_text("""
+data:
+  input:
+    type: txt
+    path: input.txt
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/clean/preview")
+
+        assert response.status_code == 200
+        data = response.json()
+        names = [p["name"] for p in data["paths"]]
+        assert ".loom-thumbnails" in names
+
+
+class TestCleanAllData:
+    """Tests for POST /api/clean endpoint."""
+
+    def test_clean_no_config_returns_400(self) -> None:
+        """Should return 400 when no config loaded."""
+        configure(config_path=None)
+        client = TestClient(app)
+
+        response = client.post("/api/clean")
+
+        assert response.status_code == 400
+        assert "No config loaded" in response.json()["detail"]
+
+    def test_clean_trash_mode(self, tmp_path: Path) -> None:
+        """Should clean data in trash mode."""
+        config = tmp_path / "pipeline.yml"
+        data_file = tmp_path / "data.txt"
+        data_file.write_text("test data")
+
+        config.write_text(f"""
+data:
+  mydata:
+    type: txt
+    path: {data_file}
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        with patch("loom.runner.clean.send2trash") as mock_trash:
+            response = client.post("/api/clean?mode=trash")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert data["cleaned_count"] == 1
+        mock_trash.assert_called_once()
+
+    def test_clean_permanent_mode(self, tmp_path: Path) -> None:
+        """Should permanently delete files in permanent mode."""
+        config = tmp_path / "pipeline.yml"
+        data_file = tmp_path / "data.txt"
+        data_file.write_text("test data")
+
+        config.write_text(f"""
+data:
+  mydata:
+    type: txt
+    path: {data_file}
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.post("/api/clean?mode=permanent")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cleaned_count"] == 1
+        assert not data_file.exists()
+
+    def test_clean_skips_nonexistent(self, tmp_path: Path) -> None:
+        """Should skip files that don't exist."""
+        config = tmp_path / "pipeline.yml"
+        config.write_text("""
+data:
+  missing:
+    type: txt
+    path: nonexistent.txt
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.post("/api/clean?mode=permanent")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["cleaned_count"] == 0
+        # Should have skipped results (missing + thumbnails)
+        skipped = [r for r in data["results"] if r["action"] == "skipped"]
+        assert len(skipped) >= 1

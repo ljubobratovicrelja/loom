@@ -26,6 +26,7 @@ cd ../../../..
 | `./scripts/test.sh` | Run all tests (Python + Frontend) |
 | `./scripts/test.sh --coverage` | Run tests with coverage report |
 | `./scripts/build.sh` | Build frontend for production |
+| `./scripts/run-examples.sh` | Run all example pipelines (cleans data first) |
 
 ## Project Structure
 

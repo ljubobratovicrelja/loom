@@ -3,6 +3,7 @@ import { useNodesState, useEdgesState, type Node, type Edge as FlowEdge, type No
 import { AlertTriangle, Info, XCircle, X } from 'lucide-react'
 
 import Canvas from './components/Canvas'
+import CleanDialog from './components/CleanDialog'
 import ConfirmDialog from './components/ConfirmDialog'
 import Sidebar from './components/Sidebar'
 import PropertiesPanel from './components/PropertiesPanel'
@@ -30,6 +31,7 @@ import type {
   RunRequest,
   StepExecutionState,
   ValidationWarning,
+  CleanPreview,
 } from './types/pipeline'
 
 // Type alias for edges used throughout the app
@@ -192,12 +194,17 @@ export default function App() {
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
 
-  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, loading, error: apiError } = useApi()
+  const { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, loading, error: apiError } = useApi()
 
   // Validation warnings
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([])
   const [showWarnings, setShowWarnings] = useState(true)
   const [expandWarnings, setExpandWarnings] = useState(false)
+
+  // Clean dialog state
+  const [showCleanDialog, setShowCleanDialog] = useState(false)
+  const [cleanPreview, setCleanPreview] = useState<CleanPreview | null>(null)
+  const [cleanLoading, setCleanLoading] = useState(false)
 
 
   // Independent step execution hook - each step can run concurrently
@@ -823,6 +830,41 @@ export default function App() {
     }
   }, [trashVariableData, refreshVariableStatus])
 
+  // Handle showing the clean dialog
+  const handleShowCleanDialog = useCallback(async () => {
+    const preview = await previewClean()
+    if (preview) {
+      setCleanPreview(preview)
+      setShowCleanDialog(true)
+    }
+  }, [previewClean])
+
+  // Handle cleaning all data
+  const handleClean = useCallback(async (mode: 'trash' | 'permanent') => {
+    setCleanLoading(true)
+    try {
+      const result = await cleanAllData(mode)
+      if (result) {
+        setShowCleanDialog(false)
+        setCleanPreview(null)
+        // Refresh variable status and freshness to update the UI
+        await refreshVariableStatus()
+        refreshFreshness()
+        if (result.failed_count > 0) {
+          alert(`Cleaned ${result.cleaned_count} file(s), but ${result.failed_count} failed.`)
+        }
+      }
+    } finally {
+      setCleanLoading(false)
+    }
+  }, [cleanAllData, refreshVariableStatus, refreshFreshness])
+
+  // Handle closing the clean dialog
+  const handleCloseCleanDialog = useCallback(() => {
+    setShowCleanDialog(false)
+    setCleanPreview(null)
+  }, [])
+
   // Handle step execution state changes
   const handleStepStatusChange = useCallback((stepName: string, state: StepExecutionState) => {
     // Runtime-only change - don't mark document as dirty
@@ -1093,6 +1135,7 @@ export default function App() {
         configPath={configPath}
         onSave={handleSave}
         onExport={handleExport}
+        onClean={handleShowCleanDialog}
         saving={loading}
         hasChanges={hasChanges}
         selectedStepName={selectedStepName}
@@ -1256,6 +1299,16 @@ export default function App() {
           onYes={handleSaveConfirm}
           onNo={handleSaveCancel}
           onYesAndRemember={handleSaveConfirmAndRemember}
+        />
+      )}
+
+      {/* Clean data dialog */}
+      {showCleanDialog && cleanPreview && (
+        <CleanDialog
+          preview={cleanPreview}
+          loading={cleanLoading}
+          onCancel={handleCloseCleanDialog}
+          onClean={handleClean}
         />
       )}
     </div>

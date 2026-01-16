@@ -97,6 +97,13 @@ loom experiment.yml --set learning_rate=0.01 epochs=200
 
 # Preview without executing
 loom experiment.yml --dry-run
+
+# Clean all data (move to trash) and re-run from scratch
+loom experiment.yml --clean
+loom experiment.yml
+
+# Preview what would be cleaned
+loom experiment.yml --clean-list
 ```
 
 ### 4. Or use the visual editor

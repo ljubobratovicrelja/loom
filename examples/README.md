@@ -13,6 +13,16 @@ loom-ui examples/linear/pipeline.yml
 
 # Preview commands without executing
 loom examples/linear/pipeline.yml --dry-run
+
+# Clean all data and re-run from scratch
+loom examples/linear/pipeline.yml --clean -y
+loom examples/linear/pipeline.yml
+
+# List what data would be cleaned
+loom examples/linear/pipeline.yml --clean-list
+
+# Run all examples (with cleanup)
+./scripts/run-examples.sh
 ```
 
 ## Examples
@@ -24,6 +34,7 @@ loom examples/linear/pipeline.yml --dry-run
 | [parameters](parameters/) | Using parameters for configuration and `--set` for overrides. |
 | [optional_steps](optional_steps/) | Optional debug/visualization steps with `--include`. |
 | [parallel](parallel/) | Hyperparameter search: same pipeline with different configs producing multiple outputs. |
+| [curve-fitting](curve-fitting/) | Scientific workflow: generate data, fit a model, visualize results. |
 
 ## Structure
 

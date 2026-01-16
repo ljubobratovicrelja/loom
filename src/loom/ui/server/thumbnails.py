@@ -53,7 +53,7 @@ class ThumbnailGenerator:
 
     def _resize_to_thumbnail(self, img: Any) -> Any:
         """Resize image to thumbnail dimensions while maintaining aspect ratio."""
-        import cv2  # type: ignore[import-not-found]
+        import cv2
 
         h, w = img.shape[:2]
         aspect = w / h

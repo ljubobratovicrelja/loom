@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import type { PipelineGraph, EditorState, TaskInfo, ValidationResult } from '../types/pipeline'
+import type { PipelineGraph, EditorState, TaskInfo, ValidationResult, CleanPreview, CleanResult } from '../types/pipeline'
 
 const API_BASE = '/api'
 
@@ -205,5 +205,52 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, loading, error }
+  const previewClean = useCallback(async (): Promise<CleanPreview | null> => {
+    const signal = getSignal('previewClean')
+    try {
+      const res = await fetch(`${API_BASE}/clean/preview`, { signal })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.detail || 'Failed to preview clean')
+      }
+      return await res.json()
+    } catch (e) {
+      if (isAbortError(e)) {
+        return null
+      }
+      setError(e instanceof Error ? e.message : 'Unknown error')
+      return null
+    } finally {
+      cleanupSignal('previewClean')
+    }
+  }, [getSignal, cleanupSignal])
+
+  const cleanAllData = useCallback(async (
+    mode: 'trash' | 'permanent',
+    includeThumbnails: boolean = true
+  ): Promise<CleanResult | null> => {
+    const signal = getSignal('cleanAllData')
+    try {
+      const url = `${API_BASE}/clean?mode=${encodeURIComponent(mode)}&include_thumbnails=${includeThumbnails}`
+      const res = await fetch(url, {
+        method: 'POST',
+        signal,
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.detail || 'Failed to clean data')
+      }
+      return await res.json()
+    } catch (e) {
+      if (isAbortError(e)) {
+        return null
+      }
+      setError(e instanceof Error ? e.message : 'Unknown error')
+      return null
+    } finally {
+      cleanupSignal('cleanAllData')
+    }
+  }, [getSignal, cleanupSignal])
+
+  return { loadConfig, saveConfig, loadState, loadTasks, loadVariablesStatus, trashVariableData, openPath, validateConfig, previewClean, cleanAllData, loading, error }
 }

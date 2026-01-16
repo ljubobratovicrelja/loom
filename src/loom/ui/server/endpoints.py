@@ -285,6 +285,69 @@ def trash_variable_data(name: str) -> dict[str, str]:
         raise HTTPException(status_code=500, detail=f"Failed to trash: {e}")
 
 
+@router.get("/api/clean/preview")
+def preview_clean() -> dict[str, Any]:
+    """Preview what files would be cleaned.
+
+    Returns a list of data node paths that would be affected by a clean operation.
+    """
+    from loom.runner import PipelineConfig, get_cleanable_paths
+
+    if not state.config_path or not state.config_path.exists():
+        raise HTTPException(status_code=400, detail="No config loaded")
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
+
+    paths = get_cleanable_paths(config)
+    return {
+        "paths": [
+            {"name": name, "path": str(path), "exists": exists} for name, path, exists in paths
+        ]
+    }
+
+
+@router.post("/api/clean")
+def clean_all_data(
+    mode: str = Query("trash", description="Clean mode: 'trash' or 'permanent'"),
+    include_thumbnails: bool = Query(True, description="Include thumbnail cache"),
+) -> dict[str, Any]:
+    """Clean all data node files.
+
+    Removes all data node files, either by moving to trash or permanent deletion.
+    """
+    from loom.runner import PipelineConfig, clean_pipeline_data
+
+    if not state.config_path or not state.config_path.exists():
+        raise HTTPException(status_code=400, detail="No config loaded")
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
+
+    permanent = mode == "permanent"
+    results = clean_pipeline_data(
+        config, permanent=permanent, include_thumbnails=include_thumbnails
+    )
+
+    return {
+        "results": [
+            {
+                "path": str(r.path),
+                "success": r.success,
+                "action": r.action,
+                "error": r.error,
+            }
+            for r in results
+        ],
+        "cleaned_count": sum(1 for r in results if r.action in ("trashed", "deleted")),
+        "failed_count": sum(1 for r in results if not r.success),
+    }
+
+
 @router.post("/api/open-path")
 def open_path(path: str = Query(...)) -> dict[str, str]:
     """Open a file or folder with the system's default application.

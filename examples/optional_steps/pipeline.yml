@@ -20,8 +20,16 @@ data:
 
 parameters:
   top_n: 10
+  num_paragraphs: 3
 
 pipeline:
+  - name: generate_text
+    task: tasks/generate_text.py
+    outputs:
+      --output: $input_txt
+    args:
+      --paragraphs: $num_paragraphs
+
   - name: load_text
     task: tasks/load_text.py
     inputs:

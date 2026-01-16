@@ -6,6 +6,7 @@ interface ToolbarProps {
   configPath: string | null
   onSave: () => void
   onExport: () => void
+  onClean: () => void
   saving: boolean
   hasChanges: boolean
   selectedStepName: string | null
@@ -28,6 +29,7 @@ export default function Toolbar({
   configPath,
   onSave,
   onExport,
+  onClean,
   saving,
   hasChanges,
   selectedStepName,
@@ -130,6 +132,19 @@ export default function Toolbar({
           className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded transition-colors"
         >
           Terminal
+        </button>
+
+        <button
+          onClick={onClean}
+          disabled={!configPath}
+          className={`
+            px-4 py-1.5 text-white text-sm rounded transition-colors
+            ${!configPath
+              ? 'bg-slate-700 cursor-not-allowed opacity-50'
+              : 'bg-orange-600 hover:bg-orange-500'}
+          `}
+        >
+          Clean Data
         </button>
 
         <button

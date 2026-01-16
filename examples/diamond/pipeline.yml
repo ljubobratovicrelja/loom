@@ -22,8 +22,16 @@ data:
 
 parameters:
   outlier_threshold: 1.5  # IQR multiplier for outlier detection
+  num_rows: 100  # Number of rows to generate
 
 pipeline:
+  - name: generate_data
+    task: tasks/generate_data.py
+    outputs:
+      --output: $raw_csv
+    args:
+      --rows: $num_rows
+
   - name: load_data
     task: tasks/load_data.py
     inputs:
