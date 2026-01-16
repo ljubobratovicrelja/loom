@@ -1,0 +1,42 @@
+variables:
+  signal_csv: data/signal.csv
+  smoothed_csv: data/smoothed.csv
+  peaks_json: data/peaks.json
+
+parameters:
+  # Signal generation
+  num_points: 200
+  noise_level: 0.2
+  frequency: 2.0
+
+  # Processing
+  window_size: 5
+  threshold: 0.3
+
+pipeline:
+  - name: generate_signal
+    task: tasks/generate_signal.py
+    outputs:
+      --output: $signal_csv
+    args:
+      --points: $num_points
+      --noise: $noise_level
+      --frequency: $frequency
+
+  - name: smooth_signal
+    task: tasks/smooth_signal.py
+    inputs:
+      signal: $signal_csv
+    outputs:
+      --output: $smoothed_csv
+    args:
+      --window: $window_size
+
+  - name: detect_peaks
+    task: tasks/detect_peaks.py
+    inputs:
+      signal: $smoothed_csv
+    outputs:
+      --output: $peaks_json
+    args:
+      --threshold: $threshold

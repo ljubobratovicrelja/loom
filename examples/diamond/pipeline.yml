@@ -1,0 +1,49 @@
+variables:
+  # Input
+  raw_csv: data/raw.csv
+
+  # Intermediate
+  validated_csv: data/validated.csv
+  stats_json: data/stats.json
+  clean_csv: data/clean.csv
+
+  # Output
+  final_report: data/final_report.json
+
+parameters:
+  outlier_threshold: 1.5  # IQR multiplier for outlier detection
+
+pipeline:
+  - name: load_data
+    task: tasks/load_data.py
+    inputs:
+      raw: $raw_csv
+    outputs:
+      --output: $validated_csv
+
+  # Path A: compute statistics on validated data
+  - name: compute_stats
+    task: tasks/compute_stats.py
+    inputs:
+      data: $validated_csv
+    outputs:
+      --output: $stats_json
+
+  # Path B: filter outliers from validated data
+  - name: filter_outliers
+    task: tasks/filter_outliers.py
+    inputs:
+      data: $validated_csv
+    outputs:
+      --output: $clean_csv
+    args:
+      --threshold: $outlier_threshold
+
+  # Merge both paths
+  - name: merge_results
+    task: tasks/merge_results.py
+    inputs:
+      stats: $stats_json
+      clean_data: $clean_csv
+    outputs:
+      --output: $final_report

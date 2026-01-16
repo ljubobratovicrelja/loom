@@ -163,6 +163,7 @@ The YAML frontmatter is optional but enables the editor to show input/output typ
 
 ## Documentation
 
+- [examples/](examples/) — Working examples you can run immediately
 - [TOOLS.md](docs/TOOLS.md) — Complete CLI reference and editor features
 - [PIPELINE_AUTHORING.md](docs/PIPELINE_AUTHORING.md) — Guide to writing pipelines and task scripts
 
