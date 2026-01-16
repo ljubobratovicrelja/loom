@@ -29,6 +29,7 @@ ui = [
     "websockets>=12.0",
     "ruamel.yaml>=0.18.0",
     "send2trash>=1.8.2",
+    "opencv-python-headless>=4.8.0",
 ]
 dev = [
     "loom[ui]",

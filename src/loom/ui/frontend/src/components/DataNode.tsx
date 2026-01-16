@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText } from 'lucide-react'
 import type { DataNode as DataNodeType, DataType } from '../types/pipeline'
+import { useThumbnail } from '../hooks/useThumbnail'
 
 // Type configuration with icons and labels
 const TYPE_CONFIG: Record<DataType, { icon: ReactNode; label: string }> = {
@@ -17,6 +18,9 @@ const TYPE_CONFIG: Record<DataType, { icon: ReactNode; label: string }> = {
 function DataNode({ data, selected }: NodeProps<DataNodeType>) {
   // Get type configuration
   const config = TYPE_CONFIG[data.type] || TYPE_CONFIG.data_folder
+
+  // Fetch thumbnail/preview for existing data
+  const thumbnail = useThumbnail(data.key, data.type, data.exists)
 
   // Determine colors based on existence status
   const getColors = () => {
@@ -85,6 +89,31 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
           className={colors.handle}
         />
       </div>
+      {/* Thumbnail/Preview section */}
+      {data.exists && (thumbnail.thumbnailUrl || thumbnail.textPreview || thumbnail.loading) && (
+        <div className="px-3 pb-2">
+          {thumbnail.loading && (
+            <div className="bg-slate-700/50 rounded h-[60px] animate-pulse" />
+          )}
+          {thumbnail.thumbnailUrl && (
+            <img
+              src={thumbnail.thumbnailUrl}
+              alt={`Preview of ${data.name}`}
+              className="rounded max-w-full h-auto max-h-[80px] object-contain"
+            />
+          )}
+          {thumbnail.textPreview && (
+            <div className="bg-slate-800/80 rounded p-1.5 font-mono text-[9px] leading-tight text-slate-300 overflow-hidden">
+              {thumbnail.textPreview.lines.map((line, i) => (
+                <div key={i} className="truncate">{line || '\u00A0'}</div>
+              ))}
+              {thumbnail.textPreview.truncated && (
+                <div className="text-slate-500">...</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div className="px-3 pb-1 flex items-center gap-2">
         <span className={`${colors.dollar} text-xs font-mono`}>${data.key}</span>
         <span className={`${colors.badge} text-[10px] px-1.5 py-0.5 rounded`}>

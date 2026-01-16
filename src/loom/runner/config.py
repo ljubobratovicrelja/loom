@@ -45,6 +45,7 @@ class PipelineConfig:
     parameters: dict[str, Any]
     steps: list[StepConfig]
     base_dir: Path = field(default_factory=Path.cwd)
+    data_types: dict[str, str] = field(default_factory=dict)
     _output_producers: dict[str, str] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -76,18 +77,20 @@ class PipelineConfig:
         steps = [StepConfig.from_dict(s) for s in data.get("pipeline", [])]
 
         # Load variables from 'data' section
-        # Data nodes provide typed file/dir references, but for execution
-        # we just need the path values to resolve $references
+        # Data nodes provide typed file/dir references
         variables: dict[str, str] = {}
+        data_types: dict[str, str] = {}
 
-        # Extract path from each data entry
+        # Extract path and type from each data entry
         for name, entry in data.get("data", {}).items():
             if isinstance(entry, dict):
                 # New format: {type: ..., path: ..., ...}
                 variables[name] = entry.get("path", "")
+                data_types[name] = entry.get("type", "")
             else:
                 # Fallback: treat as path string
                 variables[name] = str(entry)
+                data_types[name] = ""
 
         # Store the pipeline file's directory for relative path resolution
         base_dir = path.parent.resolve()
@@ -97,6 +100,7 @@ class PipelineConfig:
             parameters=data.get("parameters", {}),
             steps=steps,
             base_dir=base_dir,
+            data_types=data_types,
         )
 
     def resolve_value(self, value: Any) -> Any:

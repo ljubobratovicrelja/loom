@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from ruamel.yaml import YAML
 from send2trash import send2trash  # type: ignore[import-untyped]
@@ -312,6 +312,103 @@ def open_path(path: str = Query(...)) -> dict[str, str]:
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to open: {e}")
+
+
+@router.get("/api/thumbnail/{data_key}")
+def get_thumbnail(data_key: str) -> Response:
+    """Get thumbnail image for a data node.
+
+    Returns a PNG thumbnail for image/video data types.
+    Returns 404 if data node doesn't exist or isn't image/video type.
+    Returns 204 if thumbnail generation fails.
+    """
+    from loom.runner import PipelineConfig
+
+    from .thumbnails import ThumbnailGenerator
+
+    if not state.config_path or not state.config_path.exists():
+        raise HTTPException(status_code=400, detail="No config loaded")
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
+
+    # Security: Validate data_key exists in pipeline config
+    if data_key not in config.variables:
+        raise HTTPException(status_code=404, detail=f"Data node '{data_key}' not found")
+
+    data_type = config.data_types.get(data_key, "")
+    if data_type not in ("image", "video"):
+        raise HTTPException(
+            status_code=404, detail=f"Data type '{data_type}' doesn't support thumbnails"
+        )
+
+    # Resolve path
+    try:
+        file_path = config.resolve_path(f"${data_key}")
+    except (ValueError, OSError) as e:
+        raise HTTPException(status_code=400, detail=f"Failed to resolve path: {e}")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+
+    # Generate thumbnail
+    generator = ThumbnailGenerator(state.config_path.parent)
+    thumbnail_bytes = generator.get_thumbnail(file_path, data_type)
+
+    if thumbnail_bytes is None:
+        return Response(status_code=204)
+
+    return Response(content=thumbnail_bytes, media_type="image/png")
+
+
+@router.get("/api/preview/{data_key}")
+def get_preview(data_key: str) -> dict[str, Any]:
+    """Get text preview for a data node.
+
+    Returns first few lines for txt/csv/json data types.
+    Returns 404 if data node doesn't exist or isn't a text type.
+    """
+    from loom.runner import PipelineConfig
+
+    from .thumbnails import ThumbnailGenerator
+
+    if not state.config_path or not state.config_path.exists():
+        raise HTTPException(status_code=400, detail="No config loaded")
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
+
+    # Security: Validate data_key exists in pipeline config
+    if data_key not in config.variables:
+        raise HTTPException(status_code=404, detail=f"Data node '{data_key}' not found")
+
+    data_type = config.data_types.get(data_key, "")
+    if data_type not in ("txt", "csv", "json"):
+        raise HTTPException(
+            status_code=404, detail=f"Data type '{data_type}' doesn't support preview"
+        )
+
+    # Resolve path
+    try:
+        file_path = config.resolve_path(f"${data_key}")
+    except (ValueError, OSError) as e:
+        raise HTTPException(status_code=400, detail=f"Failed to resolve path: {e}")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+
+    # Generate preview
+    generator = ThumbnailGenerator(state.config_path.parent)
+    preview = generator.get_preview(file_path, data_type)
+
+    if preview is None:
+        raise HTTPException(status_code=500, detail="Failed to generate preview")
+
+    return dict(preview)
 
 
 @router.get("/api/run/status")
