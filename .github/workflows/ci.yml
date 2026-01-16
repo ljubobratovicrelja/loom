@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-lint:
+    name: Python Lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff format check
+        run: ruff format --check src/ tests/ examples/
+
+      - name: Run ruff lint
+        run: ruff check src/ tests/ examples/
+
+      - name: Run mypy
+        run: mypy src/ tests/
+
+  python-test:
+    name: Python Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: pytest --cov=src --cov-report=term-missing
+
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: src/loom/ui/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/loom/ui/frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: src/loom/ui/frontend
+        run: npm run lint
+
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: src/loom/ui/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/loom/ui/frontend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: src/loom/ui/frontend
+        run: npm run test:run -- --coverage
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: src/loom/ui/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src/loom/ui/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: src/loom/ui/frontend
+        run: npm run build
