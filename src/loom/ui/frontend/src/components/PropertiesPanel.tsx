@@ -64,7 +64,6 @@ interface PropertiesPanelProps {
   onCancelStep?: (stepName: string) => void
   getStepStatus?: (stepName: string) => StepExecutionState
   parameters: Record<string, unknown>
-  variables: string[]
   tasks: TaskInfo[]
   runEligibility?: RunEligibility
   freshness?: FreshnessInfo
@@ -82,7 +81,6 @@ export default function PropertiesPanel({
   onCancelStep,
   getStepStatus,
   parameters,
-  variables,
   tasks,
   runEligibility,
   freshness,
@@ -783,24 +781,6 @@ export default function PropertiesPanel({
                             <span className="text-purple-300">${name}</span>
                             <span className="text-purple-400/70 font-mono">{String(value)}</span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* Variables */}
-                  {variables.length > 0 && (
-                    <div>
-                      <div className="text-slate-500 mb-1">Variables</div>
-                      <div className="flex flex-wrap gap-1">
-                        {variables.map((name) => (
-                          <button
-                            key={name}
-                            onClick={() => navigator.clipboard.writeText(`$${name}`)}
-                            className="px-2 py-1 bg-indigo-900/50 hover:bg-indigo-800/50 text-indigo-300 rounded text-xs"
-                            title="Click to copy"
-                          >
-                            ${name}
-                          </button>
                         ))}
                       </div>
                     </div>

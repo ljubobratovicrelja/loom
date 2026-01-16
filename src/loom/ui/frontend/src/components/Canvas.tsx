@@ -17,15 +17,13 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import StepNode from './StepNode'
-import VariableNode from './VariableNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
-import type { PipelineNode, StepData, VariableData, ParameterData, DataNodeData, TaskInfo } from '../types/pipeline'
+import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 
 const nodeTypes = {
   step: StepNode,
-  variable: VariableNode,
   parameter: ParameterNode,
   data: DataNode,
 }
@@ -502,12 +500,6 @@ export default function Canvas({
         <MiniMap
           className="!bg-slate-900 !border-slate-700"
           nodeColor={(node) => {
-            if (node.type === 'variable') {
-              const varData = node.data as VariableData
-              if (varData.exists === true) return '#22c55e' // green
-              if (varData.exists === false) return '#64748b' // grey
-              return '#4f46e5' // indigo (unknown)
-            }
             if (node.type === 'data') {
               const dataData = node.data as DataNodeData
               if (dataData.exists === true) return '#14b8a6' // teal

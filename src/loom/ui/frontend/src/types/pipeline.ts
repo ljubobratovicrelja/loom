@@ -11,6 +11,7 @@ export type DataType =
   | 'video'
   | 'csv'
   | 'json'
+  | 'txt'
   | 'image_directory'
   | 'data_folder'
 

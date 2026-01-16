@@ -5,7 +5,6 @@ import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 interface RunControlsProps {
   selectedStepName: string | null
   selectedStepNames: string[]
-  selectedVariableName: string | null
   status: ExecutionStatus
   onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[]) => void
   onRunStep?: (stepName: string) => void  // Independent step execution
@@ -16,7 +15,6 @@ interface RunControlsProps {
 export default function RunControls({
   selectedStepName,
   selectedStepNames,
-  selectedVariableName,
   status,
   onRun,
   onRunStep,
@@ -100,22 +98,6 @@ export default function RunControls({
         </>
       )}
 
-      {/* Produce Selected Variable - uses global running check */}
-      {selectedVariableName && (
-        <button
-          onClick={() => onRun('to_variable', undefined, selectedVariableName)}
-          disabled={isRunning}
-          className={`
-            px-3 py-1.5 text-white text-sm rounded transition-colors
-            ${isRunning
-              ? 'bg-slate-700 cursor-not-allowed opacity-50'
-              : 'bg-orange-600 hover:bg-orange-500'}
-          `}
-          title={`Run all tasks needed to produce $${selectedVariableName}`}
-        >
-          Produce ${selectedVariableName}
-        </button>
-      )}
     </div>
   )
 }

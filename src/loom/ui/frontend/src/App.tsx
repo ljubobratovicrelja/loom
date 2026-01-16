@@ -18,12 +18,10 @@ import type {
   PipelineGraph,
   PipelineNode,
   StepNode,
-  VariableNode,
   ParameterNode,
   DataNode,
   TaskInfo,
   StepData,
-  VariableData,
   DataType,
   DataEntry,
   DataNodeData,
@@ -272,10 +270,6 @@ export default function App() {
   const selectedStepNodes = selectedNodes.filter((n) => n.type === 'step')
   const selectedStepNames = selectedStepNodes.map((n) => (n.data as StepData).name)
   const selectedStepName = selectedStepNames.length === 1 ? selectedStepNames[0] : null
-  const selectedVariableNode = selectedNodes.find((n) => n.type === 'variable')
-  const selectedVariableName = selectedVariableNode
-    ? (selectedVariableNode.data as VariableData).name
-    : null
 
   // For PropertiesPanel - show first selected node (single selection behavior)
   const selectedNode = selectedNodes.length === 1 ? selectedNodes[0] : null
@@ -309,7 +303,7 @@ export default function App() {
     return varRefs.length > 0
   }
 
-  // Refresh variable existence status and update ALL node states accordingly
+  // Refresh data node existence status and update ALL node states accordingly
   // This is the single source of truth for node visual states based on file existence
   const refreshVariableStatus = useCallback(async () => {
     const status = await loadVariablesStatus()
@@ -317,15 +311,6 @@ export default function App() {
 
     setNodes((nds) =>
       nds.map((node) => {
-        // Update variable nodes - always set exists if we have status
-        if (node.type === 'variable') {
-          const data = node.data as VariableData
-          const exists = status[data.name]
-          if (exists !== undefined) {
-            // Always update to ensure state is in sync
-            return { ...node, data: { ...data, exists } }
-          }
-        }
         // Update data nodes - use key for lookup (not display name)
         if (node.type === 'data') {
           const data = node.data as DataNodeData
@@ -385,18 +370,11 @@ export default function App() {
           // Clear undo history on load - loaded state is baseline
           clearHistory()
 
-          // Check variable file existence immediately after loading
+          // Check data node file existence immediately after loading
           const status = await loadVariablesStatus()
           if (Object.keys(status).length > 0) {
             setNodes((nds) =>
               nds.map((node) => {
-                if (node.type === 'variable') {
-                  const data = node.data as VariableData
-                  const exists = status[data.name]
-                  if (exists !== undefined) {
-                    return { ...node, data: { ...data, exists } }
-                  }
-                }
                 // Update data nodes - use key for lookup (not display name)
                 if (node.type === 'data') {
                   const data = node.data as DataNodeData
@@ -487,15 +465,6 @@ export default function App() {
   const performSave = useCallback(async () => {
     if (!configPath) return
 
-    // Build variables from variable nodes
-    const variables: Record<string, string> = {}
-    nodes.forEach((node) => {
-      if (node.type === 'variable') {
-        const varData = node.data as VariableData
-        variables[varData.name] = varData.value
-      }
-    })
-
     // Build data entries from data nodes
     const data: Record<string, DataEntry> = {}
     nodes.forEach((node) => {
@@ -512,7 +481,7 @@ export default function App() {
     })
 
     const graph: PipelineGraph = {
-      variables,
+      variables: {},  // Deprecated - kept for compatibility
       parameters,
       data,
       nodes: nodes as PipelineGraph['nodes'],
@@ -603,11 +572,17 @@ export default function App() {
 
   const handleExport = useCallback(() => {
     // Build YAML-like structure
-    const variables: Record<string, string> = {}
+    const dataSection: Record<string, DataEntry> = {}
     nodes.forEach((node) => {
-      if (node.type === 'variable') {
-        const data = node.data as VariableData
-        variables[data.name] = data.value
+      if (node.type === 'data') {
+        const data = node.data as DataNodeData
+        dataSection[data.key] = {
+          type: data.type,
+          path: data.path,
+          name: data.name,
+          description: data.description,
+          pattern: data.pattern,
+        }
       }
     })
 
@@ -628,7 +603,7 @@ export default function App() {
       })
 
     const yamlContent = {
-      variables,
+      data: dataSection,
       parameters,
       pipeline,
     }
@@ -714,38 +689,6 @@ export default function App() {
     }
     setNodes((nds) => [...nds, newNode])
   }, [nodes.length, setNodes, snapshot])
-
-  const handleAddVariable = useCallback(() => {
-    // Snapshot before change for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-    const varCount = nodes.filter((n) => n.type === 'variable').length
-
-    // Generate unique name - avoid duplicates
-    const existingNames = new Set(
-      nodesRef.current
-        .filter((n) => n.type === 'variable')
-        .map((n) => (n.data as VariableData).name)
-    )
-    let varName = `new_var_${varCount + 1}`
-    if (existingNames.has(varName)) {
-      let counter = varCount + 2
-      while (existingNames.has(`new_var_${counter}`)) {
-        counter++
-      }
-      varName = `new_var_${counter}`
-    }
-
-    const newNode: VariableNode = {
-      id: `var_new_${Date.now()}`,
-      type: 'variable',
-      position: { x: 50, y: 50 + varCount * 80 },
-      data: {
-        name: varName,
-        value: '',
-      },
-    }
-    setNodes((nds) => [...nds, newNode])
-  }, [nodes, setNodes, snapshot])
 
   const handleAddData = useCallback((dataType: DataType) => {
     // Snapshot before change for undo
@@ -995,33 +938,7 @@ export default function App() {
   }, [])
 
   const handleNodeDoubleClick = useCallback((node: PipelineNode) => {
-    if (node.type === 'variable') {
-      const varData = node.data as VariableData
-      if (varData.value) {
-        // If file doesn't exist, show pulse error animation
-        if (varData.exists === false) {
-          setNodes((nds) =>
-            nds.map((n) =>
-              n.id === node.id
-                ? { ...n, data: { ...n.data, pulseError: true } }
-                : n
-            ) as PipelineNode[]
-          )
-          // Clear the pulse after animation completes (0.4s * 3 = 1.2s)
-          setTimeout(() => {
-            setNodes((nds) =>
-              nds.map((n) =>
-                n.id === node.id
-                  ? { ...n, data: { ...n.data, pulseError: false } }
-                  : n
-              ) as PipelineNode[]
-            )
-          }, 1300)
-        } else {
-          openPath(varData.value)
-        }
-      }
-    } else if (node.type === 'data') {
+    if (node.type === 'data') {
       const dataNode = node.data as DataNodeData
       if (dataNode.path) {
         // If file doesn't exist, show pulse error animation
@@ -1148,7 +1065,6 @@ export default function App() {
         hasChanges={hasChanges}
         selectedStepName={selectedStepName}
         selectedStepNames={selectedStepNames}
-        selectedVariableName={selectedVariableName}
         executionStatus={executionStatus}
         onRun={handleRun}
         onRunStep={handleRunStepIndependent}
@@ -1229,7 +1145,6 @@ export default function App() {
             <Sidebar
               tasks={tasks}
               onAddTask={handleAddTask}
-              onAddVariable={handleAddVariable}
               onAddData={handleAddData}
               parameters={parameters}
               onUpdateParameter={handleUpdateParameter}
@@ -1273,9 +1188,6 @@ export default function App() {
               onCancelStep={handleCancelStepIndependent}
               getStepStatus={getIndependentStepStatus}
               parameters={parameters}
-              variables={nodes
-                .filter((n) => n.type === 'variable')
-                .map((n) => (n.data as VariableData).name)}
               tasks={tasks}
               runEligibility={selectedStepEligibility}
               freshness={selectedStepName ? freshness.get(selectedStepName) : undefined}

@@ -15,7 +15,6 @@ const DATA_TYPES: Array<{ type: DataType; icon: ReactNode; label: string }> = [
 interface SidebarProps {
   tasks: TaskInfo[]
   onAddTask: (task: TaskInfo) => void
-  onAddVariable: () => void
   onAddData: (type: DataType) => void
   parameters: Record<string, unknown>
   onUpdateParameter: (name: string, value: unknown) => void
@@ -25,7 +24,6 @@ interface SidebarProps {
 export default function Sidebar({
   tasks,
   onAddTask,
-  onAddVariable,
   onAddData,
   parameters,
   onUpdateParameter,
@@ -93,16 +91,6 @@ export default function Sidebar({
     <div className="flex-1 bg-slate-900 border-r border-slate-700 flex flex-col overflow-hidden">
       <div className="p-4 border-b border-slate-700 shrink-0">
         <h2 className="text-white font-semibold text-sm uppercase tracking-wide">Add Nodes</h2>
-      </div>
-
-      {/* Add Variable */}
-      <div className="p-3 shrink-0">
-        <button
-          onClick={onAddVariable}
-          className="w-full px-3 py-2 bg-indigo-700 hover:bg-indigo-600 text-white text-sm rounded transition-colors"
-        >
-          + Variable
-        </button>
       </div>
 
       {/* Data Types Palette */}
