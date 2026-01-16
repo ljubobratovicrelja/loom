@@ -362,6 +362,8 @@ export default function App() {
             : applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[]
           // Enrich step nodes with type information from task schemas
           layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
+          // Initial load - don't mark document as dirty
+          skipNextChangeTrackingRef.current = true
           setNodes(layoutedNodes)
           setEdges(graph.edges)
           setParameters(graph.parameters)
@@ -377,6 +379,8 @@ export default function App() {
           // Check data node file existence immediately after loading
           const status = await loadVariablesStatus()
           if (Object.keys(status).length > 0) {
+            // Runtime-only change - don't mark document as dirty
+            skipNextChangeTrackingRef.current = true
             setNodes((nds) =>
               nds.map((node) => {
                 // Update data nodes - use key for lookup (not display name)
