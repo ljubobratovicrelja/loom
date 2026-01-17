@@ -1,0 +1,111 @@
+data:
+  # Shared input
+  dataset:
+    type: csv
+    path: data/dataset.csv
+  results_low:
+    type: json
+    path: data/results_low.json
+  results_mid:
+    type: json
+    path: data/results_mid.json
+  results_high:
+    type: json
+    path: data/results_high.json
+  comparison:
+    type: json
+    path: data/comparison.json
+parameters:
+  num_samples: 500
+
+  # Different threshold values to compare
+  threshold_low: 0.3
+  threshold_mid: 0.5
+  threshold_high: 0.7
+
+pipeline:
+  # Generate shared input data
+- name: generate_data
+  task: tasks/generate_data.py
+  outputs:
+    --output: $dataset
+  args:
+    --samples: $num_samples
+- name: process_config_low
+  task: tasks/process.py
+  inputs:
+    data: $dataset
+  outputs:
+    --output: $results_low
+  args:
+    --threshold: $threshold_low
+    --config-name: low
+- name: process_config_mid
+  task: tasks/process.py
+  inputs:
+    data: $dataset
+  outputs:
+    --output: $results_mid
+  args:
+    --threshold: $threshold_mid
+    --config-name: mid
+- name: process_config_high
+  task: tasks/process.py
+  inputs:
+    data: $dataset
+  outputs:
+    --output: $results_high
+  args:
+    --threshold: $threshold_high
+    --config-name: high
+- name: compare_results
+  task: tasks/compare_results.py
+  inputs:
+    result_low: $results_low
+    result_mid: $results_mid
+    result_high: $results_high
+  outputs:
+    --output: $comparison
+layout:
+  generate_data:
+    x: 450
+    y: 250
+  process_config_low:
+    x: 1250
+    y: 50
+  process_config_mid:
+    x: 1250
+    y: 355
+  process_config_high:
+    x: 1250
+    y: 670
+  compare_results:
+    x: 1980
+    y: 345
+  data_dataset:
+    x: 885
+    y: 290
+  data_results_low:
+    x: 1650
+    y: 90
+  data_results_mid:
+    x: 1650
+    y: 395
+  data_results_high:
+    x: 1650
+    y: 710
+  data_comparison:
+    x: 2380
+    y: 385
+  param_num_samples:
+    x: 50
+    y: 250
+  param_threshold_low:
+    x: 850
+    y: 50
+  param_threshold_mid:
+    x: 850
+    y: 450
+  param_threshold_high:
+    x: 850
+    y: 680

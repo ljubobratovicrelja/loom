@@ -1,0 +1,72 @@
+data:
+  input_txt:
+    type: txt
+    path: data/sample.txt
+  normalized_txt:
+    type: txt
+    path: data/normalized.txt
+  frequencies_json:
+    type: json
+    path: data/frequencies.json
+  top_words_json:
+    type: json
+    path: data/top_words.json
+  debug_dump:
+    type: txt
+    path: data/debug_dump.txt
+  chart_txt:
+    type: txt
+    path: data/chart.txt
+
+parameters:
+  top_n: 10
+  num_paragraphs: 3
+
+pipeline:
+  - name: generate_text
+    task: tasks/generate_text.py
+    outputs:
+      --output: $input_txt
+    args:
+      --paragraphs: $num_paragraphs
+
+  - name: load_text
+    task: tasks/load_text.py
+    inputs:
+      text: $input_txt
+    outputs:
+      --output: $normalized_txt
+
+  - name: word_frequency
+    task: tasks/word_frequency.py
+    inputs:
+      text: $normalized_txt
+    outputs:
+      --output: $frequencies_json
+
+  - name: top_words
+    task: tasks/top_words.py
+    inputs:
+      frequencies: $frequencies_json
+    outputs:
+      --output: $top_words_json
+    args:
+      --top: $top_n
+
+  # Optional: detailed debug output
+  - name: export_debug
+    task: tasks/export_debug.py
+    optional: true
+    inputs:
+      frequencies: $frequencies_json
+    outputs:
+      --output: $debug_dump
+
+  # Optional: ASCII visualization
+  - name: visualize
+    task: tasks/visualize.py
+    optional: true
+    inputs:
+      top_words: $top_words_json
+    outputs:
+      --output: $chart_txt

@@ -1,0 +1,51 @@
+data:
+  source_image:
+    type: image
+    path: 
+      https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png
+    name: Lena (Source)
+    description: Classic test image downloaded from URL
+  grayscale_image:
+    type: image
+    path: data/grayscale.png
+    name: Grayscale
+    description: Image converted to grayscale
+  edges_image:
+    type: image
+    path: data/edges.png
+    name: Edge Detection
+    description: Canny edge detection result
+  blurred_image:
+    type: image
+    path: data/blurred.png
+    name: Gaussian Blur
+    description: Blurred version of grayscale image
+parameters:
+  blur_radius: 15
+  edge_threshold_low: 50
+  edge_threshold_high: 150
+
+pipeline:
+- name: grayscale
+  task: tasks/grayscale.py
+  inputs:
+    image: $source_image
+  outputs:
+    -o: $grayscale_image
+- name: edge_detect
+  task: tasks/edge_detect.py
+  inputs:
+    image: $grayscale_image
+  outputs:
+    -o: $edges_image
+  args:
+    --low: $edge_threshold_low
+    --high: $edge_threshold_high
+- name: blur
+  task: tasks/blur.py
+  inputs:
+    image: $grayscale_image
+  outputs:
+    -o: $blurred_image
+  args:
+    --radius: $blur_radius

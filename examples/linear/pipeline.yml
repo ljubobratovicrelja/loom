@@ -1,0 +1,35 @@
+data:
+  readings_csv:
+    type: csv
+    path: data/readings.csv
+  stats_json:
+    type: json
+    path: data/stats.json
+  report_txt:
+    type: txt
+    path: data/report.txt
+
+parameters:
+  num_samples: 100
+
+pipeline:
+  - name: generate_data
+    task: tasks/generate_data.py
+    outputs:
+      --output: $readings_csv
+    args:
+      --samples: $num_samples
+
+  - name: compute_stats
+    task: tasks/compute_stats.py
+    inputs:
+      data: $readings_csv
+    outputs:
+      --output: $stats_json
+
+  - name: format_report
+    task: tasks/format_report.py
+    inputs:
+      stats: $stats_json
+    outputs:
+      --output: $report_txt

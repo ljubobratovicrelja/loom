@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light/Dark theme CSS custom properties */
+:root {
+  /* Light mode (default) */
+  --color-surface-primary: theme('colors.slate.50');
+  --color-surface-secondary: theme('colors.slate.100');
+  --color-surface-card: theme('colors.white');
+  --color-surface-hover: theme('colors.slate.200');
+  --color-text-primary: theme('colors.slate.900');
+  --color-text-secondary: theme('colors.slate.700');
+  --color-text-muted: theme('colors.slate.500');
+  --color-border: theme('colors.slate.300');
+  --color-border-secondary: theme('colors.slate.200');
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode */
+    --color-surface-primary: theme('colors.slate.950');
+    --color-surface-secondary: theme('colors.slate.900');
+    --color-surface-card: theme('colors.slate.800');
+    --color-surface-hover: theme('colors.slate.700');
+    --color-text-primary: theme('colors.white');
+    --color-text-secondary: theme('colors.slate.200');
+    --color-text-muted: theme('colors.slate.400');
+    --color-border: theme('colors.slate.700');
+    --color-border-secondary: theme('colors.slate.600');
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* React Flow styles */
+.react-flow__node {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+}
+
+.react-flow__handle-left {
+  left: -5px;
+}
+
+.react-flow__handle-right {
+  right: -5px;
+}
+
+/* Pulse error animation for variable nodes */
+@keyframes pulse-error {
+  0%, 100% {
+    border-color: rgb(239 68 68); /* red-500 */
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.4);
+  }
+  50% {
+    border-color: rgb(185 28 28); /* red-700 */
+    box-shadow: 0 0 12px 4px rgb(239 68 68 / 0.6);
+  }
+}
+
+.animate-pulse-error {
+  animation: pulse-error 0.4s ease-in-out 3;
+}

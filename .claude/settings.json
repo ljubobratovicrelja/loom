@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && source venv/bin/activate && ruff format src/ scripts/ --quiet && ruff check --fix src/ scripts/ 2>&1 | tail -5 || true",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$TOOL_INPUT\" in *src/editor/frontend/src/*.ts*) case \"$TOOL_INPUT\" in *.test.ts*) ;; *) cd \"$CLAUDE_PROJECT_DIR/src/editor/frontend\" && npm run test:run 2>&1 | tail -20 ;; esac ;; esac",
+            "timeout": 120,
+            "statusMessage": "Running frontend tests..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -q 'git commit'; then cd \"$CLAUDE_PROJECT_DIR\" && source venv/bin/activate && ruff check src/ && python -m pytest tests/ -x -q 2>&1 | tail -10 || exit 2; fi",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
