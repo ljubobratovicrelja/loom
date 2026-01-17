@@ -1,3 +1,7 @@
+execution:
+  parallel: true
+  max_workers: 3
+
 data:
   # Shared input
   dataset:

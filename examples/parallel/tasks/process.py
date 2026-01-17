@@ -28,9 +28,15 @@ args:
 import argparse
 import csv
 import json
+import random
+import time
 
 
 def main():
+    # Simulate varying processing time to demonstrate parallel execution
+    delay = random.uniform(2, 5)
+    print(f"Processing (will take {delay:.1f}s)...")
+    time.sleep(delay)
     parser = argparse.ArgumentParser(description="Process with threshold")
     parser.add_argument("data", help="Input CSV path")
     parser.add_argument("-o", "--output", required=True, help="Output JSON path")

@@ -1,3 +1,6 @@
+execution:
+  parallel: true
+
 data:
   source_image:
     type: image
@@ -49,3 +52,34 @@ pipeline:
     -o: $blurred_image
   args:
     --radius: $blur_radius
+layout:
+  grayscale:
+    x: 450
+    y: 510
+  edge_detect:
+    x: 1250
+    y: 290
+  blur:
+    x: 1250
+    y: 740
+  param_blur_radius:
+    x: 850
+    y: 740
+  param_edge_threshold_low:
+    x: 850
+    y: 280
+  param_edge_threshold_high:
+    x: 850
+    y: 50
+  data_source_image:
+    x: 50
+    y: 510
+  data_grayscale_image:
+    x: 850
+    y: 510
+  data_edges_image:
+    x: 1650
+    y: 290
+  data_blurred_image:
+    x: 1650
+    y: 740

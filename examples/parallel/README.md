@@ -23,8 +23,11 @@ Each "process" step uses a different threshold parameter, producing separate out
 ## Run It
 
 ```bash
-# Run full pipeline (all three configs run in parallel)
+# Run full pipeline (parallel execution enabled - configs run concurrently)
 loom pipeline.yml
+
+# Run sequentially instead
+loom pipeline.yml --sequential
 
 # Check outputs
 cat data/dataset.csv           # Generated data
@@ -39,6 +42,20 @@ loom pipeline.yml --step process_config_low
 # Open in editor to see the parallel structure
 loom-ui pipeline.yml
 ```
+
+## Parallel Execution
+
+This pipeline uses parallel execution (configured in `pipeline.yml`):
+
+```yaml
+execution:
+  parallel: true
+  max_workers: 3
+```
+
+With this configuration, the three `process_config_*` steps run concurrently after `generate_data` completes. The `compare_results` step waits for all three to finish before running.
+
+**Note:** The `process.py` task includes a random 2-5 second delay to make parallel execution visible. When running in parallel, all three process steps start together and complete in ~5 seconds total. Running sequentially (`--sequential`) takes ~12 seconds since each step waits for the previous one.
 
 ## Pattern: Hyperparameter Search
 
