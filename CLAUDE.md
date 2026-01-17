@@ -8,25 +8,15 @@ Loom is a lightweight visual pipeline runner for research:
 
 ## Development Standards
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for complete development guidelines including:
+IMPORTANT: before starting a coding undertaking, read [DEVELOPMENT.md](DEVELOPMENT.md) for complete development
+guidelines including:
 - Project structure
 - Python and TypeScript code standards
 - Testing requirements
 
-## Quick Commands
-
-```bash
-./scripts/check.sh              # Run all checks before committing
-./scripts/lint.sh               # Lint Python + Frontend
-./scripts/test.sh               # Test Python + Frontend
-./scripts/test.sh --coverage    # Tests with coverage
-./scripts/build.sh              # Build frontend
-./scripts/run-examples.sh       # Run all example pipelines
-```
-
 ## Workflow
 
-1. **Before implementing**: Read relevant docs and existing code
+1. **Before implementing**: Read relevant docs and existing code, and reminder - always read the [DEVELOPMENT.md](DEVELOPMENT.md) file.
 2. **After changes**: Run `./scripts/lint.sh`
 3. **After implementing**: Run `./scripts/test.sh`
 4. **After editing examples**: Run `./scripts/run-examples.sh`
