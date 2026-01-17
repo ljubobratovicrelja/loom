@@ -488,18 +488,35 @@ class TestPipelineExecutorRunPipeline:
         assert len(results) == 3
         assert all(results.values())
 
-    def test_run_pipeline_skips_after_failure(self, config: PipelineConfig) -> None:
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_pipeline_skips_after_failure(
+        self, mock_run: MagicMock, config: PipelineConfig
+    ) -> None:
         """Test that dependent steps are skipped after a failure."""
-        executor = PipelineExecutor(config, dry_run=True)
 
-        # Simulate step1 failure
-        executor._results["step1"] = False
+        # Make step1 fail, step2 and step3 would succeed if run
+        def side_effect(cmd: list[str], **kwargs: object) -> MagicMock:
+            # step1 fails (script name ends with s1.py)
+            if any("s1.py" in str(c) for c in cmd):
+                return MagicMock(returncode=1)
+            return MagicMock(returncode=0)
 
-        # Run from step2 onward
-        results = executor.run_pipeline(from_step="step2")
+        mock_run.side_effect = side_effect
 
-        # step2 should be skipped because step1 failed
-        assert results["step2"] is False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Update config with temp paths so output dirs can be created
+            config.variables["a"] = f"{tmpdir}/a.csv"
+            config.variables["b"] = f"{tmpdir}/b.csv"
+            config.variables["c"] = f"{tmpdir}/c.csv"
+
+            executor = PipelineExecutor(config)
+            results = executor.run_pipeline()
+
+            # step1 should fail
+            assert results["step1"] is False
+            # step2 and step3 should be skipped because step1 failed
+            assert results["step2"] is False
+            assert results["step3"] is False
 
     def test_run_pipeline_empty_returns_empty(self, config: PipelineConfig) -> None:
         """Test that empty step selection returns empty results."""
@@ -542,3 +559,238 @@ class TestPipelineExecutorRunPipeline:
             results = executor.run_pipeline(steps=["step1"])
 
             assert results["step1"] is False
+
+
+class TestBuildDependencyGraph:
+    """Tests for _build_dependency_graph method."""
+
+    @pytest.fixture
+    def config_diamond(self) -> PipelineConfig:
+        """Create a config with diamond dependency pattern (A -> B,C -> D)."""
+        return PipelineConfig(
+            variables={"a": "a.csv", "b": "b.csv", "c": "c.csv", "d": "d.csv"},
+            parameters={},
+            steps=[
+                StepConfig(name="step_a", script="a.py", outputs={"-o": "$a"}),
+                StepConfig(name="step_b", script="b.py", inputs={"x": "$a"}, outputs={"-o": "$b"}),
+                StepConfig(name="step_c", script="c.py", inputs={"x": "$a"}, outputs={"-o": "$c"}),
+                StepConfig(
+                    name="step_d",
+                    script="d.py",
+                    inputs={"x": "$b", "y": "$c"},
+                    outputs={"-o": "$d"},
+                ),
+            ],
+        )
+
+    def test_build_dependency_graph_diamond(self, config_diamond: PipelineConfig) -> None:
+        """Test building dependency graph for diamond pattern."""
+        executor = PipelineExecutor(config_diamond)
+        deps, dependents = executor._build_dependency_graph(config_diamond.steps)
+
+        # Check dependencies
+        assert deps["step_a"] == set()
+        assert deps["step_b"] == {"step_a"}
+        assert deps["step_c"] == {"step_a"}
+        assert deps["step_d"] == {"step_b", "step_c"}
+
+        # Check dependents (reverse mapping)
+        assert dependents["step_a"] == {"step_b", "step_c"}
+        assert dependents["step_b"] == {"step_d"}
+        assert dependents["step_c"] == {"step_d"}
+        assert dependents["step_d"] == set()
+
+    def test_build_dependency_graph_subset(self, config_diamond: PipelineConfig) -> None:
+        """Test building dependency graph for a subset of steps."""
+        executor = PipelineExecutor(config_diamond)
+        # Only include step_b and step_d (step_a and step_c are not in the list)
+        steps = [
+            config_diamond.get_step_by_name("step_b"),
+            config_diamond.get_step_by_name("step_d"),
+        ]
+        deps, _ = executor._build_dependency_graph(steps)
+
+        # step_a is not in the run list, so step_b has no deps
+        assert deps["step_b"] == set()
+        # step_c is not in the run list, so step_d only depends on step_b
+        assert deps["step_d"] == {"step_b"}
+
+
+class TestParallelExecution:
+    """Tests for parallel pipeline execution."""
+
+    @pytest.fixture
+    def config_diamond(self) -> PipelineConfig:
+        """Create a config with diamond pattern and parallel enabled."""
+        return PipelineConfig(
+            variables={"a": "a.csv", "b": "b.csv", "c": "c.csv", "d": "d.csv"},
+            parameters={},
+            steps=[
+                StepConfig(name="step_a", script="a.py", outputs={"-o": "$a"}),
+                StepConfig(name="step_b", script="b.py", inputs={"x": "$a"}, outputs={"-o": "$b"}),
+                StepConfig(name="step_c", script="c.py", inputs={"x": "$a"}, outputs={"-o": "$c"}),
+                StepConfig(
+                    name="step_d",
+                    script="d.py",
+                    inputs={"x": "$b", "y": "$c"},
+                    outputs={"-o": "$d"},
+                ),
+            ],
+            parallel=True,
+            max_workers=2,
+        )
+
+    def test_parallel_dry_run_all_steps(self, config_diamond: PipelineConfig) -> None:
+        """Test running full pipeline in parallel dry run mode."""
+        executor = PipelineExecutor(config_diamond, dry_run=True)
+        results = executor.run_pipeline()
+
+        assert len(results) == 4
+        assert all(results.values())
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_parallel_execution_respects_dependencies(
+        self, mock_run: MagicMock, config_diamond: PipelineConfig
+    ) -> None:
+        """Test that parallel execution respects step dependencies."""
+        execution_order: list[str] = []
+
+        def mock_subprocess_run(cmd: list[str], **kwargs: dict) -> MagicMock:
+            # Extract step name from script path
+            script = cmd[1]
+            if "a.py" in script:
+                execution_order.append("step_a")
+            elif "b.py" in script:
+                execution_order.append("step_b")
+            elif "c.py" in script:
+                execution_order.append("step_c")
+            elif "d.py" in script:
+                execution_order.append("step_d")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_run.side_effect = mock_subprocess_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_diamond.variables["a"] = f"{tmpdir}/a.csv"
+            config_diamond.variables["b"] = f"{tmpdir}/b.csv"
+            config_diamond.variables["c"] = f"{tmpdir}/c.csv"
+            config_diamond.variables["d"] = f"{tmpdir}/d.csv"
+
+            executor = PipelineExecutor(config_diamond, dry_run=False)
+            results = executor.run_pipeline()
+
+            # All should succeed
+            assert all(results.values())
+
+            # step_a must run before step_b and step_c
+            assert execution_order.index("step_a") < execution_order.index("step_b")
+            assert execution_order.index("step_a") < execution_order.index("step_c")
+
+            # step_b and step_c must run before step_d
+            assert execution_order.index("step_b") < execution_order.index("step_d")
+            assert execution_order.index("step_c") < execution_order.index("step_d")
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_parallel_skips_on_failure(
+        self, mock_run: MagicMock, config_diamond: PipelineConfig
+    ) -> None:
+        """Test that parallel execution skips dependent steps on failure."""
+
+        def mock_subprocess_run(cmd: list[str], **kwargs: dict) -> MagicMock:
+            script = cmd[1]
+            # Make step_a fail
+            if "a.py" in script:
+                return MagicMock(returncode=1, stdout="", stderr="error")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_run.side_effect = mock_subprocess_run
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_diamond.variables["a"] = f"{tmpdir}/a.csv"
+            config_diamond.variables["b"] = f"{tmpdir}/b.csv"
+            config_diamond.variables["c"] = f"{tmpdir}/c.csv"
+            config_diamond.variables["d"] = f"{tmpdir}/d.csv"
+
+            executor = PipelineExecutor(config_diamond, dry_run=False)
+            results = executor.run_pipeline()
+
+            # step_a failed
+            assert results["step_a"] is False
+            # step_b, step_c, step_d should be skipped (marked as failed)
+            assert results["step_b"] is False
+            assert results["step_c"] is False
+            assert results["step_d"] is False
+
+    def test_parallel_with_max_workers(self) -> None:
+        """Test that max_workers setting is respected."""
+        config = PipelineConfig(
+            variables={},
+            parameters={},
+            steps=[StepConfig(name="step1", script="s1.py")],
+            parallel=True,
+            max_workers=2,
+        )
+
+        executor = PipelineExecutor(config, dry_run=True)
+        results = executor.run_pipeline()
+
+        assert len(results) == 1
+        assert results["step1"] is True
+
+
+class TestRunStepParallel:
+    """Tests for _run_step_parallel method."""
+
+    @pytest.fixture
+    def config(self) -> PipelineConfig:
+        """Create a simple config for testing."""
+        return PipelineConfig(
+            variables={"input": "in.txt", "output": "out.txt"},
+            parameters={},
+            steps=[
+                StepConfig(
+                    name="process",
+                    script="scripts/process.py",
+                    inputs={"x": "$input"},
+                    outputs={"-o": "$output"},
+                ),
+            ],
+            parallel=True,
+        )
+
+    def test_run_step_parallel_dry_run(self, config: PipelineConfig) -> None:
+        """Test _run_step_parallel in dry run mode."""
+        executor = PipelineExecutor(config, dry_run=True)
+        step = config.steps[0]
+
+        name, success, output = executor._run_step_parallel(step)
+
+        assert name == "process"
+        assert success is True
+        assert "[DRY RUN]" in output
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_step_parallel_captures_output(
+        self, mock_run: MagicMock, config: PipelineConfig
+    ) -> None:
+        """Test that _run_step_parallel captures and prefixes output."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="line1\nline2\n",
+            stderr="warning\n",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.variables["output"] = f"{tmpdir}/out.txt"
+
+            executor = PipelineExecutor(config, dry_run=False)
+            step = config.steps[0]
+
+            name, success, output = executor._run_step_parallel(step)
+
+            assert name == "process"
+            assert success is True
+            assert "[process] line1" in output
+            assert "[process] line2" in output
+            assert "[process] warning" in output
+            assert "[SUCCESS] process" in output

@@ -48,6 +48,8 @@ class PipelineConfig:
     steps: list[StepConfig]
     base_dir: Path = field(default_factory=Path.cwd)
     data_types: dict[str, str] = field(default_factory=dict)
+    parallel: bool = False
+    max_workers: int | None = None
     _output_producers: dict[str, str] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -97,12 +99,19 @@ class PipelineConfig:
         # Store the pipeline file's directory for relative path resolution
         base_dir = path.parent.resolve()
 
+        # Parse execution settings
+        execution = data.get("execution", {})
+        parallel = execution.get("parallel", False)
+        max_workers = execution.get("max_workers")
+
         return cls(
             variables=variables,
             parameters=data.get("parameters", {}),
             steps=steps,
             base_dir=base_dir,
             data_types=data_types,
+            parallel=parallel,
+            max_workers=max_workers,
         )
 
     def resolve_value(self, value: Any) -> Any:

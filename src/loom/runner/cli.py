@@ -22,6 +22,8 @@ Examples:
   %(prog)s pipeline.yml --from classify    # Run from step onward
   %(prog)s pipeline.yml --dry-run          # Preview commands
   %(prog)s pipeline.yml --set backend=local
+  %(prog)s pipeline.yml --parallel         # Run with parallel execution
+  %(prog)s pipeline.yml --parallel --max-workers 2
   %(prog)s pipeline.yml --clean            # Clean all data (move to trash)
   %(prog)s pipeline.yml --clean --permanent  # Permanently delete data
         """,
@@ -64,6 +66,25 @@ Examples:
 
     # Execution mode
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
+
+    # Parallel execution
+    parallel_group = parser.add_mutually_exclusive_group()
+    parallel_group.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel execution (overrides config)",
+    )
+    parallel_group.add_argument(
+        "--sequential",
+        action="store_true",
+        help="Force sequential execution (overrides config)",
+    )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        metavar="N",
+        help="Maximum number of parallel workers (default: CPU count)",
+    )
 
     # Clean mode
     parser.add_argument(
@@ -111,6 +132,15 @@ Examples:
 
     if args.var:
         config.override_variables(parse_key_value_args(args.var))
+
+    # Apply parallel execution overrides
+    if args.parallel:
+        config.parallel = True
+    elif args.sequential:
+        config.parallel = False
+
+    if args.max_workers is not None:
+        config.max_workers = args.max_workers
 
     # Build extra args dict
     extra_args = {}

@@ -564,3 +564,57 @@ class TestStepConfigTaskField:
         data = {"name": "step1"}
         with pytest.raises(KeyError, match="task.*script"):
             StepConfig.from_dict(data)
+
+
+class TestPipelineConfigParallelSettings:
+    """Tests for parallel execution settings in PipelineConfig."""
+
+    def test_parallel_defaults(self) -> None:
+        """Test that parallel settings have correct defaults."""
+        config = PipelineConfig(variables={}, parameters={}, steps=[])
+
+        assert config.parallel is False
+        assert config.max_workers is None
+
+    def test_from_yaml_loads_parallel_settings(self, tmp_path: Path) -> None:
+        """Test that from_yaml loads parallel execution settings."""
+        yaml_content = """
+execution:
+  parallel: true
+  max_workers: 4
+
+pipeline: []
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        assert config.parallel is True
+        assert config.max_workers == 4
+
+    def test_from_yaml_parallel_defaults(self, tmp_path: Path) -> None:
+        """Test that missing execution section uses defaults."""
+        yaml_content = """
+pipeline: []
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        assert config.parallel is False
+        assert config.max_workers is None
+
+    def test_from_yaml_partial_execution_settings(self, tmp_path: Path) -> None:
+        """Test that partial execution section uses defaults for missing fields."""
+        yaml_content = """
+execution:
+  parallel: true
+
+pipeline: []
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        assert config.parallel is True
+        assert config.max_workers is None
