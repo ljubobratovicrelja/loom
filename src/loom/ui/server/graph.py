@@ -2,7 +2,14 @@
 
 from typing import Any
 
-from .models import DataEntry, EditorOptions, GraphEdge, GraphNode, PipelineGraph
+from .models import (
+    DataEntry,
+    EditorOptions,
+    ExecutionOptions,
+    GraphEdge,
+    GraphNode,
+    PipelineGraph,
+)
 
 
 def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
@@ -162,6 +169,13 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
         autoSave=editor_data.get("autoSave", False),
     )
 
+    # Read execution options
+    execution_data = data.get("execution", {})
+    execution = ExecutionOptions(
+        parallel=execution_data.get("parallel", False),
+        maxWorkers=execution_data.get("max_workers"),
+    )
+
     # Build data entries dict for graph
     data_entries: dict[str, DataEntry] = {}
     for name, info in data_section.items():
@@ -180,6 +194,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
         nodes=nodes,
         edges=edges,
         editor=editor,
+        execution=execution,
         hasLayout=bool(layout),  # True if layout section existed in YAML
     )
 
@@ -451,3 +466,26 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
         # Clean up empty editor section
         if not data["editor"]:
             del data["editor"]
+
+    # Update execution options (only include non-default values)
+    has_execution_settings = graph.execution.parallel or graph.execution.maxWorkers
+    if has_execution_settings:
+        if "execution" not in data:
+            data["execution"] = {}
+        if graph.execution.parallel:
+            data["execution"]["parallel"] = True
+        elif "parallel" in data.get("execution", {}):
+            del data["execution"]["parallel"]
+        if graph.execution.maxWorkers is not None:
+            data["execution"]["max_workers"] = graph.execution.maxWorkers
+        elif "max_workers" in data.get("execution", {}):
+            del data["execution"]["max_workers"]
+    else:
+        # Remove execution section if all values are defaults
+        if "execution" in data:
+            if "parallel" in data["execution"]:
+                del data["execution"]["parallel"]
+            if "max_workers" in data["execution"]:
+                del data["execution"]["max_workers"]
+            if not data["execution"]:
+                del data["execution"]

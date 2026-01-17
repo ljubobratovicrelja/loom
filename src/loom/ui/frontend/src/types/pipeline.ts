@@ -62,6 +62,11 @@ export interface EditorOptions {
   autoSave: boolean
 }
 
+export interface ExecutionOptions {
+  parallel: boolean
+  maxWorkers: number | null
+}
+
 // Data section entry in YAML (for serialization)
 export interface DataEntry {
   type: DataType
@@ -78,6 +83,7 @@ export interface PipelineGraph {
   nodes: PipelineNode[]
   edges: Edge[]
   editor?: EditorOptions
+  execution?: ExecutionOptions
   hasLayout?: boolean  // True if positions were loaded from YAML
 }
 

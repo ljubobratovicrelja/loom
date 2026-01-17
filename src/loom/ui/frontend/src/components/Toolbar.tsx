@@ -21,6 +21,10 @@ interface ToolbarProps {
   canRedo: boolean
   skipSaveConfirmation: boolean
   onSkipSaveConfirmationChange: (value: boolean) => void
+  parallelEnabled: boolean
+  onParallelEnabledChange: (value: boolean) => void
+  maxWorkers: number | null
+  onMaxWorkersChange: (value: number | null) => void
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
 }
@@ -44,6 +48,10 @@ export default function Toolbar({
   canRedo,
   skipSaveConfirmation,
   onSkipSaveConfirmationChange,
+  parallelEnabled,
+  onParallelEnabledChange,
+  maxWorkers,
+  onMaxWorkersChange,
   stepEligibility,
   parallelEligibility,
 }: ToolbarProps) {
@@ -153,6 +161,36 @@ export default function Toolbar({
         >
           Export YAML
         </button>
+
+        {/* Execution settings */}
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={parallelEnabled}
+              onChange={(e) => onParallelEnabledChange(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            />
+            Parallel
+          </label>
+          {parallelEnabled && (
+            <label className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-sm select-none">
+              <span>Workers:</span>
+              <input
+                type="number"
+                min="1"
+                max="32"
+                value={maxWorkers ?? ''}
+                placeholder="auto"
+                onChange={(e) => {
+                  const val = e.target.value
+                  onMaxWorkersChange(val === '' ? null : parseInt(val, 10))
+                }}
+                className="w-16 px-1.5 py-0.5 text-sm rounded border border-slate-400 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </label>
+          )}
+        </div>
 
         {/* Skip confirmation checkbox */}
         <label className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-sm cursor-pointer select-none">

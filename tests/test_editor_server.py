@@ -5,6 +5,7 @@ from pathlib import Path
 from loom.ui.server import (
     DataEntry,
     EditorOptions,
+    ExecutionOptions,
     GraphNode,
     PipelineGraph,
     _update_yaml_from_graph,
@@ -303,6 +304,154 @@ class TestEditorOptionsSerialization:
 
         # Assert
         assert "editor" not in yaml_out
+
+
+class TestExecutionOptionsSerialization:
+    """Test that execution options are serialized and restored correctly."""
+
+    def test_yaml_to_graph_reads_execution_options(self) -> None:
+        """Execution options in YAML should be read into graph."""
+        # Arrange
+        yaml_data = {
+            "data": {},
+            "parameters": {},
+            "pipeline": [],
+            "execution": {"parallel": True, "max_workers": 4},
+        }
+
+        # Act
+        graph = yaml_to_graph(yaml_data)
+
+        # Assert
+        assert graph.execution.parallel is True
+        assert graph.execution.maxWorkers == 4
+
+    def test_yaml_to_graph_reads_parallel_only(self) -> None:
+        """Execution options with only parallel should work."""
+        # Arrange
+        yaml_data = {
+            "data": {},
+            "parameters": {},
+            "pipeline": [],
+            "execution": {"parallel": True},
+        }
+
+        # Act
+        graph = yaml_to_graph(yaml_data)
+
+        # Assert
+        assert graph.execution.parallel is True
+        assert graph.execution.maxWorkers is None
+
+    def test_yaml_to_graph_defaults_execution_options(self) -> None:
+        """Without execution section, defaults should be used."""
+        # Arrange
+        yaml_data: dict[str, object] = {
+            "data": {},
+            "parameters": {},
+            "pipeline": [],
+        }
+
+        # Act
+        graph = yaml_to_graph(yaml_data)
+
+        # Assert
+        assert graph.execution.parallel is False
+        assert graph.execution.maxWorkers is None
+
+    def test_update_yaml_writes_execution_options_when_parallel(self) -> None:
+        """Execution options should be written when parallel is enabled."""
+        # Arrange
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            nodes=[],
+            edges=[],
+            execution=ExecutionOptions(parallel=True),
+        )
+
+        # Act - use _update_yaml_from_graph which writes execution options
+        data: dict[str, object] = {"parameters": {}, "pipeline": []}
+        _update_yaml_from_graph(data, graph)
+
+        # Assert
+        assert data.get("execution") == {"parallel": True}
+
+    def test_update_yaml_writes_max_workers(self) -> None:
+        """Execution options with max_workers should be written."""
+        # Arrange
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            nodes=[],
+            edges=[],
+            execution=ExecutionOptions(parallel=True, maxWorkers=8),
+        )
+
+        # Act
+        data: dict[str, object] = {"parameters": {}, "pipeline": []}
+        _update_yaml_from_graph(data, graph)
+
+        # Assert
+        assert data.get("execution") == {"parallel": True, "max_workers": 8}
+
+    def test_update_yaml_omits_execution_when_default(self) -> None:
+        """Execution section should be omitted when all values are default."""
+        # Arrange
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            nodes=[],
+            edges=[],
+            execution=ExecutionOptions(parallel=False, maxWorkers=None),
+        )
+
+        # Act
+        data: dict[str, object] = {"parameters": {}, "pipeline": []}
+        _update_yaml_from_graph(data, graph)
+
+        # Assert
+        assert "execution" not in data
+
+    def test_update_yaml_removes_execution_when_disabled(self) -> None:
+        """Execution section should be removed when parallel is disabled."""
+        # Arrange - start with execution options
+        data: dict[str, object] = {
+            "parameters": {},
+            "pipeline": [],
+            "execution": {"parallel": True, "max_workers": 4},
+        }
+        # Graph has defaults (parallel disabled)
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            nodes=[],
+            edges=[],
+            execution=ExecutionOptions(parallel=False, maxWorkers=None),
+        )
+
+        # Act
+        _update_yaml_from_graph(data, graph)
+
+        # Assert - execution section should be removed
+        assert "execution" not in data
+
+    def test_execution_options_roundtrip(self) -> None:
+        """Execution options should survive yaml -> graph -> update roundtrip."""
+        # Arrange
+        original_yaml: dict[str, object] = {
+            "parameters": {},
+            "pipeline": [],
+            "execution": {"parallel": True, "max_workers": 6},
+        }
+
+        # Act - load to graph, then update yaml
+        graph = yaml_to_graph(original_yaml)
+        output_yaml: dict[str, object] = {"parameters": {}, "pipeline": []}
+        _update_yaml_from_graph(output_yaml, graph)
+
+        # Assert
+        assert output_yaml.get("execution") == {"parallel": True, "max_workers": 6}
 
 
 # Sample YAML with data section (typed data nodes)

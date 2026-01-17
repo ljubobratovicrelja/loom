@@ -29,6 +29,7 @@ from .graph import update_yaml_from_graph as _update_yaml_from_graph
 from .models import (
     DataEntry,
     EditorOptions,
+    ExecutionOptions,
     ExecutionStatus,
     GraphEdge,
     GraphNode,
@@ -111,6 +112,7 @@ __all__ = [
     # Models
     "DataEntry",
     "EditorOptions",
+    "ExecutionOptions",
     "ExecutionStatus",
     "GraphEdge",
     "GraphNode",

@@ -94,6 +94,10 @@ export default function App() {
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [skipSaveConfirmation, setSkipSaveConfirmation] = useState(false)
 
+  // Execution options state
+  const [parallelEnabled, setParallelEnabled] = useState(false)
+  const [maxWorkers, setMaxWorkers] = useState<number | null>(null)
+
   // Resizable sidebar widths
   const [sidebarWidth, setSidebarWidth] = useState(256) // Default w-64
   const [propertiesWidth, setPropertiesWidth] = useState(320) // Default w-80
@@ -431,6 +435,12 @@ export default function App() {
             setSkipSaveConfirmation(graph.editor.autoSave ?? false)
           }
 
+          // Load execution options
+          if (graph.execution) {
+            setParallelEnabled(graph.execution.parallel ?? false)
+            setMaxWorkers(graph.execution.maxWorkers ?? null)
+          }
+
           // Clear undo history on load - loaded state is baseline
           clearHistory()
 
@@ -509,6 +519,24 @@ export default function App() {
     setHasChanges(true)
   }, [nodes, edges])
 
+  // Track execution settings changes
+  const prevParallelRef = useRef(parallelEnabled)
+  const prevMaxWorkersRef = useRef(maxWorkers)
+  useEffect(() => {
+    // Skip during initial load phase
+    if (isLoadingRef.current) {
+      prevParallelRef.current = parallelEnabled
+      prevMaxWorkersRef.current = maxWorkers
+      return
+    }
+    // Only mark dirty if the values actually changed
+    if (prevParallelRef.current !== parallelEnabled || prevMaxWorkersRef.current !== maxWorkers) {
+      setHasChanges(true)
+      prevParallelRef.current = parallelEnabled
+      prevMaxWorkersRef.current = maxWorkers
+    }
+  }, [parallelEnabled, maxWorkers])
+
   // Track previous execution status to detect when execution stops
   const prevExecutionStatusRef = useRef<ExecutionStatus>('idle')
 
@@ -559,6 +587,10 @@ export default function App() {
       editor: {
         autoSave: skipSaveConfirmation,
       },
+      execution: {
+        parallel: parallelEnabled,
+        maxWorkers: maxWorkers,
+      },
     }
 
     const success = await saveConfig(graph, configPath)
@@ -573,7 +605,7 @@ export default function App() {
       const errorMessage = apiError || 'Failed to save changes. Please try again.'
       alert(`Save failed: ${errorMessage}`)
     }
-  }, [configPath, nodes, edges, parameters, skipSaveConfirmation, saveConfig, clearHistory, apiError])
+  }, [configPath, nodes, edges, parameters, skipSaveConfirmation, parallelEnabled, maxWorkers, saveConfig, clearHistory, apiError])
 
   // Request save - shows confirmation dialog unless skipped
   const handleSave = useCallback(() => {
@@ -996,6 +1028,15 @@ export default function App() {
           setSkipSaveConfirmation(graph.editor.autoSave ?? false)
         }
 
+        // Load execution options
+        if (graph.execution) {
+          setParallelEnabled(graph.execution.parallel ?? false)
+          setMaxWorkers(graph.execution.maxWorkers ?? null)
+        } else {
+          setParallelEnabled(false)
+          setMaxWorkers(null)
+        }
+
         // Check file existence
         const status = await loadDataStatus()
         if (Object.keys(status).length > 0) {
@@ -1360,6 +1401,10 @@ export default function App() {
         canRedo={canRedo}
         skipSaveConfirmation={skipSaveConfirmation}
         onSkipSaveConfirmationChange={setSkipSaveConfirmation}
+        parallelEnabled={parallelEnabled}
+        onParallelEnabledChange={setParallelEnabled}
+        maxWorkers={maxWorkers}
+        onMaxWorkersChange={setMaxWorkers}
         stepEligibility={selectedStepEligibility}
         parallelEligibility={parallelEligibility}
       />

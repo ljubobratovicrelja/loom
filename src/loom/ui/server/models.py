@@ -48,6 +48,13 @@ class EditorOptions(BaseModel):
     autoSave: bool = False  # noqa: N815 - matches frontend naming
 
 
+class ExecutionOptions(BaseModel):
+    """Pipeline execution options (stored in YAML execution section)."""
+
+    parallel: bool = False
+    maxWorkers: int | None = None  # noqa: N815 - matches frontend naming
+
+
 class DataEntry(BaseModel):
     """Data node entry in YAML."""
 
@@ -67,6 +74,7 @@ class PipelineGraph(BaseModel):
     nodes: list[GraphNode]
     edges: list[GraphEdge]
     editor: EditorOptions = EditorOptions()
+    execution: ExecutionOptions = ExecutionOptions()
     hasLayout: bool = False  # noqa: N815 - True if positions were loaded from YAML
 
 
