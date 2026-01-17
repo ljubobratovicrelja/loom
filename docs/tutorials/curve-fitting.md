@@ -21,7 +21,7 @@ This example demonstrates non-linear curve fitting with visualization — a comm
 This example requires additional Python packages:
 
 ```bash
-pip install loom[examples]
+pip install loom-pipeline[examples]
 # or: pip install numpy scipy matplotlib
 ```
 

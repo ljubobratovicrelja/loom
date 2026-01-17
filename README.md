@@ -1,8 +1,15 @@
 ![Loom Banner](media/banner.svg)
 
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://loom-examples.onrender.com/)
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](.github/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-coming%20soon-lightgrey)](docs/)
+[![PyPI](https://img.shields.io/badge/pypi-coming%20soon-lightgrey)](https://pypi.org/)
+
 A lightweight visual pipeline runner for research.
 
-Connect your Python scripts into a graph, tweak parameters, run experiments, see results — without setting up Airflow or learning a workflow framework. Just `pip install` into your project's virtualenv and go.
+Connect your Python scripts into a graph, tweak parameters, run experiments, see results — without setting up Airflow or learning a workflow framework.
+
+**[Try the live demo](https://loom-examples.onrender.com/)** — no installation required. Browse and run the [example pipelines](examples/) in your browser. (First load may take ~30s to wake up.)
 
 **What it is:**
 - A visual graph editor for your existing Python scripts
@@ -19,10 +26,10 @@ Connect your Python scripts into a graph, tweak parameters, run experiments, see
 
 ```bash
 # Core runner only
-pip install loom
+pip install loom-pipeline
 
 # With visual editor
-pip install loom[ui]
+pip install loom-pipeline[ui]
 ```
 
 That's it. No services to start, no configuration files to create.

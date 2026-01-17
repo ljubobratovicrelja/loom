@@ -9,10 +9,10 @@
 
 ```bash
 # Core runner only
-pip install loom
+pip install loom-pipeline
 
 # With visual editor
-pip install loom[ui]
+pip install loom-pipeline[ui]
 ```
 
 That's it. No services to start, no configuration files to create.

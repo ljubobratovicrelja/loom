@@ -63,13 +63,13 @@ Both tools operate on the same YAML configuration:
 
 ```bash
 # Core runner only
-pip install loom
+pip install loom-pipeline
 
 # With editor
-pip install loom[ui]
+pip install loom-pipeline[ui]
 
 # Development
-pip install loom[dev]
+pip install loom-pipeline[dev]
 ```
 
 ### CLI Reference

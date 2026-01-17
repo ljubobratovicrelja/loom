@@ -36,7 +36,7 @@ generate_data ──► raw_data.csv ──┬──► plot_raw ──► raw_p
 
 ```bash
 # Install example dependencies
-pip install loom[examples]
+pip install loom-pipeline[examples]
 
 # Run the pipeline
 loom examples/curve-fitting/pipeline.yml
