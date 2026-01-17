@@ -19,8 +19,7 @@ Connect your Python scripts into a graph, tweak parameters, run experiments, see
 
 **What it isn't:**
 - Not a replacement for Airflow/Kubeflow/Prefect (those are for production pipelines)
-- Not an experiment tracker like W&B or MLflow (though it complements them)
-- Not a framework that requires you to rewrite your scripts
+- Not an experiment tracker like W&B or MLflow (though it can be made to complement them)
 
 ## Installation
 
@@ -131,6 +130,8 @@ You can also point it at a directory to browse multiple pipelines:
 loom-ui experiments/    # Browse all pipelines in a folder
 ```
 
+Be mindful in this case, the folders structure has to be with a directory named as the pipeline, with the pipeline file stored within named `pipeline.yml`. See [examples](examples/) as an example on how to organize your project.
+
 ## How Scripts Work
 
 Your scripts stay normal Python with argparse. Just add a YAML block in the docstring so Loom knows the interface:
@@ -181,12 +182,6 @@ The YAML frontmatter is optional but enables the editor to show input/output typ
 
 **Result organization**: Variables point to file paths, so your outputs are organized by experiment configuration.
 
-## Documentation
-
-- [examples/](examples/) — Working examples you can run immediately
-- [TOOLS.md](docs/TOOLS.md) — Complete CLI reference and editor features
-- [PIPELINE_AUTHORING.md](docs/PIPELINE_AUTHORING.md) — Guide to writing pipelines and task scripts
-
 ## Philosophy
 
 Loom is intentionally minimal:
@@ -197,21 +192,6 @@ Loom is intentionally minimal:
 - **No magic** — Loom just builds shell commands and runs them
 
 This makes it easy to adopt incrementally. Start with one experiment, see if it helps, expand from there.
-
-## Development
-
-```bash
-git clone https://github.com/your-username/loom.git
-cd loom
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Build frontend (requires Node.js 18+)
-cd src/loom/ui/frontend
-npm install && npm run build
-```
 
 ## License
 
