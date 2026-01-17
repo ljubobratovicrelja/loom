@@ -1426,7 +1426,7 @@ export default function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 flex overflow-hidden">
           {/* Left sidebar with resize handle */}
-          <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex">
+          <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex h-full">
             <Sidebar
               tasks={tasks}
               onAddTask={handleAddTask}
@@ -1442,7 +1442,7 @@ export default function App() {
               pipelinesLoading={pipelinesLoading}
             />
             <div
-              className="w-1 bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors"
+              className="w-1.5 h-full bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors relative z-10 flex-shrink-0"
               onMouseDown={handleSidebarResize}
             />
           </div>
@@ -1462,9 +1462,9 @@ export default function App() {
           />
 
           {/* Right sidebar with resize handle */}
-          <div style={{ width: propertiesWidth }} className="flex-shrink-0 flex">
+          <div style={{ width: propertiesWidth }} className="flex-shrink-0 flex h-full">
             <div
-              className="w-1 bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors z-10"
+              className="w-1.5 h-full bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors relative z-10 flex-shrink-0"
               onMouseDown={handlePropertiesResize}
             />
             <PropertiesPanel
