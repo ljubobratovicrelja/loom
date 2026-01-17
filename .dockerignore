@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+dist
+build
+*.egg
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Node
+node_modules
+src/loom/ui/frontend/node_modules
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Docs (not needed for demo)
+docs
+site
+
+# Tests (not needed for runtime)
+tests
+
+# Misc
+*.md
+!examples/README.md
+.env
+*.log

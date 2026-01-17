@@ -1,0 +1,15 @@
+# Render configuration for the loom examples demo (free tier)
+#
+# To deploy: Connect your GitHub repo on render.com
+# The free tier spins down after 15 min of inactivity (cold starts on request)
+
+services:
+  - type: web
+    runtime: docker
+    name: loom-examples
+    dockerfilePath: ./examples/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8080
