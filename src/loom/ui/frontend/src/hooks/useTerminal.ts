@@ -91,7 +91,7 @@ export function useTerminal(options: UseTerminalOptions = {}) {
       if (!terminal) return
 
       terminal.clear()
-      terminal.writeln('\x1b[36m[MIRA]\x1b[0m Starting execution...\r\n')
+      terminal.writeln('\x1b[36m[LOOM]\x1b[0m Starting execution...\r\n')
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`)
@@ -168,7 +168,7 @@ export function useTerminal(options: UseTerminalOptions = {}) {
       }
 
       ws.onclose = () => {
-        terminal.writeln('\r\n\x1b[36m[MIRA]\x1b[0m Connection closed')
+        terminal.writeln('\r\n\x1b[36m[LOOM]\x1b[0m Connection closed')
         updateStatus('idle')
       }
 
