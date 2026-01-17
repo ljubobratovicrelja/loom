@@ -193,6 +193,10 @@ Loom is intentionally minimal:
 
 This makes it easy to adopt incrementally. Start with one experiment, see if it helps, expand from there.
 
+## AI Coding Assistance
+
+This project is set up for AI-assisted development. [DEVELOPMENT.md](DEVELOPMENT.md) contains coding guidelines for both human developers and AI assistants, covering code standards, project structure, and workflow. [CLAUDE.md](CLAUDE.md) provides Claude-specific instructions that reference these guidelines.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
