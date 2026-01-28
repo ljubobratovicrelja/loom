@@ -72,3 +72,12 @@ examples/*/.loom-thumbnails/**
 examples/*/.loom-url-cache/**
 # MkDocs build output
 site/
+
+# Generated tutorial files (created by docs/hooks/generate_tutorials.py)
+docs/tutorials/linear.md
+docs/tutorials/diamond.md
+docs/tutorials/parameters.md
+docs/tutorials/parallel.md
+docs/tutorials/optional-steps.md
+docs/tutorials/curve-fitting.md
+docs/tutorials/image-processing.md

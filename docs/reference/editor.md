@@ -20,42 +20,29 @@ loom-ui pipeline.yml --port 8080
 
 ## User Interface
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│ Toolbar: [Logo] path/to/config.yml*  [Run Controls] [Save] etc. │
-├──────────┬───────────────────────────────────────┬───────────────┤
-│          │                                       │               │
-│ Sidebar  │           Canvas                      │  Properties   │
-│          │       (Graph View)                    │    Panel      │
-│ - Tasks  │                                       │               │
-│ - Params │    ┌─────┐      ┌─────┐               │  - Node name  │
-│          │    │ Var │─────►│Step │               │  - Inputs     │
-│          │    └─────┘      └──┬──┘               │  - Outputs    │
-│          │                    │                  │  - Args       │
-│          │    ┌─────┐      ┌──▼──┐               │               │
-│          │    │ Var │◄─────│Step │               │               │
-│          │    └─────┘      └─────┘               │               │
-│          │                                       │               │
-├──────────┴───────────────────────────────────────┴───────────────┤
-│ Terminal Panel (collapsible)                                     │
-│ $ Running extract_gaze...                                        │
-│ [SUCCESS] extract_gaze                                           │
-└──────────────────────────────────────────────────────────────────┘
-```
+![Editor UI](../assets/editor-ui.png)
+
+The editor has four main areas:
+
+- **Toolbar** (top) — Logo, file path, run controls, save button
+- **Sidebar** (left) — Add data nodes, browse tasks, manage parameters
+- **Canvas** (center) — Visual graph of your pipeline
+- **Properties Panel** (right) — Edit selected node, run individual steps
+- **Terminal Panel** (bottom, collapsible) — Execution output
 
 ## Panels
 
 ### Sidebar (Left)
 
-- **Add Variable** — Create new data nodes
-- **Available Tasks** — Click to add to canvas
+- **Data Types** — Add new data nodes to the canvas
+- **Tasks** — Click to add task steps to the canvas
 - **Parameters** — Add/edit configuration values
 
 ### Canvas (Center)
 
 - Visual graph of your pipeline
 - Drag nodes to arrange
-- Connect steps to variables by dragging from handles
+- Connect steps to data nodes by dragging from handles
 - Multi-select with Shift+click or drag box
 - Mini-map in corner for navigation
 
@@ -63,9 +50,9 @@ loom-ui pipeline.yml --port 8080
 
 - Edit selected node properties
 - **For steps:** name, task, inputs, outputs, args
-- **For variables:** name, file path
+- **For data nodes:** display name, key, type, path, description
 - Run/Cancel buttons for individual steps
-- Shows available variable/parameter references
+- Shows available data/parameter references
 
 ### Terminal Panel (Bottom)
 
@@ -76,9 +63,9 @@ loom-ui pipeline.yml --port 8080
 
 ## Node Types
 
-### Variable Nodes
+### Data Nodes
 
-Represent file paths:
+Represent file paths or URLs:
 
 - **Green** = file exists on disk
 - **Grey** = file doesn't exist yet
@@ -89,6 +76,7 @@ Represent Python tasks:
 
 - **Solid border** = regular step
 - **Dashed border** = optional step
+- Optional and disabled checkboxes in properties panel
 - Shows execution state (idle, running, completed, failed)
 
 ## Keyboard Shortcuts
@@ -114,8 +102,11 @@ Represent Python tasks:
 
 Select a step to access:
 
-- **Run Step** — Execute just this step
-- **Run From Here** — Execute this step and all downstream
+- **Run This Step** — Execute just this step
+
+### Run from Toolbar
+
+- **From Here** — Execute from the selected step and all downstream
 
 ### Execution States
 
@@ -152,10 +143,10 @@ Features:
 
 | From | To | Valid? |
 |------|----|--------|
-| Variable → Step input | Yes | Main data flow |
-| Step output → Variable | Yes | Step produces data |
+| Data node → Step input | Yes | Main data flow |
+| Step output → Data node | Yes | Step produces data |
 | Parameter → Step arg | Yes | Config value |
-| Variable → Variable | No | Not allowed |
+| Data node → Data node | No | Not allowed |
 
 ### Type Validation
 
@@ -171,7 +162,7 @@ When tasks have typed inputs/outputs, the editor validates that connected types 
 ## Tips
 
 - **Drag from handles** to create connections
-- **Double-click** variables to edit paths inline
+- **Double-click** data nodes to open the file path
 - **Shift+click** to multi-select nodes
 - **Delete key** removes selected nodes/connections
 - **Mini-map** helps navigate large pipelines

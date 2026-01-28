@@ -4,22 +4,23 @@ Complete reference for pipeline YAML configuration.
 
 ## Overview
 
-A pipeline file has three main sections:
+A pipeline file has these sections:
 
 ```yaml
-data:        # File paths (variables or typed data nodes)
+data:        # File paths (simple strings or typed data nodes)
 parameters:  # Configuration values
 pipeline:    # Processing steps
+execution:   # Optional: parallel execution settings
 ```
 
 ## Data Section
 
-The `data` section defines files in your pipeline. You can use either simple variables or typed data nodes.
+The `data` section defines files in your pipeline. Each entry can be a simple path string or a typed data node.
 
-### Simple Variables
+### Simple Paths
 
 ```yaml
-variables:
+data:
   input_file: data/input.csv
   output_file: data/output.csv
 ```
@@ -27,6 +28,8 @@ variables:
 Reference with `$`: `$input_file` → `data/input.csv`
 
 ### Typed Data Nodes
+
+For better editor validation, use typed entries:
 
 ```yaml
 data:
@@ -72,7 +75,7 @@ data:
 1. URLs are detected by `http://` or `https://` prefix
 2. On first access, the URL is downloaded to `.loom-url-cache/` in the pipeline directory
 3. Subsequent runs use the cached file (fast)
-4. Use `loom clean` to clear the cache and re-download
+4. Use `loom pipeline.yml --clean` to clear the cache and re-download
 
 **Example:**
 
@@ -81,7 +84,7 @@ data:
   lena_image:
     type: image
     path: https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png
-    name: Lena (Source)
+    description: Lena test image
 ```
 
 ### Visual Representation
@@ -141,8 +144,8 @@ The `pipeline` section defines processing steps.
 |-------|----------|-------------|
 | `name` | Yes | Unique identifier for the step |
 | `task` | Yes | Path to the Python script |
-| `inputs` | No | Named inputs mapped to variables |
-| `outputs` | No | Output flags mapped to variables |
+| `inputs` | No | Named inputs mapped to data entries |
+| `outputs` | No | Output flags mapped to data entries |
 | `args` | No | Additional command-line arguments |
 | `optional` | No | If `true`, skipped unless `--include`d |
 
@@ -217,13 +220,36 @@ python tasks/detect_fixations.py data/gaze.csv -o data/fixations.csv --algorithm
 2. **Outputs** — flag arguments (e.g., `-o value`)
 3. **Args** — additional arguments
 
+## Execution Section
+
+Configure how the pipeline runs:
+
+```yaml
+execution:
+  parallel: true      # Enable parallel execution
+  max_workers: 4      # Maximum concurrent steps (default: CPU count)
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `parallel` | `false` | Enable parallel step execution |
+| `max_workers` | CPU count | Maximum concurrent workers |
+
+Override from command line:
+
+```bash
+loom pipeline.yml --parallel --max-workers 2
+loom pipeline.yml --sequential  # Force sequential
+```
+
 ## Execution Order
 
 Loom determines execution order from dependencies:
 
 1. Steps with no input dependencies run first
 2. A step runs after all steps producing its inputs complete
-3. Optional steps are skipped unless explicitly included
+3. Independent steps can run in parallel (if enabled)
+4. Optional steps are skipped unless explicitly included
 
 ## Complete Example
 

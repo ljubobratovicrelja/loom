@@ -23,12 +23,16 @@ loom pipeline.yml --dry-run
 | `--dry-run` | Preview commands without executing |
 | `--step NAME [NAME ...]` | Run specific step(s) only |
 | `--from NAME` | Run from a step onward (includes all subsequent steps) |
-| `--include NAME` | Include optional step(s) |
+| `--include NAME [NAME ...]` | Include optional step(s) |
 | `--set KEY=VALUE [...]` | Override parameter values |
 | `--var KEY=VALUE [...]` | Override variable values |
 | `--extra "ARGS"` | Pass extra arguments to a step |
-| `--clean` | Move all output data to trash before running |
-| `--clean-list` | List files that would be cleaned (without deleting) |
+| `--parallel` | Enable parallel execution (overrides config) |
+| `--sequential` | Force sequential execution (overrides config) |
+| `--max-workers N` | Maximum parallel workers (default: CPU count) |
+| `--clean` | Move all output data to trash |
+| `--clean-list` | List files that would be cleaned (preview only) |
+| `--permanent` | Permanently delete instead of trash (use with `--clean`) |
 | `-y, --yes` | Skip confirmation prompts |
 
 ### Examples
@@ -58,9 +62,21 @@ loom pipeline.yml --var video=other.mp4
 # Pass extra arguments to a step
 loom pipeline.yml --step extract --extra "--debug --verbose"
 
+# Run steps in parallel
+loom pipeline.yml --parallel
+
+# Run in parallel with limited workers
+loom pipeline.yml --parallel --max-workers 4
+
+# Force sequential even if config says parallel
+loom pipeline.yml --sequential
+
 # Clean all data and re-run
 loom pipeline.yml --clean -y
 loom pipeline.yml
+
+# Permanently delete instead of trash
+loom pipeline.yml --clean --permanent -y
 
 # Preview what would be cleaned
 loom pipeline.yml --clean-list
@@ -130,7 +146,6 @@ A pipeline browser appears in the sidebar, letting you:
 
 Both tools require:
 
-- **Python 3.9+**
-- **Node.js 18+** (for `loom-ui` only)
+- **Python 3.11+**
 
-Pipelines are executed from the directory containing the YAML file, so relative paths in your config resolve correctly.
+All relative paths in pipeline configs are resolved relative to the directory containing the YAML file, so your paths work correctly regardless of where you invoke `loom`.

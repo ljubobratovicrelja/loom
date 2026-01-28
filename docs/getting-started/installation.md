@@ -2,8 +2,8 @@
 
 ## Requirements
 
-- **Python 3.9+**
-- **Node.js 18+** (only required if using the visual editor)
+- **Python 3.11+**
+- **Node.js 20+** (only for development/building from source)
 
 ## Install from PyPI
 
@@ -15,7 +15,7 @@ pip install loom-pipeline
 pip install loom-pipeline[ui]
 ```
 
-That's it. No services to start, no configuration files to create.
+That's it. No configuration files to create, no external services to manage.
 
 ## Verify Installation
 
@@ -32,7 +32,7 @@ loom-ui --help
 For contributing to Loom or running from source:
 
 ```bash
-git clone https://github.com/relja/loom.git
+git clone https://github.com/ljubobratovicrelja/loom.git
 cd loom
 pip install -e ".[dev]"
 

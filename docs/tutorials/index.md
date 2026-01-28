@@ -16,6 +16,7 @@ Make sure you have [Loom installed](../getting-started/installation.md) and have
 | [Parallel Execution](parallel.md) | Same task with different configs |
 | [Optional Steps](optional-steps.md) | Conditional execution with `--include` |
 | [Scientific Workflow](curve-fitting.md) | A complete scientific workflow example |
+| [Image Processing](image-processing.md) | Working with images and URL caching |
 
 ## Running Examples
 

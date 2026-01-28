@@ -1,7 +1,7 @@
 site_name: Loom
 site_description: A lightweight visual pipeline runner for research
-repo_url: https://github.com/relja/loom
-repo_name: relja/loom
+repo_url: https://github.com/ljubobratovicrelja/loom
+repo_name: ljubobratovicrelja/loom
 docs_dir: docs
 
 theme:
@@ -23,6 +23,11 @@ theme:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
@@ -30,6 +35,9 @@ markdown_extensions:
 
 plugins:
   - search
+
+hooks:
+  - docs/hooks/generate_tutorials.py
 
 nav:
   - Home: index.md
@@ -44,6 +52,7 @@ nav:
     - Parallel Execution: tutorials/parallel.md
     - Optional Steps: tutorials/optional-steps.md
     - Scientific Workflow: tutorials/curve-fitting.md
+    - Image Processing: tutorials/image-processing.md
   - Reference:
     - CLI Commands: reference/cli.md
     - Pipeline Schema: reference/pipeline-schema.md

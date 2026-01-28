@@ -13,12 +13,19 @@ loom examples/linear/pipeline.yml
 You should see output like:
 
 ```
+Pipeline: 3 step(s) to run
+----------------------------------------
 [RUNNING] generate_data
+[generate_data] Generated 100 samples -> data/readings.csv
 [SUCCESS] generate_data
 [RUNNING] compute_stats
+[compute_stats] Computed stats for 100 rows -> data/stats.json
 [SUCCESS] compute_stats
 [RUNNING] format_report
+[format_report] Report written -> data/report.txt
 [SUCCESS] format_report
+----------------------------------------
+Completed: 3/3 steps succeeded
 ```
 
 ## What Just Happened?
