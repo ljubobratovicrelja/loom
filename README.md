@@ -1,9 +1,9 @@
 ![Loom Banner](media/banner.svg)
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://loom-examples.onrender.com/)
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](.github/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-coming%20soon-lightgrey)](docs/)
-[![PyPI](https://img.shields.io/badge/pypi-coming%20soon-lightgrey)](https://pypi.org/)
+[![CI](https://github.com/ljubobratovicrelja/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/ljubobratovicrelja/loom/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-available-brightgreen)](https://ljubobratovicrelja.github.io/loom/)
+[![PyPI](https://img.shields.io/pypi/v/loom-pipeline)](https://pypi.org/project/loom-pipeline/)
 
 A lightweight visual pipeline runner for research.
 
@@ -31,9 +31,58 @@ pip install loom-pipeline
 pip install loom-pipeline[ui]
 ```
 
-That's it. No services to start, no configuration files to create.
+That's it. No configuration files to create, no external services to manage.
 
 ## Quick Start
+
+Clone the repo and try an example:
+
+```bash
+git clone https://github.com/ljubobratovicrelja/loom.git
+cd loom
+pip install -e .[ui,examples]
+
+# Run a pipeline from the command line
+loom examples/image-processing/pipeline.yml
+```
+
+```
+Pipeline: 3 step(s) to run [parallel]
+----------------------------------------
+[RUNNING] grayscale
+[grayscale] Converted to grayscale: .loom-url-cache/35bb4a6_Lenna.png -> data/grayscale.png
+[SUCCESS] grayscale
+[RUNNING] blur
+[blur] Gaussian blur (radius=15): data/grayscale.png -> data/blurred.png
+[SUCCESS] blur
+[RUNNING] edge_detect
+[edge_detect] Edge detection: data/grayscale.png -> data/edges.png
+[SUCCESS] edge_detect
+----------------------------------------
+Completed: 3/3 steps succeeded
+```
+
+Or open it in the visual editor:
+
+```bash
+# Edit a single pipeline
+loom-ui examples/image-processing/pipeline.yml
+
+# Browse all example pipelines
+loom-ui examples/
+```
+
+The editor opens in your browser where you can see the pipeline graph, run steps, and view outputs.
+
+## Building Your Own Pipeline
+
+Add Loom to your project's environment:
+
+```bash
+pip install loom-pipeline[ui]  # or just loom-pipeline for CLI only
+```
+
+Now you can run pipelines from within your project. Here's how to set one up.
 
 ### 1. Point it at your scripts
 
@@ -99,7 +148,13 @@ loom experiment.yml --step train
 loom experiment.yml --from train
 
 # Try different parameters
-loom experiment.yml --set learning_rate=0.01 epochs=200
+loom experiment.yml --set learning_rate=0.01 --set epochs=200
+
+# Override file paths
+loom experiment.yml --var video=other_recording.mp4
+
+# Run steps in parallel
+loom experiment.yml --parallel --max-workers 4
 
 # Preview without executing
 loom experiment.yml --dry-run
@@ -130,7 +185,7 @@ You can also point it at a directory to browse multiple pipelines:
 loom-ui experiments/    # Browse all pipelines in a folder
 ```
 
-Be mindful in this case, the folders structure has to be with a directory named as the pipeline, with the pipeline file stored within named `pipeline.yml`. See [examples](examples/) as an example on how to organize your project.
+Each pipeline should be in its own subdirectory with a `pipeline.yml` file inside. See [examples/](examples/) for the expected structure.
 
 ## How Scripts Work
 
@@ -187,15 +242,11 @@ The YAML frontmatter is optional but enables the editor to show input/output typ
 Loom is intentionally minimal:
 
 - **No database** — Everything is files: your scripts, YAML configs, and outputs
-- **No server** — The editor runs locally and shuts down when you close it
+- **No external services** — The visual editor runs a local server that stops when you close it
 - **No lock-in** — Your scripts work with or without Loom
 - **No magic** — Loom just builds shell commands and runs them
 
 This makes it easy to adopt incrementally. Start with one experiment, see if it helps, expand from there.
-
-## AI Coding Assistance
-
-This project is set up for AI-assisted development. [DEVELOPMENT.md](DEVELOPMENT.md) contains coding guidelines for both human developers and AI assistants, covering code standards, project structure, and workflow. [CLAUDE.md](CLAUDE.md) provides Claude-specific instructions that reference these guidelines.
 
 ## License
 
