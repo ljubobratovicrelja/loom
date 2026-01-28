@@ -11,15 +11,9 @@ Connect your Python scripts into a graph, tweak parameters, run experiments, see
 
 **[Try the live demo](https://loom-examples.onrender.com/)** — no installation required. Browse and run the [example pipelines](examples/) in your browser. (First load may take ~30s to wake up.)
 
-**What it is:**
-- A visual graph editor for your existing Python scripts
-- A CLI runner with dependency tracking
-- A way to organize experiments as YAML files you can version control
-- Simple enough to install in any project's virtualenv
+Loom gives you a CLI runner and visual editor for pipelines defined in YAML. Your scripts stay as regular Python with argparse — no framework to learn, no rewrites needed.
 
-**What it isn't:**
-- Not a replacement for Airflow/Kubeflow/Prefect (those are for production pipelines)
-- Not an experiment tracker like W&B or MLflow (though it can be made to complement them)
+It's designed for research workflows. For production orchestration, tools like Airflow or Kubeflow are better suited.
 
 ## Installation
 
