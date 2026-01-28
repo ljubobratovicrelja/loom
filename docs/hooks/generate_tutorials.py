@@ -1,10 +1,21 @@
-"""MkDocs hook to generate tutorial pages from examples/ READMEs."""
+"""MkDocs hooks for tutorial generation and version injection."""
 
 import logging
+import os
 import re
 from pathlib import Path
 
-log = logging.getLogger("mkdocs.hooks.generate_tutorials")
+log = logging.getLogger("mkdocs.hooks")
+
+
+def on_config(config: dict, **kwargs) -> dict:
+    """Inject version from environment variable into site config."""
+    version = os.environ.get("SITE_VERSION", "")
+    if version:
+        config.setdefault("extra", {})["version"] = version
+        log.info(f"Site version set to: {version}")
+    return config
+
 
 # GitHub raw URL base for images
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/ljubobratovicrelja/loom/main"

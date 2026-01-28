@@ -1,14 +1,14 @@
 name: Deploy Documentation
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs.yml'
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to display (e.g., v0.1.0)'
+        required: false
+        default: 'dev'
 
 permissions:
   contents: write
@@ -27,5 +27,15 @@ jobs:
       - name: Install dependencies
         run: pip install mkdocs-material
 
+      - name: Set version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "VERSION=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{ github.event.inputs.version || 'dev' }}" >> $GITHUB_ENV
+          fi
+
       - name: Deploy to GitHub Pages
         run: mkdocs gh-deploy --force
+        env:
+          SITE_VERSION: ${{ env.VERSION }}
