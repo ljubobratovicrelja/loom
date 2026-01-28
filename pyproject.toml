@@ -12,11 +12,6 @@ requires-python = ">=3.10"
 authors = [
     {name = "Relja Ljubobratovic", email = "ljubobratovic.relja@gmail.com"}
 ]
-
-[project.urls]
-Homepage = "https://github.com/ljubobratovicrelja/loom"
-Repository = "https://github.com/ljubobratovicrelja/loom"
-Documentation = "https://ljubobratovicrelja.github.io/loom/"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -30,6 +25,11 @@ dependencies = [
     "PyYAML>=6.0",
     "requests>=2.28.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ljubobratovicrelja/loom"
+Repository = "https://github.com/ljubobratovicrelja/loom"
+Documentation = "https://ljubobratovicrelja.github.io/loom/"
 
 [project.optional-dependencies]
 ui = [
