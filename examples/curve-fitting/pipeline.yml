@@ -5,54 +5,75 @@ data:
   raw_data:
     type: csv
     path: data/raw_data.csv
-
   raw_plot:
     type: image
     path: data/raw_plot.png
-
   fit_params:
     type: json
     path: data/fit_params.json
-
   fit_plot:
     type: image
     path: data/fit_plot.png
-
 parameters:
   num_samples: 50
   noise_level: 0.5
 
 pipeline:
   # Step 1: Generate synthetic data with noise
-  - name: generate_data
-    task: tasks/generate_data.py
-    outputs:
-      --output: $raw_data
-    args:
-      --samples: $num_samples
-      --noise: $noise_level
-
-  # Step 2: Plot the raw noisy data
-  - name: plot_raw
-    task: tasks/plot_data.py
-    inputs:
-      data: $raw_data
-    outputs:
-      --output: $raw_plot
-
-  # Step 3: Fit exponential decay model
-  - name: fit_curve
-    task: tasks/fit_curve.py
-    inputs:
-      data: $raw_data
-    outputs:
-      --output: $fit_params
-
-  # Step 4: Create comparison plot with fitted curve
-  - name: plot_fit
-    task: tasks/plot_fit.py
-    inputs:
-      data: $raw_data
-      params: $fit_params
-    outputs:
-      --output: $fit_plot
+- name: generate_data
+  task: tasks/generate_data.py
+  outputs:
+    --output: $raw_data
+  args:
+    --samples: $num_samples
+    --noise: $noise_level
+- name: plot_raw
+  task: tasks/plot_data.py
+  inputs:
+    data: $raw_data
+  outputs:
+    --output: $raw_plot
+- name: fit_curve
+  task: tasks/fit_curve.py
+  inputs:
+    data: $raw_data
+  outputs:
+    --output: $fit_params
+- name: plot_fit
+  task: tasks/plot_fit.py
+  inputs:
+    data: $raw_data
+    params: $fit_params
+  outputs:
+    --output: $fit_plot
+layout:
+  generate_data:
+    x: 450
+    y: 175
+  plot_raw:
+    x: 1250
+    y: 50
+  fit_curve:
+    x: 1250
+    y: 300
+  plot_fit:
+    x: 2050
+    y: 238
+  param_num_samples:
+    x: 50
+    y: 60
+  param_noise_level:
+    x: 50
+    y: 290
+  data_raw_data:
+    x: 850
+    y: 175
+  data_raw_plot:
+    x: 1650
+    y: 50
+  data_fit_params:
+    x: 1650
+    y: 300
+  data_fit_plot:
+    x: 2450
+    y: 238
