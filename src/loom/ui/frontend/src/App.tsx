@@ -407,6 +407,7 @@ export default function App() {
       const state = await loadState()
 
       // Check if we're in workspace mode
+      let hashPipelinePath: string | null = null
       if (state?.isWorkspaceMode) {
         setIsWorkspaceMode(true)
         // Load available pipelines
@@ -414,6 +415,27 @@ export default function App() {
         const pipelineList = await listPipelines()
         setPipelines(pipelineList)
         setPipelinesLoading(false)
+
+        // Check URL hash for deep-linked pipeline
+        const hash = window.location.hash.replace(/^#\/?/, '')
+        const pipelineMatch = hash.match(/^pipeline\/(.+)$/)
+        if (pipelineMatch) {
+          const relativePath = pipelineMatch[1]
+          const matched = pipelineList.find(p => p.relative_path === relativePath)
+          if (matched) {
+            hashPipelinePath = matched.path
+          }
+        }
+
+        // If hash points to a valid pipeline different from current, switch to it
+        if (hashPipelinePath && hashPipelinePath !== state?.configPath) {
+          // Open the hash-specified pipeline via backend
+          const result = await openPipeline(hashPipelinePath)
+          if (result.success && result.configPath) {
+            // Override configPath so the rest of init loads the right pipeline
+            state.configPath = result.configPath
+          }
+        }
       }
 
       if (state?.configPath) {
@@ -494,11 +516,24 @@ export default function App() {
           }
         }
       }
+      // Sync URL hash with loaded pipeline (for workspace mode)
+      if (state?.isWorkspaceMode && state?.configPath) {
+        const pipelineList = pipelines.length > 0 ? pipelines : await listPipelines()
+        const matched = pipelineList.find(p => p.path === state.configPath)
+        if (matched && matched.relative_path) {
+          programmaticHashChangeRef.current = true
+          window.location.hash = `/pipeline/${matched.relative_path}`
+        }
+      }
+
       // Mark loading as complete - changes after this point should mark dirty
       isLoadingRef.current = false
     }
     init()
-  }, [loadConfig, loadState, loadTasks, loadDataStatus, validateConfig, listPipelines, setNodes, setEdges, clearHistory, refreshFreshness])
+  }, [loadConfig, loadState, loadTasks, loadDataStatus, validateConfig, listPipelines, openPipeline, setNodes, setEdges, clearHistory, refreshFreshness])
+
+  // Flag to skip hashchange events triggered by our own programmatic hash updates
+  const programmaticHashChangeRef = useRef(false)
 
   // Track changes - skip initial mount and handle save properly
   useEffect(() => {
@@ -1073,9 +1108,45 @@ export default function App() {
       }
     }
 
+    // Update URL hash to reflect the opened pipeline
+    const matched = pipelines.find(p => p.path === pipelinePath)
+    programmaticHashChangeRef.current = true
+    if (matched && matched.relative_path) {
+      window.location.hash = `/pipeline/${matched.relative_path}`
+    } else {
+      window.location.hash = ''
+    }
+
     // Mark loading as complete
     isLoadingRef.current = false
-  }, [openPipeline, independentStepStatuses, setNodes, setEdges, clearHistory, loadTasks, loadConfig, loadDataStatus, validateConfig, refreshFreshness])
+  }, [openPipeline, independentStepStatuses, pipelines, setNodes, setEdges, clearHistory, loadTasks, loadConfig, loadDataStatus, validateConfig, refreshFreshness])
+
+  // Listen for hash changes (browser back/forward) to navigate between pipelines
+  useEffect(() => {
+    if (!isWorkspaceMode) return
+
+    const handleHashChange = () => {
+      // Skip if we triggered this hash change programmatically
+      if (programmaticHashChangeRef.current) {
+        programmaticHashChangeRef.current = false
+        return
+      }
+
+      const hash = window.location.hash.replace(/^#\/?/, '')
+      const pipelineMatch = hash.match(/^pipeline\/(.+)$/)
+
+      if (pipelineMatch) {
+        const relativePath = pipelineMatch[1]
+        const matched = pipelines.find(p => p.relative_path === relativePath)
+        if (matched) {
+          performOpenPipeline(matched.path)
+        }
+      }
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [isWorkspaceMode, pipelines, performOpenPipeline])
 
   // Handle pipeline selection from browser (checks for unsaved changes)
   const handleSelectPipeline = useCallback((pipelinePath: string) => {

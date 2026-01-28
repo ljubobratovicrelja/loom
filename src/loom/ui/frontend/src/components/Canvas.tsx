@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css'
 import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
-import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode, DataType } from '../types/pipeline'
+import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 
 const nodeTypes = {
@@ -281,7 +281,7 @@ export default function Canvas({
 
           // Create the data node
           const dataNodeId = `data_${Date.now()}`
-          const newDataNode: DataNode = {
+          const newDataNode: DataNodeType = {
             id: dataNodeId,
             type: 'data',
             position: { x: midX, y: midY },
