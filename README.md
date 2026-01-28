@@ -1,4 +1,4 @@
-![Loom Banner](media/banner.svg)
+![Loom Banner](https://raw.githubusercontent.com/ljubobratovicrelja/loom/main/media/banner.svg)
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://loom-examples.onrender.com/)
 [![CI](https://github.com/ljubobratovicrelja/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/ljubobratovicrelja/loom/actions/workflows/ci.yml)
