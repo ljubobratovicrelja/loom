@@ -83,7 +83,7 @@ export default function Canvas({
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
 
   // Track whether user is zoomed out past threshold for group/node z-swap
-  const ZOOM_THRESHOLD = 0.45
+  const ZOOM_THRESHOLD = 0.4
   const [isZoomedOut, setIsZoomedOut] = useState(false)
   const onViewportChange = useCallback(
     ({ zoom }: Viewport) => setIsZoomedOut(zoom < ZOOM_THRESHOLD),
@@ -654,6 +654,39 @@ export default function Canvas({
     )
   }, [edges, highlightedEdgeIds])
 
+  // Group click: select all member nodes + their 1st-degree neighbors
+  const handleGroupClick = useCallback(
+    (memberIds: string[]) => {
+      const memberSet = new Set(memberIds)
+      // Collect 1st-degree neighbors of members
+      const neighborIds = new Set<string>()
+      for (const edge of edgesRef.current) {
+        if (memberSet.has(edge.source)) neighborIds.add(edge.target)
+        if (memberSet.has(edge.target)) neighborIds.add(edge.source)
+      }
+      const selectIds = new Set([...memberIds, ...neighborIds])
+      // Mark nodes as selected via onNodesChange
+      const changes = nodesRef.current.map((n) => ({
+        id: n.id,
+        type: 'select' as const,
+        selected: selectIds.has(n.id),
+      }))
+      onNodesChange(changes)
+    },
+    [onNodesChange]
+  )
+
+  // Group double-click: pan to group center and zoom just past the threshold so nodes appear
+  const handleGroupDoubleClick = useCallback(
+    (centerX: number, centerY: number) => {
+      reactFlowInstance.current?.setCenter(centerX, centerY, {
+        zoom: ZOOM_THRESHOLD + 0.02,
+        duration: 600,
+      })
+    },
+    [ZOOM_THRESHOLD]
+  )
+
   // Build display nodes: regular nodes + computed group rectangle nodes
   const displayNodes = useMemo(() => {
     const NODE_WIDTH = 250
@@ -747,10 +780,16 @@ export default function Canvas({
       const width = bounds.maxX - bounds.minX + 2 * MARGIN
       const height = bounds.maxY - bounds.minY + TOP_MARGIN + MARGIN
 
+      const memberIds = groupMap.get(groupName)!.map((node) => node.id)
+      const groupX = bounds.minX - MARGIN
+      const groupY = bounds.minY - TOP_MARGIN
+      const centerX = groupX + width / 2
+      const centerY = groupY + height / 2
+
       return {
         id: `_group_${groupName}`,
         type: 'group' as const,
-        position: { x: bounds.minX - MARGIN, y: bounds.minY - TOP_MARGIN },
+        position: { x: groupX, y: groupY },
         width,
         height,
         zIndex,
@@ -759,9 +798,11 @@ export default function Canvas({
         deletable: false,
         data: {
           groupName,
-          memberIds: groupMap.get(groupName)!.map((node) => node.id),
+          memberIds,
           color,
           isZoomedOut,
+          onGroupClick: () => handleGroupClick(memberIds),
+          onGroupDoubleClick: () => handleGroupDoubleClick(centerX, centerY),
         },
       }
     })
@@ -779,7 +820,7 @@ export default function Canvas({
         })
 
     return [...groupNodes, ...styledRegularNodes]
-  }, [nodes, edges, hideParameterNodes, isZoomedOut])
+  }, [nodes, edges, hideParameterNodes, isZoomedOut, handleGroupClick, handleGroupDoubleClick])
 
   return (
     <HighlightContext.Provider value={{ neighborNodeIds }}>
@@ -808,6 +849,7 @@ export default function Canvas({
         panOnDrag={[1, 2]}
         panOnScroll
         zoomOnScroll={false}
+        zoomOnDoubleClick={!isZoomedOut}
         selectionOnDrag
         selectionMode={SelectionMode.Partial}
         proOptions={{ hideAttribution: true }}

@@ -42,6 +42,7 @@ body,
 /* React Flow styles */
 .react-flow__node {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  transition: opacity 0.4s ease;
 }
 
 /* Group nodes: strip all React Flow default node chrome */

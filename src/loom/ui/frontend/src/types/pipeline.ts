@@ -46,6 +46,8 @@ export interface GroupNodeData {
   memberIds: string[]
   color: string
   isZoomedOut?: boolean
+  onGroupClick?: () => void
+  onGroupDoubleClick?: () => void
   // Index signature for React Flow compatibility
   [key: string]: unknown
 }
