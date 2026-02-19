@@ -27,35 +27,6 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   })
 
   /**
-   * Validates that a step name is unique within the graph.
-   * This is the validation function that SHOULD exist but currently doesn't.
-   */
-  function _validateStepNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
-    const existingNames = nodes
-      .filter((n) => n.type === 'step')
-      .map((n) => (n.data as StepData).name)
-
-    if (existingNames.includes(newName)) {
-      return { valid: false, error: `Step name "${newName}" already exists` }
-    }
-    return { valid: true }
-  }
-
-  /**
-   * Validates that a data node name is unique within the graph.
-   */
-  function _validateDataNameUnique(nodes: Node[], newName: string): { valid: boolean; error?: string } {
-    const existingNames = nodes
-      .filter((n) => n.type === 'data')
-      .map((n) => (n.data as DataNodeData).name)
-
-    if (existingNames.includes(newName)) {
-      return { valid: false, error: `Data name "${newName}" already exists` }
-    }
-    return { valid: true }
-  }
-
-  /**
    * Generates a unique step name, similar to the fixed handleAddTask in App.tsx.
    */
   function generateUniqueStepName(existingNodes: Node[], baseName: string): string {
