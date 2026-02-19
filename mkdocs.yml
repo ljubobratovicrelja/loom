@@ -55,6 +55,7 @@ nav:
     - Scientific Workflow: tutorials/curve-fitting.md
     - Image Processing: tutorials/image-processing.md
     - Loop (Per-Item Processing): tutorials/loop.md
+    - Groups: tutorials/groups.md
   - Reference:
     - CLI Commands: reference/cli.md
     - Pipeline Schema: reference/pipeline-schema.md
