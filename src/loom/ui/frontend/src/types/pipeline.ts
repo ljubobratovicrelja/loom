@@ -15,6 +15,13 @@ export type DataType =
   | 'image_directory'
   | 'data_folder'
 
+export interface LoopConfig {
+  over: string      // e.g. "$raw_images" — data var to iterate over
+  into: string      // e.g. "$processed_images" — data var to collect outputs into
+  parallel?: boolean
+  filter?: string   // Glob pattern, e.g. "*.jpg"
+}
+
 export interface StepData {
   name: string
   task: string
@@ -23,6 +30,7 @@ export interface StepData {
   args: Record<string, unknown>
   optional: boolean
   disabled?: boolean
+  loop?: LoopConfig
   executionState?: StepExecutionState
   freshnessStatus?: FreshnessStatus
   // Type information from task schema (populated on load)

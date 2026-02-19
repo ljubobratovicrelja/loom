@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 from .config import PipelineConfig, StepConfig
@@ -38,12 +39,19 @@ class PipelineExecutor:
         self.dry_run = dry_run
         self._results: dict[str, bool] = {}
 
-    def build_command(self, step: StepConfig, extra_args: str | None = None) -> list[str]:
+    def build_command(
+        self,
+        step: StepConfig,
+        extra_args: str | None = None,
+        loop_bindings: dict[str, str] | None = None,
+    ) -> list[str]:
         """Build subprocess command from step definition.
 
         Args:
             step: Step configuration.
             extra_args: Additional arguments to append.
+            loop_bindings: Per-iteration variable bindings for loop steps,
+                e.g. {"loop_item": "/path/file.jpg", "loop_output": "/out/file.jpg"}.
 
         Returns:
             Command as list of strings.
@@ -53,20 +61,40 @@ class PipelineExecutor:
         cmd = [sys.executable, str(script_path)]
 
         # Add positional inputs in order (resolved to absolute paths)
-        # Use resolve_path_for_execution to handle URL downloads
         for var_ref in step.inputs.values():
-            resolved = self.config.resolve_path_for_execution(var_ref)
-            cmd.append(str(resolved))
+            if (
+                loop_bindings
+                and isinstance(var_ref, str)
+                and var_ref.startswith("$")
+                and var_ref[1:] in loop_bindings
+            ):
+                cmd.append(loop_bindings[var_ref[1:]])
+            else:
+                # Use resolve_path_for_execution to handle URL downloads
+                resolved = self.config.resolve_path_for_execution(var_ref)
+                cmd.append(str(resolved))
 
         # Add output flags (resolved to absolute paths)
         for flag, var_ref in step.outputs.items():
-            resolved = self.config.resolve_path(var_ref)
-            cmd.append(flag)
-            cmd.append(str(resolved))
+            if (
+                loop_bindings
+                and isinstance(var_ref, str)
+                and var_ref.startswith("$")
+                and var_ref[1:] in loop_bindings
+            ):
+                cmd.append(flag)
+                cmd.append(loop_bindings[var_ref[1:]])
+            else:
+                resolved = self.config.resolve_path(var_ref)
+                cmd.append(flag)
+                cmd.append(str(resolved))
 
         # Add other args
         for flag, value in step.args.items():
-            resolved = self.config.resolve_value(value)
+            if loop_bindings:
+                resolved = self.config.resolve_value_with_loop(value, loop_bindings)
+            else:
+                resolved = self.config.resolve_value(value)
 
             # Handle boolean flags
             if isinstance(resolved, bool):
@@ -93,6 +121,8 @@ class PipelineExecutor:
     ) -> subprocess.CompletedProcess | None:
         """Run a single pipeline step.
 
+        For loop steps (step.loop is set), iterates over the collection.
+
         Args:
             step: Step configuration.
             extra_args: Additional arguments to append.
@@ -100,6 +130,13 @@ class PipelineExecutor:
         Returns:
             CompletedProcess if executed, None if dry run.
         """
+        if step.loop is not None:
+            if self.dry_run:
+                self._print_loop_dry_run(step)
+                return None
+            success = self.run_loop_step(step)
+            return subprocess.CompletedProcess(args=[], returncode=0 if success else 1)
+
         cmd = self.build_command(step, extra_args)
         cmd_str = " ".join(cmd)
 
@@ -121,6 +158,133 @@ class PipelineExecutor:
             print(f"[FAILED] {step.name} (exit code {result.returncode})")
 
         return result
+
+    def _print_loop_dry_run(self, step: StepConfig) -> None:
+        """Print dry-run output for a loop step."""
+        loop = step.loop
+        assert loop is not None
+        over_path = self.config.resolve_path(loop.over)
+        into_path = self.config.resolve_path(loop.into)
+        if loop.filter:
+            files = sorted(over_path.glob(loop.filter)) if over_path.exists() else []
+        else:
+            files = (
+                sorted(f for f in over_path.iterdir() if f.is_file()) if over_path.exists() else []
+            )
+        print(f"[DRY RUN] {step.name} (loop: {len(files)} items):")
+        for f in files:
+            loop_bindings = {
+                "loop_item": str(f),
+                "loop_output": str(into_path / f.name),
+            }
+            cmd = self.build_command(step, loop_bindings=loop_bindings)
+            print(f"  item {f.name}: {' '.join(cmd)}")
+
+    def run_loop_step(self, step: StepConfig) -> bool:
+        """Execute a loop step, running the task for each item in the collection.
+
+        Args:
+            step: Step with a loop config.
+
+        Returns:
+            True if all iterations succeeded, False otherwise.
+        """
+        loop = step.loop
+        assert loop is not None
+
+        over_path = self.config.resolve_path(loop.over)
+
+        if not over_path.exists():
+            print(f"[FAILED] {step.name}: loop.over directory does not exist: {over_path}")
+            return False
+
+        # Enumerate files, optionally filtered
+        if loop.filter:
+            files = sorted(over_path.glob(loop.filter))
+        else:
+            files = sorted(f for f in over_path.iterdir() if f.is_file())
+
+        if not files:
+            print(f"[RUNNING] {step.name} (loop: no files to process)")
+            print(f"[SUCCESS] {step.name}")
+            return True
+
+        into_path = self.config.resolve_path(loop.into)
+        into_path.mkdir(parents=True, exist_ok=True)
+
+        # Determine whether to run iterations in parallel
+        use_parallel = loop.parallel if loop.parallel is not None else self.config.parallel
+        max_workers = self.config.max_workers or 4
+
+        mode = f"loop: {len(files)} items" + (", parallel" if use_parallel else "")
+        print(f"[RUNNING] {step.name} ({mode})")
+
+        if use_parallel:
+            success = self._run_loop_iterations_parallel(step, files, into_path, max_workers)
+        else:
+            success = self._run_loop_iterations_sequential(step, files, into_path)
+
+        if success:
+            print(f"[SUCCESS] {step.name}")
+        else:
+            print(f"[FAILED] {step.name} (some iterations failed)")
+
+        return success
+
+    def _run_loop_iterations_sequential(
+        self, step: StepConfig, files: list[Path], into_path: Path
+    ) -> bool:
+        """Run loop iterations one at a time."""
+        total = len(files)
+        for i, f in enumerate(files):
+            loop_bindings = {
+                "loop_item": str(f),
+                "loop_output": str(into_path / f.name),
+            }
+            cmd = self.build_command(step, loop_bindings=loop_bindings)
+            print(f"  [{i + 1}/{total}] {f.name}")
+            result = subprocess.run(cmd, capture_output=False)
+            if result.returncode != 0:
+                print(f"  [FAILED] item {f.name} (exit code {result.returncode})")
+                return False
+        return True
+
+    def _run_loop_iterations_parallel(
+        self, step: StepConfig, files: list[Path], into_path: Path, max_workers: int
+    ) -> bool:
+        """Run loop iterations concurrently."""
+
+        def run_item(f: Path) -> tuple[str, bool, str]:
+            loop_bindings = {
+                "loop_item": str(f),
+                "loop_output": str(into_path / f.name),
+            }
+            cmd = self.build_command(step, loop_bindings=loop_bindings)
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            output_lines: list[str] = []
+            if result.stdout:
+                for line in result.stdout.rstrip().split("\n"):
+                    if line:
+                        output_lines.append(f"[{step.name}/{f.name}] {line}")
+            if result.stderr:
+                for line in result.stderr.rstrip().split("\n"):
+                    if line:
+                        output_lines.append(f"[{step.name}/{f.name}] {line}")
+            return f.name, result.returncode == 0, "\n".join(output_lines)
+
+        all_success = True
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(run_item, f) for f in files]
+            for future in futures:
+                item_name, item_success, output = future.result()
+                with _print_lock:
+                    if output:
+                        print(output)
+                    if not item_success:
+                        print(f"  [FAILED] item {item_name}")
+                if not item_success:
+                    all_success = False
+        return all_success
 
     def _get_steps_to_run(
         self,
@@ -180,7 +344,9 @@ class PipelineExecutor:
     def _run_step_parallel(
         self, step: StepConfig, extra_args: str | None = None
     ) -> tuple[str, bool, str]:
-        """Run a single step with captured output for parallel execution.
+        """Run a single step with captured output for pipeline-level parallel execution.
+
+        For loop steps, runs all iterations and captures combined output.
 
         Args:
             step: Step configuration.
@@ -189,6 +355,11 @@ class PipelineExecutor:
         Returns:
             Tuple of (step_name, success, output_text).
         """
+        if step.loop is not None:
+            if self.dry_run:
+                return step.name, True, f"[DRY RUN] {step.name} (loop)"
+            return self._run_loop_step_captured(step)
+
         cmd = self.build_command(step, extra_args)
         cmd_str = " ".join(cmd)
         output_lines: list[str] = []
@@ -227,6 +398,70 @@ class PipelineExecutor:
             output_lines.append(f"[FAILED] {step.name} (exit code {result.returncode})")
 
         return step.name, result.returncode == 0, "\n".join(output_lines)
+
+    def _run_loop_step_captured(self, step: StepConfig) -> tuple[str, bool, str]:
+        """Run a loop step with captured output, for use in parallel pipeline execution.
+
+        Args:
+            step: Loop step.
+
+        Returns:
+            Tuple of (step_name, success, output_text).
+        """
+        loop = step.loop
+        assert loop is not None
+
+        output_lines: list[str] = []
+        over_path = self.config.resolve_path(loop.over)
+
+        if not over_path.exists():
+            msg = f"[FAILED] {step.name}: loop.over directory does not exist: {over_path}"
+            return step.name, False, msg
+
+        if loop.filter:
+            files = sorted(over_path.glob(loop.filter))
+        else:
+            files = sorted(f for f in over_path.iterdir() if f.is_file())
+
+        if not files:
+            output_lines.append(f"[RUNNING] {step.name} (loop: no files to process)")
+            output_lines.append(f"[SUCCESS] {step.name}")
+            return step.name, True, "\n".join(output_lines)
+
+        into_path = self.config.resolve_path(loop.into)
+        into_path.mkdir(parents=True, exist_ok=True)
+
+        use_parallel = loop.parallel if loop.parallel is not None else self.config.parallel
+        mode = f"loop: {len(files)} items" + (", parallel" if use_parallel else "")
+        output_lines.append(f"[RUNNING] {step.name} ({mode})")
+
+        all_success = True
+        for f in files:
+            loop_bindings = {
+                "loop_item": str(f),
+                "loop_output": str(into_path / f.name),
+            }
+            cmd = self.build_command(step, loop_bindings=loop_bindings)
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.stdout:
+                for line in result.stdout.rstrip().split("\n"):
+                    if line:
+                        output_lines.append(f"[{step.name}/{f.name}] {line}")
+            if result.stderr:
+                for line in result.stderr.rstrip().split("\n"):
+                    if line:
+                        output_lines.append(f"[{step.name}/{f.name}] {line}")
+            if result.returncode != 0:
+                output_lines.append(f"  [FAILED] item {f.name}")
+                all_success = False
+                break
+
+        if all_success:
+            output_lines.append(f"[SUCCESS] {step.name}")
+        else:
+            output_lines.append(f"[FAILED] {step.name} (some iterations failed)")
+
+        return step.name, all_success, "\n".join(output_lines)
 
     def run_pipeline(
         self,

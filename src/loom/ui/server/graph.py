@@ -44,20 +44,23 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
             col = i % 2
             position = {"x": 300 + col * 400, "y": 50 + row * 250}
         step_positions[step_id] = position
+        step_data: dict[str, Any] = {
+            "name": step["name"],
+            "task": step["task"],
+            "inputs": step.get("inputs", {}),
+            "outputs": step.get("outputs", {}),
+            "args": step.get("args", {}),
+            "optional": step.get("optional", False),
+            "disabled": step.get("disabled", False),
+        }
+        if step.get("loop"):
+            step_data["loop"] = step["loop"]
         nodes.append(
             GraphNode(
                 id=step_id,
                 type="step",
                 position=position,
-                data={
-                    "name": step["name"],
-                    "task": step["task"],
-                    "inputs": step.get("inputs", {}),
-                    "outputs": step.get("outputs", {}),
-                    "args": step.get("args", {}),
-                    "optional": step.get("optional", False),
-                    "disabled": step.get("disabled", False),
-                },
+                data=step_data,
             )
         )
 
@@ -163,6 +166,40 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                         )
                     )
 
+    # 4d: Loop edges — data node → step (loop-over) and step → data node (loop-into)
+    for step in pipeline:
+        step_id = step["name"]
+        loop = step.get("loop")
+        if loop:
+            over_ref = loop.get("over", "")
+            into_ref = loop.get("into", "")
+
+            if over_ref.startswith("$"):
+                over_name = over_ref[1:]
+                if over_name in data_names:
+                    edges.append(
+                        GraphEdge(
+                            id=f"e_loop_over_data_{over_name}_{step_id}",
+                            source=f"data_{over_name}",
+                            target=step_id,
+                            sourceHandle="value",
+                            targetHandle="loop-over",
+                        )
+                    )
+
+            if into_ref.startswith("$"):
+                into_name = into_ref[1:]
+                if into_name in data_names:
+                    edges.append(
+                        GraphEdge(
+                            id=f"e_loop_into_{step_id}_data_{into_name}",
+                            source=step_id,
+                            target=f"data_{into_name}",
+                            sourceHandle="loop-into",
+                            targetHandle="input",
+                        )
+                    )
+
     # Read editor options
     editor_data = data.get("editor", {})
     editor = EditorOptions(
@@ -228,6 +265,8 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
             "task": node.data["task"],
         }
 
+        if node.data.get("loop"):
+            step["loop"] = node.data["loop"]
         if node.data.get("inputs"):
             step["inputs"] = node.data["inputs"]
         if node.data.get("outputs"):
@@ -386,6 +425,8 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
             "name": step_name,
             "task": node.data["task"],
         }
+        if node.data.get("loop"):
+            step_data["loop"] = node.data["loop"]
         if node.data.get("inputs"):
             step_data["inputs"] = dict(node.data["inputs"])
         if node.data.get("outputs"):
@@ -417,6 +458,11 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
         if name in graph_steps:
             graph_step = graph_steps[name]
             step["task"] = graph_step["task"]
+            # Update loop
+            if "loop" in graph_step:
+                step["loop"] = graph_step["loop"]
+            elif "loop" in step:
+                del step["loop"]
             # Update inputs
             if "inputs" in graph_step:
                 step["inputs"] = graph_step["inputs"]

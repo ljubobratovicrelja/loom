@@ -17,6 +17,7 @@ Make sure you have [Loom installed](../getting-started/installation.md) and have
 | [Optional Steps](optional-steps.md) | Conditional execution with `--include` |
 | [Scientific Workflow](curve-fitting.md) | A complete scientific workflow example |
 | [Image Processing](image-processing.md) | Working with images and URL caching |
+| [Loop (Per-Item Processing)](loop.md) | Iterating over every file in a directory |
 
 ## Running Examples
 

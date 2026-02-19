@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder } from 'lucide-react'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, RefreshCw } from 'lucide-react'
 import type { StepNode as StepNodeType, DataType } from '../types/pipeline'
 
 // Color configuration for data types - support both light and dark modes
@@ -31,6 +31,7 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
   const inputNames = Object.keys(data.inputs || {})
   const outputNames = Object.keys(data.outputs || {})
   const isDisabled = data.disabled === true
+  const isLoop = !!data.loop
 
   // Get color for input based on type
   const getInputColor = (name: string) => {
@@ -131,6 +132,7 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
         data.executionState === 'running' ? 'bg-cyan-100 dark:bg-cyan-900/50' :
         data.executionState === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
         data.executionState === 'failed' ? 'bg-red-100 dark:bg-red-900/30' :
+        isLoop ? 'bg-violet-100 dark:bg-violet-900/30' :
         'bg-slate-200 dark:bg-slate-700'
       }`}>
         <div className="relative">
@@ -139,6 +141,9 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
             <div className="absolute inset-0 w-2 h-2 rounded-full bg-cyan-400" />
           )}
         </div>
+        {isLoop && (
+          <RefreshCw className="w-3 h-3 text-violet-500 dark:text-violet-400 flex-shrink-0" />
+        )}
         <span className="text-slate-900 dark:text-white font-medium text-sm">{data.name}</span>
         {isDisabled && (
           <span className="ml-auto text-slate-500 dark:text-slate-400 text-xs">DISABLED</span>
@@ -155,6 +160,41 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
           </span>
         )}
       </div>
+
+      {/* Loop summary and handles */}
+      {isLoop && data.loop && (
+        <div className="px-3 py-2 border-b border-violet-200 dark:border-violet-800">
+          {/* Loop summary */}
+          <div className="text-[10px] text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 rounded px-2 py-1 mb-2">
+            <div>∀ item in <span className="font-mono">{data.loop.over.replace(/^\$/, '')}</span></div>
+            <div className="pl-2">→ into <span className="font-mono">{data.loop.into.replace(/^\$/, '')}</span></div>
+            {data.loop.parallel && <div className="text-violet-400 dark:text-violet-500">parallel: true</div>}
+            {data.loop.filter && <div className="text-violet-400 dark:text-violet-500">filter: {data.loop.filter}</div>}
+          </div>
+          {/* Loop-over handle (input from collection) */}
+          <div className="flex items-center py-0.5 relative">
+            <Handle
+              type="target"
+              position={Position.Left}
+              id="loop-over"
+              className="!bg-violet-500"
+              style={{ top: 'auto', position: 'relative', transform: 'none' }}
+            />
+            <span className="ml-2 text-violet-500 dark:text-violet-400 text-[10px]">collection in</span>
+          </div>
+          {/* Loop-into handle (output to collection) */}
+          <div className="flex items-center justify-end py-0.5 relative">
+            <span className="mr-2 text-violet-500 dark:text-violet-400 text-[10px]">collection out</span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="loop-into"
+              className="!bg-violet-500"
+              style={{ top: 'auto', position: 'relative', transform: 'none' }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Inputs/Outputs */}
       <div className="px-3 py-2 text-xs">

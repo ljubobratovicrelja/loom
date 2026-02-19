@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from loom.runner.config import PipelineConfig, StepConfig
+from loom.runner.config import LoopConfig, PipelineConfig, StepConfig
 from loom.runner.executor import PipelineExecutor, parse_key_value_args
 
 
@@ -794,3 +794,258 @@ class TestRunStepParallel:
             assert "[process] line2" in output
             assert "[process] warning" in output
             assert "[SUCCESS] process" in output
+
+
+class TestBuildCommandWithLoopBindings:
+    """Tests for build_command with loop_bindings parameter."""
+
+    @pytest.fixture
+    def config(self) -> PipelineConfig:
+        """Config for testing loop command building."""
+        return PipelineConfig(
+            variables={"src": "data/src", "dst": "data/dst"},
+            parameters={"width": 512},
+            steps=[],
+        )
+
+    def test_build_command_with_loop_item_in_inputs(self, config: PipelineConfig) -> None:
+        """Test that $loop_item in inputs is resolved from loop_bindings."""
+        step = StepConfig(
+            name="process",
+            script="scripts/process.py",
+            inputs={"image": "$loop_item"},
+        )
+        executor = PipelineExecutor(config)
+        loop_bindings = {"loop_item": "/data/raw/foo.jpg", "loop_output": "/data/out/foo.jpg"}
+        cmd = executor.build_command(step, loop_bindings=loop_bindings)
+
+        assert "/data/raw/foo.jpg" in cmd
+
+    def test_build_command_with_loop_output_in_outputs(self, config: PipelineConfig) -> None:
+        """Test that $loop_output in outputs is resolved from loop_bindings."""
+        step = StepConfig(
+            name="process",
+            script="scripts/process.py",
+            outputs={"--output": "$loop_output"},
+        )
+        executor = PipelineExecutor(config)
+        loop_bindings = {"loop_item": "/data/raw/foo.jpg", "loop_output": "/data/out/foo.jpg"}
+        cmd = executor.build_command(step, loop_bindings=loop_bindings)
+
+        assert "--output" in cmd
+        idx = cmd.index("--output")
+        assert cmd[idx + 1] == "/data/out/foo.jpg"
+
+    def test_build_command_loop_bindings_do_not_affect_regular_refs(
+        self, config: PipelineConfig
+    ) -> None:
+        """Test that non-loop refs still resolve normally with loop_bindings."""
+        step = StepConfig(
+            name="process",
+            script="scripts/process.py",
+            args={"--width": "$width"},
+        )
+        executor = PipelineExecutor(config)
+        loop_bindings = {"loop_item": "/data/raw/foo.jpg"}
+        cmd = executor.build_command(step, loop_bindings=loop_bindings)
+
+        assert "--width" in cmd
+        idx = cmd.index("--width")
+        assert cmd[idx + 1] == "512"
+
+    def test_build_command_without_loop_bindings_unchanged(self, config: PipelineConfig) -> None:
+        """Test that build_command without loop_bindings behaves as before."""
+        step = StepConfig(
+            name="process",
+            script="scripts/process.py",
+            inputs={"src": "$src"},
+            args={"--width": "$width"},
+        )
+        executor = PipelineExecutor(config)
+        cmd = executor.build_command(step)
+
+        assert Path(cmd[2]).name == "src"
+        assert "--width" in cmd
+
+
+class TestLoopStepExecution:
+    """Tests for loop step execution."""
+
+    def _make_loop_config(self, tmp_path: Path, parallel: bool = False) -> PipelineConfig:
+        """Build a minimal loop pipeline config."""
+        return PipelineConfig(
+            variables={
+                "raw": str(tmp_path / "raw"),
+                "processed": str(tmp_path / "processed"),
+            },
+            parameters={},
+            steps=[
+                StepConfig(
+                    name="process_each",
+                    script="scripts/process.py",
+                    inputs={"image": "$loop_item"},
+                    outputs={"--output": "$loop_output"},
+                    loop=LoopConfig(over="$raw", into="$processed", parallel=parallel),
+                )
+            ],
+            base_dir=tmp_path,
+        )
+
+    def test_run_step_dry_run_loop(self, tmp_path: Path) -> None:
+        """Test dry-run for a loop step prints loop info."""
+        (tmp_path / "raw").mkdir()
+        (tmp_path / "raw" / "a.txt").write_text("a")
+        (tmp_path / "raw" / "b.txt").write_text("b")
+
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config, dry_run=True)
+        step = config.steps[0]
+
+        result = executor.run_step(step)
+
+        assert result is None  # dry run returns None
+
+    def test_run_loop_step_missing_over_dir_fails(self, tmp_path: Path) -> None:
+        """Test that loop step fails when over directory doesn't exist."""
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+        # Don't create the 'raw' dir
+
+        success = executor.run_loop_step(step)
+
+        assert success is False
+
+    def test_run_loop_step_empty_dir_succeeds(self, tmp_path: Path) -> None:
+        """Test that loop step succeeds when directory is empty."""
+        (tmp_path / "raw").mkdir()
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+
+        success = executor.run_loop_step(step)
+
+        assert success is True
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_loop_step_sequential(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        """Test sequential loop iterates over all files."""
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir()
+        (raw_dir / "a.txt").write_text("a")
+        (raw_dir / "b.txt").write_text("b")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+
+        success = executor.run_loop_step(step)
+
+        assert success is True
+        assert mock_run.call_count == 2
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_loop_step_stops_on_first_failure(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        """Test sequential loop stops when an item fails."""
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir()
+        for name in ["a.txt", "b.txt", "c.txt"]:
+            (raw_dir / name).write_text(name)
+        mock_run.return_value = MagicMock(returncode=1)
+
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+
+        success = executor.run_loop_step(step)
+
+        assert success is False
+        assert mock_run.call_count == 1  # Stops after first failure
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_loop_step_filter(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        """Test loop filter only processes matching files."""
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir()
+        (raw_dir / "a.jpg").write_text("a")
+        (raw_dir / "b.png").write_text("b")
+        (raw_dir / "c.jpg").write_text("c")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        config = PipelineConfig(
+            variables={"raw": str(raw_dir), "processed": str(tmp_path / "processed")},
+            parameters={},
+            steps=[
+                StepConfig(
+                    name="process_each",
+                    script="scripts/process.py",
+                    inputs={"image": "$loop_item"},
+                    outputs={"--output": "$loop_output"},
+                    loop=LoopConfig(over="$raw", into="$processed", filter="*.jpg"),
+                )
+            ],
+            base_dir=tmp_path,
+        )
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+
+        success = executor.run_loop_step(step)
+
+        assert success is True
+        assert mock_run.call_count == 2  # Only the 2 jpg files
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_loop_step_creates_into_dir(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        """Test that loop creates the into directory."""
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir()
+        (raw_dir / "a.txt").write_text("a")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+
+        executor.run_loop_step(step)
+
+        assert (tmp_path / "processed").exists()
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_loop_step_loop_bindings_in_command(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
+        """Test that loop_item and loop_output appear correctly in commands."""
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir()
+        file_a = raw_dir / "a.txt"
+        file_a.write_text("a")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        step = config.steps[0]
+        executor.run_loop_step(step)
+
+        assert mock_run.called
+        cmd = mock_run.call_args[0][0]
+        # The input should be the file path
+        assert str(file_a) in cmd
+        # The output should be in the processed dir
+        assert str(tmp_path / "processed" / "a.txt") in cmd
+
+    @patch("loom.runner.executor.subprocess.run")
+    def test_run_pipeline_with_loop_step(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        """Test that a loop step integrates with run_pipeline."""
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir()
+        (raw_dir / "a.txt").write_text("a")
+        mock_run.return_value = MagicMock(returncode=0)
+
+        config = self._make_loop_config(tmp_path)
+        executor = PipelineExecutor(config)
+        results = executor.run_pipeline()
+
+        assert results["process_each"] is True

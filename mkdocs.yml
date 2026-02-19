@@ -54,6 +54,7 @@ nav:
     - Optional Steps: tutorials/optional-steps.md
     - Scientific Workflow: tutorials/curve-fitting.md
     - Image Processing: tutorials/image-processing.md
+    - Loop (Per-Item Processing): tutorials/loop.md
   - Reference:
     - CLI Commands: reference/cli.md
     - Pipeline Schema: reference/pipeline-schema.md
