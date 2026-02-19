@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import {
   ReactFlow,
   Background,
@@ -13,13 +13,15 @@ import {
   type OnEdgesChange,
   type Edge,
   type ReactFlowInstance,
+  type Viewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
 import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
-import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig } from '../types/pipeline'
+import GroupNode from './GroupNode'
+import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig, GroupNode as GroupNodeType } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 import { HighlightContext } from '../contexts/HighlightContext'
 
@@ -27,7 +29,11 @@ const nodeTypes = {
   step: StepNode,
   parameter: ParameterNode,
   data: DataNode,
+  group: GroupNode,
 }
+
+// Color palette for group rectangles (in order of appearance)
+const GROUP_COLORS = ['#a5b4fc', '#f9a8d4', '#5eead4', '#fdba74', '#c4b5fd', '#67e8f9', '#bef264', '#fda4af']
 
 /**
  * Deep clones a node, including nested data objects.
@@ -75,6 +81,14 @@ export default function Canvas({
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
+
+  // Track whether user is zoomed out past threshold for group/node z-swap
+  const ZOOM_THRESHOLD = 0.45
+  const [isZoomedOut, setIsZoomedOut] = useState(false)
+  const onViewportChange = useCallback(
+    ({ zoom }: Viewport) => setIsZoomedOut(zoom < ZOOM_THRESHOLD),
+    [ZOOM_THRESHOLD]
+  )
 
   // Store copied nodes and their edges for paste operation
   const copiedNodesRef = useRef<PipelineNode[]>([])
@@ -640,9 +654,132 @@ export default function Canvas({
     )
   }, [edges, highlightedEdgeIds])
 
-  const displayNodes = hideParameterNodes
-    ? nodes.map((n) => (n.type === 'parameter' ? { ...n, hidden: true } : n))
-    : nodes
+  // Build display nodes: regular nodes + computed group rectangle nodes
+  const displayNodes = useMemo(() => {
+    const NODE_WIDTH = 250
+    const NODE_HEIGHT = 150
+    const MARGIN = 48
+    const TOP_MARGIN = 60 // extra space at the top for the group label
+
+    // Apply parameter visibility
+    const regularNodes = hideParameterNodes
+      ? nodes.map((n) => (n.type === 'parameter' ? { ...n, hidden: true } : n))
+      : nodes
+
+    // Build map from step node id → group name
+    const stepGroupMap = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.type === 'step') {
+        const group = (node.data as StepData).group
+        if (group) stepGroupMap.set(node.id, group)
+      }
+    }
+
+    if (stepGroupMap.size === 0) return regularNodes
+
+    // For non-step nodes, check if all connected step neighbors share the same group
+    const nodeNeighborGroups = new Map<string, Set<string>>()
+    for (const edge of edges) {
+      const srcGroup = stepGroupMap.get(edge.source)
+      const tgtGroup = stepGroupMap.get(edge.target)
+      if (srcGroup) {
+        if (!nodeNeighborGroups.has(edge.target)) nodeNeighborGroups.set(edge.target, new Set())
+        nodeNeighborGroups.get(edge.target)!.add(srcGroup)
+      }
+      if (tgtGroup) {
+        if (!nodeNeighborGroups.has(edge.source)) nodeNeighborGroups.set(edge.source, new Set())
+        nodeNeighborGroups.get(edge.source)!.add(tgtGroup)
+      }
+    }
+
+    // Collect all nodes belonging to each group (step nodes + adopted non-step nodes)
+    const groupMap = new Map<string, PipelineNode[]>()
+    for (const node of nodes) {
+      let group: string | undefined
+      if (node.type === 'step') {
+        group = stepGroupMap.get(node.id)
+      } else {
+        const neighborGroups = nodeNeighborGroups.get(node.id)
+        if (neighborGroups && neighborGroups.size === 1) {
+          group = [...neighborGroups][0]
+        }
+      }
+      if (group) {
+        if (!groupMap.has(group)) groupMap.set(group, [])
+        groupMap.get(group)!.push(node)
+      }
+    }
+
+    // Assign colors in order of first appearance
+    const groupColorMap = new Map<string, string>()
+    let colorIdx = 0
+    for (const groupName of groupMap.keys()) {
+      groupColorMap.set(groupName, GROUP_COLORS[colorIdx % GROUP_COLORS.length])
+      colorIdx++
+    }
+
+    // Compute bounding boxes and average x-positions for each group
+    interface GroupBounds {
+      minX: number; maxX: number; minY: number; maxY: number; avgX: number
+    }
+    const groupBounds = new Map<string, GroupBounds>()
+    for (const [groupName, members] of groupMap.entries()) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, sumX = 0
+      for (const node of members) {
+        const x = node.position.x, y = node.position.y
+        minX = Math.min(minX, x)
+        maxX = Math.max(maxX, x + NODE_WIDTH)
+        minY = Math.min(minY, y)
+        maxY = Math.max(maxY, y + NODE_HEIGHT)
+        sumX += x
+      }
+      groupBounds.set(groupName, { minX, maxX, minY, maxY, avgX: sumX / members.length })
+    }
+
+    // Sort groups by average x-position; assign z-index so leftmost is furthest back
+    const sortedGroups = [...groupBounds.entries()].sort((a, b) => a[1].avgX - b[1].avgX)
+    const n = sortedGroups.length
+
+    const groupNodes: GroupNodeType[] = sortedGroups.map(([groupName, bounds], idx) => {
+      const color = groupColorMap.get(groupName)!
+      // When zoomed out: groups in front (positive z); when zoomed in: behind (negative z)
+      const zIndex = isZoomedOut ? 1000 + idx : idx - n
+      const width = bounds.maxX - bounds.minX + 2 * MARGIN
+      const height = bounds.maxY - bounds.minY + TOP_MARGIN + MARGIN
+
+      return {
+        id: `_group_${groupName}`,
+        type: 'group' as const,
+        position: { x: bounds.minX - MARGIN, y: bounds.minY - TOP_MARGIN },
+        width,
+        height,
+        zIndex,
+        selectable: false,
+        draggable: false,
+        deletable: false,
+        data: {
+          groupName,
+          memberIds: groupMap.get(groupName)!.map((node) => node.id),
+          color,
+          isZoomedOut,
+        },
+      }
+    })
+
+    // When zoomed out, fade regular nodes
+    const styledRegularNodes = isZoomedOut
+      ? regularNodes.map((n) => ({ ...n, style: { ...n.style, opacity: 0.3 } }))
+      : regularNodes.map((n) => {
+          // Clear opacity when zooming back in (avoid stale opacity from zoom-out)
+          if (n.style?.opacity === 0.3) {
+            const { opacity: _, ...rest } = n.style
+            return { ...n, style: Object.keys(rest).length > 0 ? rest : undefined }
+          }
+          return n
+        })
+
+    return [...groupNodes, ...styledRegularNodes]
+  }, [nodes, edges, hideParameterNodes, isZoomedOut])
 
   return (
     <HighlightContext.Provider value={{ neighborNodeIds }}>
@@ -664,6 +801,7 @@ export default function Canvas({
         onSelectionChange={onSelectionChange}
         onNodeDoubleClick={(_event, node) => onNodeDoubleClick?.(node)}
         onInit={(instance) => { reactFlowInstance.current = instance }}
+        onViewportChange={onViewportChange}
         nodeTypes={nodeTypes}
         fitView
         minZoom={0.05}
@@ -684,6 +822,7 @@ export default function Canvas({
         <MiniMap
           className="!bg-slate-200 dark:!bg-slate-900 !border-slate-300 dark:!border-slate-700"
           nodeColor={(node) => {
+            if (node.type === 'group') return 'transparent'
             if (node.type === 'data') {
               const dataData = node.data as DataNodeData
               if (dataData.exists === true) return '#14b8a6' // teal

@@ -151,4 +151,83 @@ describe('applyDagreLayout', () => {
       })
     })
   })
+
+  describe('grouped nodes', () => {
+    const createGroupedStepNode = (id: string, group: string): Node => ({
+      id,
+      type: 'step',
+      position: { x: 0, y: 0 },
+      data: { name: id, task: 'tasks/test.py', inputs: {}, outputs: {}, args: {}, group },
+    })
+
+    it('should not return virtual _group_ cluster nodes in result', () => {
+      const nodes = [
+        createGroupedStepNode('step1', 'my_group'),
+        createGroupedStepNode('step2', 'my_group'),
+        createStepNode('step3'),
+      ]
+
+      const result = applyDagreLayout(nodes, [])
+
+      // Virtual cluster nodes must be filtered out
+      const ids = result.map((n) => n.id)
+      expect(ids).not.toContain('_group_my_group')
+      expect(result.length).toBe(3)
+    })
+
+    it('should return valid positions for all original nodes', () => {
+      const nodes = [
+        createGroupedStepNode('step1', 'group_a'),
+        createGroupedStepNode('step2', 'group_a'),
+        createStepNode('step3'),
+      ]
+
+      const result = applyDagreLayout(nodes, [])
+
+      result.forEach((node) => {
+        expect(Number.isFinite(node.position.x)).toBe(true)
+        expect(Number.isFinite(node.position.y)).toBe(true)
+      })
+    })
+
+    it('should cluster grouped nodes closer together than ungrouped', () => {
+      // step1 and step2 are in the same group; step3 is far apart in x
+      const nodes = [
+        createGroupedStepNode('step1', 'group_a'),
+        createGroupedStepNode('step2', 'group_a'),
+        createStepNode('step3'),
+      ]
+      const edges = [
+        createEdge('step1', 'step3'),
+        createEdge('step2', 'step3'),
+      ]
+
+      const result = applyDagreLayout(nodes, edges)
+
+      const s1 = result.find((n) => n.id === 'step1')!
+      const s2 = result.find((n) => n.id === 'step2')!
+      const s3 = result.find((n) => n.id === 'step3')!
+
+      // step3 should be to the right of both grouped nodes (downstream)
+      expect(s3.position.x).toBeGreaterThan(s1.position.x)
+      expect(s3.position.x).toBeGreaterThan(s2.position.x)
+    })
+
+    it('should handle multiple groups without errors', () => {
+      const nodes = [
+        createGroupedStepNode('a1', 'group_a'),
+        createGroupedStepNode('a2', 'group_a'),
+        createGroupedStepNode('b1', 'group_b'),
+        createGroupedStepNode('b2', 'group_b'),
+      ]
+
+      const result = applyDagreLayout(nodes, [])
+
+      expect(result.length).toBe(4)
+      result.forEach((node) => {
+        expect(Number.isFinite(node.position.x)).toBe(true)
+        expect(Number.isFinite(node.position.y)).toBe(true)
+      })
+    })
+  })
 })

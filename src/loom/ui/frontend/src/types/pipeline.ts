@@ -31,11 +31,21 @@ export interface StepData {
   optional: boolean
   disabled?: boolean
   loop?: LoopConfig
+  group?: string
   executionState?: StepExecutionState
   freshnessStatus?: FreshnessStatus
   // Type information from task schema (populated on load)
   inputTypes?: Record<string, DataType>
   outputTypes?: Record<string, DataType>
+  // Index signature for React Flow compatibility
+  [key: string]: unknown
+}
+
+export interface GroupNodeData {
+  groupName: string
+  memberIds: string[]
+  color: string
+  isZoomedOut?: boolean
   // Index signature for React Flow compatibility
   [key: string]: unknown
 }
@@ -64,7 +74,8 @@ export interface DataNodeData {
 export type StepNode = Node<StepData, 'step'>
 export type ParameterNode = Node<ParameterData, 'parameter'>
 export type DataNode = Node<DataNodeData, 'data'>
-export type PipelineNode = StepNode | ParameterNode | DataNode
+export type GroupNode = Node<GroupNodeData, 'group'>
+export type PipelineNode = StepNode | ParameterNode | DataNode | GroupNode
 
 export interface EditorOptions {
   autoSave: boolean
