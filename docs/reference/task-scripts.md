@@ -301,3 +301,4 @@ python tasks/detect_fixations.py data/gaze.csv -o data/fixations.csv \
 - **Add frontmatter** — It enables validation and better UI in the editor
 - **Match names** — Frontmatter input/arg names must match argparse argument names
 - **Use types** — Type hints enable connection validation in the editor
+- **Inspect from CLI** — Run `loom pipeline.yml --step NAME --investigate` to preview a step's interface (inputs, outputs, args) without opening the editor

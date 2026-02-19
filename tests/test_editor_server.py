@@ -198,7 +198,7 @@ class TestLayoutSerialization:
         assert graph.hasLayout is False
 
     def test_graph_to_yaml_writes_layout_section(self) -> None:
-        """Node positions should be written to layout section."""
+        """Node positions should be written to layout section when hasLayout is True."""
         # Arrange
         graph = PipelineGraph(
             variables={},
@@ -226,6 +226,7 @@ class TestLayoutSerialization:
                 ),
             ],
             edges=[],
+            hasLayout=True,
         )
 
         # Act
@@ -235,6 +236,38 @@ class TestLayoutSerialization:
         assert "layout" in yaml_out
         assert yaml_out["layout"]["step1"] == {"x": 150, "y": 250}
         assert yaml_out["layout"]["data_input"] == {"x": 50, "y": 100}
+
+    def test_graph_to_yaml_omits_layout_section_when_no_layout(self) -> None:
+        """Layout section should be omitted when hasLayout is False (auto-layout)."""
+        # Arrange
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            data={},
+            nodes=[
+                GraphNode(
+                    id="step1",
+                    type="step",
+                    position={"x": 150, "y": 250},
+                    data={
+                        "name": "step1",
+                        "task": "tasks/test.py",
+                        "inputs": {},
+                        "outputs": {},
+                        "args": {},
+                        "optional": False,
+                    },
+                ),
+            ],
+            edges=[],
+            hasLayout=False,
+        )
+
+        # Act
+        yaml_out = graph_to_yaml(graph)
+
+        # Assert
+        assert "layout" not in yaml_out
 
 
 class TestEditorOptionsSerialization:

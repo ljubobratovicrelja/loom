@@ -1,7 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { useNodesState, useEdgesState, type Node, type Edge as FlowEdge, type NodeChange } from '@xyflow/react'
-import { AlertTriangle, Info, XCircle, X } from 'lucide-react'
+import { AlertTriangle, Info, XCircle, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
+import AutoLayoutConfirmDialog from './components/AutoLayoutConfirmDialog'
 import Canvas from './components/Canvas'
 import CleanDialog from './components/CleanDialog'
 import ConfirmDialog from './components/ConfirmDialog'
@@ -101,6 +102,19 @@ export default function App() {
   // Resizable sidebar widths
   const [sidebarWidth, setSidebarWidth] = useState(256) // Default w-64
   const [propertiesWidth, setPropertiesWidth] = useState(320) // Default w-80
+
+  // Collapsible sidebar state
+  const [leftCollapsed, setLeftCollapsed] = useState(false)
+  const [rightCollapsed, setRightCollapsed] = useState(false)
+
+  // Parameter nodes visibility
+  const [showParameterNodes, setShowParameterNodes] = useState(true)
+
+  // Auto-layout confirm dialog
+  const [showAutoLayoutConfirm, setShowAutoLayoutConfirm] = useState(false)
+
+  // One-shot flag: when true, next save omits the layout section
+  const clearLayoutOnSave = useRef(false)
 
   // Refs for change tracking and history
   const isInitialMount = useRef(true)
@@ -619,6 +633,7 @@ export default function App() {
       data,
       nodes: nodes as PipelineGraph['nodes'],
       edges,
+      hasLayout: !clearLayoutOnSave.current,
       editor: {
         autoSave: skipSaveConfirmation,
       },
@@ -630,6 +645,8 @@ export default function App() {
 
     const success = await saveConfig(graph, configPath)
     if (success) {
+      // Reset the clear-layout flag after a successful save
+      clearLayoutOnSave.current = false
       // Clear undo history on save - saved state is now baseline
       clearHistory()
       // Skip next change tracking trigger - save doesn't change the document
@@ -652,7 +669,26 @@ export default function App() {
     }
   }, [configPath, skipSaveConfirmation, performSave])
 
-  // Keyboard shortcuts for undo/redo/save
+  // Re-runs dagre and saves without layout positions in the YAML
+  const performAutoLayoutAndSave = useCallback(async () => {
+    snapshot(getCurrentState())
+    const layoutedNodes = applyDagreLayout(nodes as Node[], edges) as PipelineNode[]
+    setNodes(layoutedNodes)
+    clearLayoutOnSave.current = true
+    await performSave()
+  }, [snapshot, getCurrentState, nodes, edges, setNodes, performSave])
+
+  // Entry point for auto-layout: confirm when autosave is off
+  const handleAutoLayout = useCallback(() => {
+    if (!configPath) return
+    if (skipSaveConfirmation) {
+      performAutoLayoutAndSave()
+    } else {
+      setShowAutoLayoutConfirm(true)
+    }
+  }, [configPath, skipSaveConfirmation, performAutoLayoutAndSave])
+
+  // Keyboard shortcuts for undo/redo/save/layout/sidebar/parameter-toggle
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input
@@ -684,12 +720,32 @@ export default function App() {
         // Cmd/Ctrl+S = Save (override browser save dialog)
         e.preventDefault()
         handleSave()
+      } else if (modifier && e.shiftKey && e.key === 'L') {
+        // Ctrl/Cmd+Shift+L = Auto-layout
+        e.preventDefault()
+        handleAutoLayout()
+      } else if (e.key === 'p' || e.key === 'P') {
+        // P = Toggle parameter nodes (bare key, no modifier)
+        if (!modifier) {
+          const tag = (e.target as HTMLElement).tagName
+          if (!['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(tag)) {
+            setShowParameterNodes((v) => !v)
+          }
+        }
+      } else if (e.key === 'Tab') {
+        // Tab = Toggle sidebars (collapse both or expand both)
+        const tag = (e.target as HTMLElement).tagName
+        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(tag)) return
+        e.preventDefault()
+        const allCollapsed = leftCollapsed && rightCollapsed
+        setLeftCollapsed(!allCollapsed)
+        setRightCollapsed(!allCollapsed)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, getCurrentState, handleSave])
+  }, [undo, redo, getCurrentState, handleSave, handleAutoLayout, leftCollapsed, rightCollapsed])
 
   // Save dialog handlers
   const handleSaveConfirm = useCallback(() => {
@@ -1470,6 +1526,9 @@ export default function App() {
         onRedo={() => redo(getCurrentState())}
         canUndo={canUndo}
         canRedo={canRedo}
+        showParameterNodes={showParameterNodes}
+        onToggleParameterNodes={() => setShowParameterNodes((v) => !v)}
+        onAutoLayout={handleAutoLayout}
         skipSaveConfirmation={skipSaveConfirmation}
         onSkipSaveConfirmationChange={setSkipSaveConfirmation}
         parallelEnabled={parallelEnabled}
@@ -1541,8 +1600,11 @@ export default function App() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 flex overflow-hidden">
-          {/* Left sidebar with resize handle */}
-          <div style={{ width: sidebarWidth }} className="flex-shrink-0 flex h-full">
+          {/* Left sidebar with collapsible toggle strip */}
+          <div
+            style={{ width: leftCollapsed ? 0 : sidebarWidth }}
+            className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full"
+          >
             <Sidebar
               tasks={tasks}
               onAddTask={handleAddTask}
@@ -1557,10 +1619,26 @@ export default function App() {
               onRefreshPipelines={handleRefreshPipelines}
               pipelinesLoading={pipelinesLoading}
             />
-            <div
-              className="w-1.5 h-full bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors relative z-10 flex-shrink-0"
-              onMouseDown={handleSidebarResize}
-            />
+          </div>
+
+          {/* Left toggle strip: collapse button + drag-resize handle */}
+          <div className="w-5 flex-shrink-0 flex flex-col h-full">
+            <button
+              onClick={() => setLeftCollapsed((v) => !v)}
+              className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
+              title={leftCollapsed ? 'Expand sidebar (Tab)' : 'Collapse sidebar (Tab)'}
+            >
+              {leftCollapsed
+                ? <ChevronRight className="w-3 h-3" />
+                : <ChevronLeft className="w-3 h-3" />
+              }
+            </button>
+            {!leftCollapsed && (
+              <div
+                className="flex-1 bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors"
+                onMouseDown={handleSidebarResize}
+              />
+            )}
           </div>
 
           <Canvas
@@ -1575,14 +1653,34 @@ export default function App() {
             onSnapshot={() => snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })}
             onNodeDoubleClick={handleNodeDoubleClick}
             onParameterDrop={handleParameterDrop}
+            hideParameterNodes={!showParameterNodes}
           />
 
-          {/* Right sidebar with resize handle */}
-          <div style={{ width: propertiesWidth }} className="flex-shrink-0 flex h-full">
-            <div
-              className="w-1.5 h-full bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors relative z-10 flex-shrink-0"
-              onMouseDown={handlePropertiesResize}
-            />
+          {/* Right toggle strip: drag-resize handle + collapse button */}
+          <div className="w-5 flex-shrink-0 flex flex-col h-full">
+            <button
+              onClick={() => setRightCollapsed((v) => !v)}
+              className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
+              title={rightCollapsed ? 'Expand panel (Tab)' : 'Collapse panel (Tab)'}
+            >
+              {rightCollapsed
+                ? <ChevronLeft className="w-3 h-3" />
+                : <ChevronRight className="w-3 h-3" />
+              }
+            </button>
+            {!rightCollapsed && (
+              <div
+                className="flex-1 bg-slate-300 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-ew-resize transition-colors"
+                onMouseDown={handlePropertiesResize}
+              />
+            )}
+          </div>
+
+          {/* Right sidebar with collapsible toggle */}
+          <div
+            style={{ width: rightCollapsed ? 0 : propertiesWidth }}
+            className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full"
+          >
             <PropertiesPanel
               selectedNode={selectedNode}
               edges={edges}
@@ -1622,6 +1720,14 @@ export default function App() {
           }}
         />
       </div>
+
+      {/* Auto-layout confirmation dialog */}
+      {showAutoLayoutConfirm && (
+        <AutoLayoutConfirmDialog
+          onConfirm={() => { setShowAutoLayoutConfirm(false); performAutoLayoutAndSave() }}
+          onCancel={() => setShowAutoLayoutConfirm(false)}
+        />
+      )}
 
       {/* Save confirmation dialog */}
       {showSaveDialog && (

@@ -92,6 +92,7 @@ export default function PropertiesPanel({
 }: PropertiesPanelProps) {
   const [editData, setEditData] = useState<Record<string, unknown>>({})
   const [showRefs, setShowRefs] = useState(true)
+  const [paramValueInput, setParamValueInput] = useState('')
 
   // Find the task schema for the currently selected step
   const taskSchema = useMemo(() => {
@@ -107,8 +108,13 @@ export default function PropertiesPanel({
   useEffect(() => {
     if (selectedNode) {
       setEditData({ ...selectedNode.data })
+      if (selectedNode.type === 'parameter') {
+        const paramData = selectedNode.data as ParameterData
+        setParamValueInput(String(paramData.value ?? ''))
+      }
     } else {
       setEditData({})
+      setParamValueInput('')
     }
   }, [selectedNode])
 
@@ -294,21 +300,22 @@ export default function PropertiesPanel({
               <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Value</label>
               <input
                 type="text"
-                value={String(editData.value ?? '')}
-                onChange={(e) => {
-                  const newValue = e.target.value
-                  // Parse value type
-                  let parsedValue: unknown = newValue
-                  if (newValue === 'true') parsedValue = true
-                  else if (newValue === 'false') parsedValue = false
-                  else if (!isNaN(Number(newValue)) && newValue.trim() !== '') {
-                    parsedValue = Number(newValue)
+                value={paramValueInput}
+                onChange={(e) => setParamValueInput(e.target.value)}
+                onBlur={() => {
+                  let parsedValue: unknown = paramValueInput
+                  if (paramValueInput === 'true') parsedValue = true
+                  else if (paramValueInput === 'false') parsedValue = false
+                  else if (!isNaN(Number(paramValueInput)) && paramValueInput.trim() !== '') {
+                    parsedValue = Number(paramValueInput)
                   }
                   handleChange('value', parsedValue)
-                  // Also update the global parameter
                   if (onUpdateParameter && editData.name) {
                     onUpdateParameter(editData.name as string, parsedValue)
                   }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
                 }}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm focus:border-purple-500"
               />

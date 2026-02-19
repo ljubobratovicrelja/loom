@@ -33,7 +33,7 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 @router.get("/api/config/validate")
 def validate_config(path: str = Query(None)) -> ValidationResult:
     """Validate pipeline configuration and return warnings."""
-    from ..task_schema import list_task_schemas
+    from loom.runner.task_schema import list_task_schemas
 
     config_path = Path(path) if path else state.config_path
     if not config_path or not config_path.exists():
@@ -106,7 +106,7 @@ def list_tasks() -> list[dict[str, Any]]:
     - outputs: Output file flags (typically -o)
     - args: Additional arguments with type, default, description
     """
-    from ..task_schema import list_task_schemas
+    from loom.runner.task_schema import list_task_schemas
 
     schemas = list_task_schemas(state.tasks_dir)
     return [schema.to_dict() for schema in schemas]

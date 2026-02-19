@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from loom.ui.task_schema import (
+from loom.runner.task_schema import (
     ArgSchema,
     InputOutputSchema,
     TaskSchema,

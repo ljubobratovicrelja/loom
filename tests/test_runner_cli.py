@@ -435,3 +435,154 @@ pipeline:
             or "input" in captured.out
             and "protected" in captured.out.lower()
         )
+
+
+class TestCLIInspection:
+    """Tests for --list and --investigate CLI options."""
+
+    @pytest.fixture
+    def inspection_config_file(self, tmp_path: Path) -> Path:
+        """Create a pipeline config with optional/disabled steps for inspection tests."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+
+        # Create a task with full frontmatter schema
+        task_with_schema = tasks_dir / "compute_stats.py"
+        task_with_schema.write_text(
+            '"""Compute statistics from sensor readings.\n\n'
+            "---\n"
+            "inputs:\n"
+            "  data:\n"
+            "    type: csv\n"
+            "    description: Input CSV with sensor readings\n"
+            "outputs:\n"
+            "  --output:\n"
+            "    type: csv\n"
+            "    description: JSON file with computed statistics\n"
+            "args:\n"
+            "  --threshold:\n"
+            "    type: float\n"
+            "    default: 50.0\n"
+            "    description: Detection threshold\n"
+            "---\n"
+            '"""\n'
+        )
+
+        # Create a simple task without schema
+        simple_task = tasks_dir / "generate_data.py"
+        simple_task.write_text('"""Generate synthetic data."""\n')
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text(
+            """
+data:
+  raw:
+    type: csv
+    path: data/raw.csv
+  stats:
+    type: csv
+    path: data/stats.csv
+
+parameters: {}
+
+pipeline:
+  - name: generate_data
+    task: tasks/generate_data.py
+    outputs:
+      -o: $raw
+
+  - name: compute_stats
+    task: tasks/compute_stats.py
+    inputs:
+      data: $raw
+    outputs:
+      --output: $stats
+
+  - name: optional_report
+    task: tasks/generate_data.py
+    optional: true
+    inputs:
+      data: $stats
+
+  - name: disabled_export
+    task: tasks/generate_data.py
+    disabled: true
+    inputs:
+      data: $stats
+"""
+        )
+        return config
+
+    def test_list_shows_all_steps(
+        self, inspection_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --list shows all step names."""
+        with patch("sys.argv", ["loom", str(inspection_config_file), "--list"]):
+            result = main()
+            assert result == 0
+
+        captured = capsys.readouterr()
+        assert "generate_data" in captured.out
+        assert "compute_stats" in captured.out
+        assert "optional_report" in captured.out
+        assert "disabled_export" in captured.out
+        assert "Pipeline steps (4)" in captured.out
+
+    def test_list_marks_optional_steps(
+        self, inspection_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --list marks optional and disabled steps."""
+        with patch("sys.argv", ["loom", str(inspection_config_file), "--list"]):
+            result = main()
+            assert result == 0
+
+        captured = capsys.readouterr()
+        assert "[optional]" in captured.out
+        assert "[disabled]" in captured.out
+
+    def test_investigate_requires_step(
+        self, inspection_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --investigate without --step prints error and returns 1."""
+        with patch("sys.argv", ["loom", str(inspection_config_file), "--investigate"]):
+            result = main()
+            assert result == 1
+
+        captured = capsys.readouterr()
+        assert "Error" in captured.err
+
+    def test_investigate_shows_schema(
+        self, inspection_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --investigate shows description, inputs, outputs, and args."""
+        with patch(
+            "sys.argv",
+            ["loom", str(inspection_config_file), "--step", "compute_stats", "--investigate"],
+        ):
+            result = main()
+            assert result == 0
+
+        captured = capsys.readouterr()
+        assert "compute_stats" in captured.out
+        assert "Compute statistics from sensor readings" in captured.out
+        assert "Inputs:" in captured.out
+        assert "data" in captured.out
+        assert "Outputs:" in captured.out
+        assert "--output" in captured.out
+        assert "Args:" in captured.out
+        assert "--threshold" in captured.out
+        assert "50.0" in captured.out
+
+    def test_investigate_unknown_step(
+        self, inspection_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --investigate with nonexistent step name returns error."""
+        with patch(
+            "sys.argv",
+            ["loom", str(inspection_config_file), "--step", "nonexistent", "--investigate"],
+        ):
+            result = main()
+            assert result == 1
+
+        captured = capsys.readouterr()
+        assert "Error" in captured.err

@@ -1,3 +1,4 @@
+import { Eye, EyeOff, LayoutGrid } from 'lucide-react'
 import RunControls from './RunControls'
 import type { ExecutionStatus, RunMode } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
@@ -19,6 +20,9 @@ interface ToolbarProps {
   onRedo: () => void
   canUndo: boolean
   canRedo: boolean
+  showParameterNodes: boolean
+  onToggleParameterNodes: () => void
+  onAutoLayout: () => void
   skipSaveConfirmation: boolean
   onSkipSaveConfirmationChange: (value: boolean) => void
   parallelEnabled: boolean
@@ -46,6 +50,9 @@ export default function Toolbar({
   onRedo,
   canUndo,
   canRedo,
+  showParameterNodes,
+  onToggleParameterNodes,
+  onAutoLayout,
   skipSaveConfirmation,
   onSkipSaveConfirmationChange,
   parallelEnabled,
@@ -130,6 +137,35 @@ export default function Toolbar({
             </svg>
           </button>
         </div>
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+
+        {/* Parameter nodes toggle */}
+        <button
+          onClick={onToggleParameterNodes}
+          className={`
+            px-2 py-1.5 text-sm rounded transition-colors
+            ${showParameterNodes
+              ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white'
+              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'}
+          `}
+          title="Toggle parameter nodes (P)"
+        >
+          {showParameterNodes
+            ? <Eye className="w-4 h-4" />
+            : <EyeOff className="w-4 h-4" />
+          }
+        </button>
+
+        {/* Auto-layout button */}
+        <button
+          onClick={onAutoLayout}
+          className="px-2 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-sm rounded transition-colors"
+          title="Auto-layout (Ctrl+Shift+L)"
+        >
+          <LayoutGrid className="w-4 h-4" />
+        </button>
 
         {/* Divider */}
         <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
