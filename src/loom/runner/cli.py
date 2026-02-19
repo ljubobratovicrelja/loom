@@ -26,6 +26,8 @@ Examples:
   %(prog)s pipeline.yml --parallel --max-workers 2
   %(prog)s pipeline.yml --clean            # Clean all data (move to trash)
   %(prog)s pipeline.yml --clean --permanent  # Permanently delete data
+  %(prog)s pipeline.yml --list             # List all steps
+  %(prog)s pipeline.yml --step foo --investigate  # Inspect step interface
         """,
     )
 
@@ -109,6 +111,14 @@ Examples:
         help="Skip confirmation prompt (use with --clean)",
     )
 
+    # Inspection
+    parser.add_argument("--list", action="store_true", help="List all steps in the pipeline")
+    parser.add_argument(
+        "--investigate",
+        action="store_true",
+        help="Show step interface (inputs/outputs/args); use with --step",
+    )
+
     args = parser.parse_args()
 
     # Load config
@@ -117,6 +127,13 @@ Examples:
         return 1
 
     config = PipelineConfig.from_yaml(args.config)
+
+    # Handle inspection modes (no execution needed)
+    if args.list:
+        return _handle_list(config)
+
+    if args.investigate:
+        return _handle_investigate(config, args)
 
     # Handle clean-list mode (preview only)
     if args.clean_list:
@@ -161,6 +178,105 @@ Examples:
         failed = [name for name, success in results.items() if not success]
         if failed:
             return 1
+
+    return 0
+
+
+def _handle_list(config: PipelineConfig) -> int:
+    """List all steps in the pipeline.
+
+    Args:
+        config: Pipeline configuration.
+
+    Returns:
+        Exit code (0 for success).
+    """
+    steps = config.steps
+    n = len(steps)
+    print(f"Pipeline steps ({n}):\n")
+    for i, step in enumerate(steps, 1):
+        tags = []
+        if step.optional:
+            tags.append("[optional]")
+        if step.disabled:
+            tags.append("[disabled]")
+        tag_str = "  " + "  ".join(tags) if tags else ""
+        print(f"  {i}. {step.name:<20} {step.script}{tag_str}")
+    return 0
+
+
+def _handle_investigate(config: PipelineConfig, args: object) -> int:
+    """Show step interface (inputs/outputs/args) for a specific step.
+
+    Args:
+        config: Pipeline configuration.
+        args: Parsed CLI arguments (must have .step attribute).
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    from .task_schema import parse_task_schema
+
+    step_names = getattr(args, "step", None)
+
+    if not step_names:
+        print("Error: --investigate requires --step <name>", file=sys.stderr)
+        return 1
+
+    if len(step_names) != 1:
+        print("Error: --investigate requires exactly one --step name", file=sys.stderr)
+        return 1
+
+    step_name = step_names[0]
+
+    # Find the step in the pipeline
+    try:
+        step = config.get_step_by_name(step_name)
+    except ValueError:
+        print(f"Error: Step '{step_name}' not found in pipeline", file=sys.stderr)
+        return 1
+
+    # Resolve the script path
+    script_path = config.resolve_script_path(step.script)
+    if not script_path.exists():
+        print(f"Error: Script not found: {script_path}", file=sys.stderr)
+        return 1
+
+    schema = parse_task_schema(script_path)
+
+    print(f"Step: {step_name}")
+    print(f"Task: {step.script}\n")
+
+    if schema.description:
+        print("Description:")
+        print(f"  {schema.description}\n")
+
+    if schema.inputs:
+        print("Inputs:")
+        for name, inp in schema.inputs.items():
+            type_str = f"({inp.type})  " if inp.type else ""
+            print(f"  {name:<14}{type_str}{inp.description}")
+        print()
+
+    if schema.outputs:
+        print("Outputs:")
+        for name, out in schema.outputs.items():
+            type_str = f"({out.type})  " if out.type else ""
+            print(f"  {name:<14}{type_str}{out.description}")
+        print()
+
+    if schema.args:
+        print("Args:")
+        for name, arg in schema.args.items():
+            default_str = f"    default: {arg.default}" if arg.default is not None else ""
+            print(f"  {name:<14}{arg.type:<10}{default_str}    {arg.description}")
+        print()
+
+    if not schema.inputs and not schema.outputs and not schema.args:
+        if not schema.description:
+            print("(No interface schema found in task file)")
+        else:
+            print("(No interface schema found in task file — only description available)")
 
     return 0
 

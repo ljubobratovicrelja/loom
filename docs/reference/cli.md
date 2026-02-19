@@ -34,6 +34,8 @@ loom pipeline.yml --dry-run
 | `--clean-list` | List files that would be cleaned (preview only) |
 | `--permanent` | Permanently delete instead of trash (use with `--clean`) |
 | `-y, --yes` | Skip confirmation prompts |
+| `--list` | List all steps in the pipeline |
+| `--investigate` | Show step interface (inputs/outputs/args); use with `--step` |
 
 ### Examples
 
@@ -80,6 +82,12 @@ loom pipeline.yml --clean --permanent -y
 
 # Preview what would be cleaned
 loom pipeline.yml --clean-list
+
+# List all steps in a pipeline
+loom pipeline.yml --list
+
+# Inspect a step's interface (inputs, outputs, args)
+loom pipeline.yml --step compute_stats --investigate
 ```
 
 ## loom-ui
