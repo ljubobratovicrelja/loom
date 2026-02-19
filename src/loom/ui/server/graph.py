@@ -249,14 +249,15 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
 
         pipeline.append(step)
 
-    # Extract layout (positions) from all nodes
+    # Extract layout (positions) from all nodes — only if layout should be preserved
     layout: dict[str, dict[str, float]] = {}
-    for node in graph.nodes:
-        # Round positions to integers for cleaner YAML
-        layout[node.id] = {
-            "x": round(node.position.get("x", 0)),
-            "y": round(node.position.get("y", 0)),
-        }
+    if graph.hasLayout:
+        for node in graph.nodes:
+            # Round positions to integers for cleaner YAML
+            layout[node.id] = {
+                "x": round(node.position.get("x", 0)),
+                "y": round(node.position.get("y", 0)),
+            }
 
     # Extract data nodes from graph nodes
     data_section: dict[str, dict[str, Any]] = {}
@@ -298,8 +299,9 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
     result: dict[str, Any] = {
         "parameters": parameters,
         "pipeline": pipeline,
-        "layout": layout,
     }
+    if layout:
+        result["layout"] = layout
     if data_section:
         result["data"] = data_section
     if editor:
@@ -446,15 +448,18 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
         if name not in existing_names:
             data["pipeline"].append(graph_step)
 
-    # Update layout (positions) from all nodes
-    if "layout" not in data:
-        data["layout"] = {}
-    for node in graph.nodes:
-        # Round positions to integers for cleaner YAML
-        data["layout"][node.id] = {
-            "x": round(node.position.get("x", 0)),
-            "y": round(node.position.get("y", 0)),
-        }
+    # Update layout (positions) — only if layout should be preserved
+    if graph.hasLayout:
+        if "layout" not in data:
+            data["layout"] = {}
+        for node in graph.nodes:
+            # Round positions to integers for cleaner YAML
+            data["layout"][node.id] = {
+                "x": round(node.position.get("x", 0)),
+                "y": round(node.position.get("y", 0)),
+            }
+    elif "layout" in data:
+        del data["layout"]
 
     # Update editor options (only include non-default values)
     if graph.editor.autoSave:
