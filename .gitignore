@@ -68,6 +68,10 @@ Thumbs.db
 
 # Example data
 examples/*/data/**
+# Keep static input fixtures for the loop example
+!examples/loop/data/
+!examples/loop/data/input/
+!examples/loop/data/input/**
 examples/*/.loom-thumbnails/**
 examples/*/.loom-url-cache/**
 # MkDocs build output
@@ -81,3 +85,4 @@ docs/tutorials/parallel.md
 docs/tutorials/optional-steps.md
 docs/tutorials/curve-fitting.md
 docs/tutorials/image-processing.md
+docs/tutorials/loop.md
