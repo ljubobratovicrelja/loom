@@ -53,6 +53,7 @@ interface CanvasProps {
   onSnapshot?: () => void
   onNodeDoubleClick?: (node: PipelineNode) => void
   onParameterDrop?: (name: string, value: unknown, position: { x: number; y: number }) => void
+  hideParameterNodes?: boolean
 }
 
 export default function Canvas({
@@ -67,6 +68,7 @@ export default function Canvas({
   onSnapshot,
   onNodeDoubleClick,
   onParameterDrop,
+  hideParameterNodes,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -541,6 +543,10 @@ export default function Canvas({
     [onParameterDrop]
   )
 
+  const displayNodes = hideParameterNodes
+    ? nodes.map((n) => (n.type === 'parameter' ? { ...n, hidden: true } : n))
+    : nodes
+
   return (
     <div
       ref={reactFlowWrapper}
@@ -549,7 +555,7 @@ export default function Canvas({
       onDrop={onDrop}
     >
       <ReactFlow
-        nodes={nodes}
+        nodes={displayNodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -562,6 +568,7 @@ export default function Canvas({
         onInit={(instance) => { reactFlowInstance.current = instance }}
         nodeTypes={nodeTypes}
         fitView
+        minZoom={0.05}
         panOnDrag={[1, 2]}
         panOnScroll
         zoomOnScroll={false}
