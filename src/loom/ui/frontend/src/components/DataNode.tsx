@@ -1,8 +1,9 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useContext, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText, Link } from 'lucide-react'
 import type { DataNode as DataNodeType, DataType } from '../types/pipeline'
 import { useThumbnail } from '../hooks/useThumbnail'
+import { HighlightContext } from '../contexts/HighlightContext'
 
 // Helper to check if a path is a URL
 const isUrl = (path: string): boolean => {
@@ -20,7 +21,10 @@ const TYPE_CONFIG: Record<DataType, { icon: ReactNode; label: string }> = {
   data_folder: { icon: <Folder className="w-4 h-4" />, label: 'Folder' },
 }
 
-function DataNode({ data, selected }: NodeProps<DataNodeType>) {
+function DataNode({ data, id, selected }: NodeProps<DataNodeType>) {
+  const { neighborNodeIds } = useContext(HighlightContext)
+  const isNeighbor = neighborNodeIds.has(id)
+
   // Get type configuration
   const config = TYPE_CONFIG[data.type] || TYPE_CONFIG.data_folder
 
@@ -73,6 +77,8 @@ function DataNode({ data, selected }: NodeProps<DataNodeType>) {
         ${colors.bg} rounded-lg shadow-lg min-w-[160px] border-2 transition-all duration-300
         ${colors.border} ${colors.shadow}
         ${data.pulseError ? 'animate-pulse-error' : ''}
+        ${selected ? 'shadow-lg shadow-blue-400/50' : ''}
+        ${isNeighbor ? 'ring-1 ring-teal-400/50 shadow-teal-400/25' : ''}
       `}
     >
       {/* Input handle for receiving data from step outputs */}

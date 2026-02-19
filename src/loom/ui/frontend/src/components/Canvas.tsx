@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import {
   ReactFlow,
   Background,
@@ -21,6 +21,7 @@ import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
 import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
+import { HighlightContext } from '../contexts/HighlightContext'
 
 const nodeTypes = {
   step: StepNode,
@@ -54,6 +55,7 @@ interface CanvasProps {
   onNodeDoubleClick?: (node: PipelineNode) => void
   onParameterDrop?: (name: string, value: unknown, position: { x: number; y: number }) => void
   hideParameterNodes?: boolean
+  selectedNodes?: PipelineNode[]
 }
 
 export default function Canvas({
@@ -69,6 +71,7 @@ export default function Canvas({
   onNodeDoubleClick,
   onParameterDrop,
   hideParameterNodes,
+  selectedNodes,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -603,11 +606,46 @@ export default function Canvas({
     [onParameterDrop]
   )
 
+  const { highlightedEdgeIds, neighborNodeIds } = useMemo(() => {
+    if (!selectedNodes || selectedNodes.length === 0)
+      return { highlightedEdgeIds: new Set<string>(), neighborNodeIds: new Set<string>() }
+    const selectedIds = new Set(selectedNodes.map((n) => n.id))
+    const highlightedEdgeIds = new Set<string>()
+    const neighborNodeIds = new Set<string>()
+    for (const edge of edges) {
+      if (selectedIds.has(edge.source) || selectedIds.has(edge.target)) {
+        highlightedEdgeIds.add(edge.id)
+        if (selectedIds.has(edge.source)) neighborNodeIds.add(edge.target)
+        else neighborNodeIds.add(edge.source)
+      }
+    }
+    for (const id of selectedIds) neighborNodeIds.delete(id)
+    return { highlightedEdgeIds, neighborNodeIds }
+  }, [selectedNodes, edges])
+
+  const styledEdges = useMemo(() => {
+    if (highlightedEdgeIds.size === 0) return edges
+    return edges.map((edge) =>
+      highlightedEdgeIds.has(edge.id)
+        ? {
+            ...edge,
+            style: {
+              ...edge.style,
+              stroke: '#2dd4bf',
+              strokeWidth: 3,
+              filter: 'drop-shadow(0 0 6px rgba(45, 212, 191, 0.7))',
+            },
+          }
+        : edge
+    )
+  }, [edges, highlightedEdgeIds])
+
   const displayNodes = hideParameterNodes
     ? nodes.map((n) => (n.type === 'parameter' ? { ...n, hidden: true } : n))
     : nodes
 
   return (
+    <HighlightContext.Provider value={{ neighborNodeIds }}>
     <div
       ref={reactFlowWrapper}
       className="flex-1 bg-slate-100 dark:bg-slate-950"
@@ -616,7 +654,7 @@ export default function Canvas({
     >
       <ReactFlow
         nodes={displayNodes}
-        edges={edges}
+        edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -668,5 +706,6 @@ export default function Canvas({
         />
       </ReactFlow>
     </div>
+    </HighlightContext.Provider>
   )
 }

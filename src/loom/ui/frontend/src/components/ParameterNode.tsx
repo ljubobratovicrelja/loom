@@ -1,8 +1,11 @@
-import { memo } from 'react'
+import { memo, useContext } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { ParameterNode as ParameterNodeType } from '../types/pipeline'
+import { HighlightContext } from '../contexts/HighlightContext'
 
-function ParameterNode({ data, selected }: NodeProps<ParameterNodeType>) {
+function ParameterNode({ data, id, selected }: NodeProps<ParameterNodeType>) {
+  const { neighborNodeIds } = useContext(HighlightContext)
+  const isNeighbor = neighborNodeIds.has(id)
   // Format value for display
   const displayValue = () => {
     if (typeof data.value === 'boolean') {
@@ -22,7 +25,8 @@ function ParameterNode({ data, selected }: NodeProps<ParameterNodeType>) {
     <div
       className={`
         bg-purple-100 dark:bg-purple-900/80 rounded-lg shadow-lg min-w-[120px] border-2 transition-all duration-300
-        ${selected ? 'border-purple-400 shadow-purple-500/30' : 'border-purple-400 dark:border-purple-700'}
+        ${selected ? 'border-purple-400 shadow-lg shadow-purple-500/60' : 'border-purple-400 dark:border-purple-700'}
+        ${isNeighbor ? 'ring-1 ring-teal-400/50 shadow-teal-400/25' : ''}
       `}
     >
       <div className="px-3 py-2 flex items-center justify-between">
