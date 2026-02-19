@@ -13,11 +13,30 @@ const createStepNode = (id: string): Node => ({
   data: { name: id, task: 'tasks/test.py', inputs: {}, outputs: {}, args: {} },
 })
 
+const createStepNodeWithIO = (
+  id: string,
+  inputs: Record<string, string>,
+  outputs: Record<string, string>,
+  args: Record<string, unknown>,
+): Node => ({
+  id,
+  type: 'step',
+  position: { x: 0, y: 0 },
+  data: { name: id, task: 'tasks/test.py', inputs, outputs, args },
+})
+
 const createDataNode = (id: string): Node => ({
   id,
   type: 'data',
   position: { x: 0, y: 0 },
   data: { key: id, name: id, type: 'csv', path: 'data/test.csv' },
+})
+
+const createParameterNode = (id: string, value: unknown = 0): Node => ({
+  id,
+  type: 'parameter',
+  position: { x: 0, y: 0 },
+  data: { name: id, value },
 })
 
 const createEdge = (source: string, target: string): Edge => ({
@@ -149,6 +168,151 @@ describe('applyDagreLayout', () => {
         expect(Number.isFinite(node.position.x)).toBe(true)
         expect(Number.isFinite(node.position.y)).toBe(true)
       })
+    })
+  })
+
+  describe('node sizing', () => {
+    it('should produce more compact layout for data nodes than steps with many I/O', () => {
+      // Two data nodes stacked vertically
+      const dataNodes = [
+        createDataNode('d1'),
+        createDataNode('d2'),
+        createStepNode('s1'),
+      ]
+      const dataEdges = [
+        createEdge('d1', 's1'),
+        createEdge('d2', 's1'),
+      ]
+
+      // Two step nodes with multiple I/O (taller) stacked vertically
+      const stepNodes = [
+        createStepNodeWithIO('s1', { a: 'x', b: 'y' }, { out: 'z' }, { p1: 1, p2: 2, p3: 3 }),
+        createStepNodeWithIO('s2', { a: 'x', b: 'y' }, { out: 'z' }, { p1: 1, p2: 2, p3: 3 }),
+        createDataNode('d1'),
+      ]
+      const stepEdges = [
+        createEdge('s1', 'd1'),
+        createEdge('s2', 'd1'),
+      ]
+
+      const dataResult = applyDagreLayout(dataNodes, dataEdges)
+      const stepResult = applyDagreLayout(stepNodes, stepEdges)
+
+      const dataYs = dataResult.map((n) => n.position.y)
+      const dataSpan = Math.max(...dataYs) - Math.min(...dataYs)
+
+      const stepYs = stepResult.map((n) => n.position.y)
+      const stepSpan = Math.max(...stepYs) - Math.min(...stepYs)
+
+      // Steps with I/O are taller, so the step layout should use more vertical space
+      expect(dataSpan).toBeLessThan(stepSpan)
+    })
+  })
+
+  describe('parameter node handling', () => {
+    it('should position parameter nodes to the left of their connected step', () => {
+      const nodes = [
+        createParameterNode('p1', 10),
+        createStepNode('step1'),
+        createDataNode('out1'),
+      ]
+      const edges = [
+        createEdge('p1', 'step1'),
+        createEdge('step1', 'out1'),
+      ]
+
+      const result = applyDagreLayout(nodes, edges)
+      const p1 = result.find((n) => n.id === 'p1')!
+      const step1 = result.find((n) => n.id === 'step1')!
+
+      expect(p1.position.x).toBeLessThan(step1.position.x)
+    })
+
+    it('should include all parameter nodes in result', () => {
+      const nodes = [
+        createParameterNode('p1', 1),
+        createParameterNode('p2', 2),
+        createStepNode('step1'),
+      ]
+      const edges = [
+        createEdge('p1', 'step1'),
+        createEdge('p2', 'step1'),
+      ]
+
+      const result = applyDagreLayout(nodes, edges)
+      expect(result.length).toBe(3)
+      expect(result.find((n) => n.id === 'p1')).toBeDefined()
+      expect(result.find((n) => n.id === 'p2')).toBeDefined()
+    })
+
+    it('should produce compact layout with many parameters vs without', () => {
+      // Step with 10 parameters (parameters excluded from dagre)
+      const manyParamNodes: Node[] = [
+        createStepNodeWithIO(
+          'step1',
+          { img: 'image' },
+          { out: 'result' },
+          Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`arg${i}`, `$p${i}`])),
+        ),
+        createDataNode('out1'),
+        ...Array.from({ length: 10 }, (_, i) => createParameterNode(`p${i}`, i)),
+      ]
+      const manyParamEdges: Edge[] = [
+        createEdge('step1', 'out1'),
+        ...Array.from({ length: 10 }, (_, i) => createEdge(`p${i}`, 'step1')),
+      ]
+
+      const result = applyDagreLayout(manyParamNodes, manyParamEdges)
+
+      // All nodes should have valid positions
+      expect(result.length).toBe(12)
+      result.forEach((node) => {
+        expect(Number.isFinite(node.position.x)).toBe(true)
+        expect(Number.isFinite(node.position.y)).toBe(true)
+      })
+
+      // The step+data vertical span should be reasonable.
+      // Without parameter exclusion, 10 params in dagre would create ~600px+ vertical span
+      // from parameter stacking. With exclusion, step+data layout is compact.
+      const ys = result.filter((n) => n.type !== 'parameter').map((n) => n.position.y)
+      const verticalSpan = Math.max(...ys) - Math.min(...ys)
+      expect(verticalSpan).toBeLessThan(600)
+    })
+
+    it('should center-align parameters with different name lengths', () => {
+      // Create parameters with different name lengths
+      const shortParam: Node = {
+        id: 'short', type: 'parameter', position: { x: 0, y: 0 },
+        data: { name: 'w_lmk', value: 1 },
+      }
+      const longParam: Node = {
+        id: 'long', type: 'parameter', position: { x: 0, y: 0 },
+        data: { name: 'n_stage3_icp_passes', value: 20 },
+      }
+      const nodes = [shortParam, longParam, createStepNode('step1')]
+      const edges = [createEdge('short', 'step1'), createEdge('long', 'step1')]
+
+      const result = applyDagreLayout(nodes, edges)
+      const s = result.find((n) => n.id === 'short')!
+      const l = result.find((n) => n.id === 'long')!
+
+      // Shorter parameter should be shifted right (larger x) compared to longer one
+      // because both are centered on the same column axis
+      expect(s.position.x).toBeGreaterThan(l.position.x)
+    })
+
+    it('should handle orphan parameters not connected to any step', () => {
+      const nodes = [
+        createParameterNode('orphan', 42),
+        createStepNode('step1'),
+      ]
+
+      const result = applyDagreLayout(nodes, [])
+
+      expect(result.length).toBe(2)
+      const orphan = result.find((n) => n.id === 'orphan')!
+      expect(Number.isFinite(orphan.position.x)).toBe(true)
+      expect(Number.isFinite(orphan.position.y)).toBe(true)
     })
   })
 

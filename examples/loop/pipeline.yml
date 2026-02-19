@@ -3,38 +3,34 @@ data:
     type: data_folder
     path: data/input
     description: Folder of text files to process
-
   processed_texts:
     type: data_folder
     path: data/output
     description: Folder of uppercased text files
-
   summary_txt:
     type: txt
     path: data/summary.txt
     description: Summary of all processed files
-
 parameters:
   prefix: "PROCESSED"
 
 pipeline:
-  - name: uppercase_each
-    task: tasks/uppercase.py
-    loop:
-      over: $input_texts
-      into: $processed_texts
-      parallel: false
-      filter: "*.txt"
-    inputs:
-      input: $loop_item
-    outputs:
-      --output: $loop_output
-    args:
-      --prefix: $prefix
-
-  - name: summarize
-    task: tasks/summarize.py
-    inputs:
-      folder: $processed_texts
-    outputs:
-      --output: $summary_txt
+- name: uppercase_each
+  task: tasks/uppercase.py
+  loop:
+    over: $input_texts
+    into: $processed_texts
+    parallel: false
+    filter: '*.txt'
+  inputs:
+    input: $loop_item
+  outputs:
+    --output: $loop_output
+  args:
+    --prefix: $prefix
+- name: summarize
+  task: tasks/summarize.py
+  inputs:
+    folder: $processed_texts
+  outputs:
+    --output: $summary_txt

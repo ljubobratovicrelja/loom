@@ -812,7 +812,7 @@ export default function Canvas({
         selectionMode={SelectionMode.Partial}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
-          style: { stroke: '#64748b', strokeWidth: 2 },
+          style: { stroke: '#475569', strokeWidth: 2 },
           type: 'bezier',
           reconnectable: true,
         }}
