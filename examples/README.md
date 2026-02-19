@@ -45,6 +45,9 @@ loom examples/linear/pipeline.yml --clean-list
 | [parameters](parameters/) | Using parameters for configuration and `--set` for overrides. |
 | [optional_steps](optional_steps/) | Optional debug/visualization steps with `--include`. |
 | [parallel](parallel/) | Hyperparameter search: same pipeline with different configs producing multiple outputs. |
+| [loop](loop/) | Iterate over files in a directory with `loop:` blocks. |
+| [groups](groups/) | Visual grouping: organize steps under named `group:` blocks. |
+| [image-processing](image-processing/) | Image pipeline with URL data sources and automatic downloads. |
 | [curve-fitting](curve-fitting/) | Scientific workflow: generate data, fit a model, visualize results. |
 
 ## Structure

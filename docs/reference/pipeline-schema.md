@@ -192,6 +192,37 @@ pipeline:
 
 Run with: `loom pipeline.yml --include visualize`
 
+### Group Block
+
+Group related steps visually in the editor by wrapping them in a `group:` block:
+
+```yaml
+pipeline:
+  - group: preprocessing
+    steps:
+      - name: preprocess
+        task: tasks/preprocess.py
+        outputs:
+          --output: $clean_data
+
+      - name: normalize
+        task: tasks/normalize.py
+        inputs:
+          data: $clean_data
+        outputs:
+          --output: $normalized_data
+
+  - name: train
+    task: tasks/train.py
+    inputs:
+      data: $normalized_data
+```
+
+Groups are **purely visual** — they don't affect execution order, dependency resolution, or
+parallelism. In loom-ui, each group is drawn as a colored rectangle behind its member nodes.
+
+Grouped and ungrouped steps can be mixed freely in the same pipeline.
+
 ## Command Generation
 
 Steps become shell commands:

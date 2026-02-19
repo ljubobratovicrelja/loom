@@ -1375,8 +1375,12 @@ export default function App() {
   // Wrap onNodesChange to detect drag start and create snapshot
   const handleNodesChange = useCallback(
     (changes: NodeChange<PipelineNode>[]) => {
+      // Filter out changes for synthetic group nodes — they live only in Canvas's
+      // displayNodes useMemo and must never be written back to the nodes state
+      const realChanges = changes.filter((c) => !('id' in c && c.id.startsWith('_group_')))
+
       // Check for drag start
-      for (const change of changes) {
+      for (const change of realChanges) {
         if (change.type === 'position' && 'dragging' in change) {
           if (change.dragging === true && !isDraggingRef.current) {
             // Drag started - snapshot BEFORE drag begins
@@ -1390,7 +1394,7 @@ export default function App() {
       }
 
       // Pass through to original handler
-      onNodesChange(changes)
+      onNodesChange(realChanges)
     },
     [onNodesChange, snapshot]
   )

@@ -30,6 +30,7 @@ EXAMPLES = {
     "curve-fitting": ("curve-fitting.md", "Scientific Workflow"),
     "image-processing": ("image-processing.md", "Image Processing"),
     "loop": ("loop.md", "Loop (Per-Item Processing)"),
+    "groups": ("groups.md", "Groups"),
 }
 
 

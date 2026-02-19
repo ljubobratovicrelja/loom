@@ -167,12 +167,12 @@ describe('handleConnect', () => {
     })
 
     it('should fail for connection with missing source', () => {
-      const result = handleConnect([], [], { source: null, target: 'step1', sourceHandle: null, targetHandle: null })
+      const result = handleConnect([], [], { source: null as unknown as string, target: 'step1', sourceHandle: null, targetHandle: null })
       expect(result.success).toBe(false)
     })
 
     it('should fail for connection with missing target', () => {
-      const result = handleConnect([], [], { source: 'step1', target: null, sourceHandle: null, targetHandle: null })
+      const result = handleConnect([], [], { source: 'step1', target: null as unknown as string, sourceHandle: null, targetHandle: null })
       expect(result.success).toBe(false)
     })
   })
@@ -359,7 +359,7 @@ describe('handleReconnect', () => {
 
   it('should fail with missing source or target', () => {
     const result = handleReconnect([], [], createEdge('a', 'b'), {
-      source: null,
+      source: null as unknown as string,
       target: 'step1',
       sourceHandle: null,
       targetHandle: null,

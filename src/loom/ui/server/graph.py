@@ -12,6 +12,52 @@ from .models import (
 )
 
 
+def _flatten_pipeline(pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten grouped pipeline entries into a flat list with group tag injected.
+
+    Group blocks of the form ``{"group": name, "steps": [...]}`` are expanded
+    into flat step dicts with a ``"group"`` key added to each step.
+    Ungrouped steps are passed through unchanged.
+    """
+    flat = []
+    for entry in pipeline:
+        if "group" in entry and "steps" in entry:
+            for step in entry["steps"]:
+                flat.append({**step, "group": entry["group"]})
+        else:
+            flat.append(entry)
+    return flat
+
+
+def _build_step_dict(node: GraphNode, param_edges: dict[tuple[str, str], str]) -> dict[str, Any]:
+    """Build a YAML step dict from a graph node (without group key)."""
+    step: dict[str, Any] = {
+        "name": node.data["name"],
+        "task": node.data["task"],
+    }
+    if node.data.get("loop"):
+        step["loop"] = node.data["loop"]
+    if node.data.get("inputs"):
+        step["inputs"] = node.data["inputs"]
+    if node.data.get("outputs"):
+        step["outputs"] = node.data["outputs"]
+
+    # Build args: merge node data args with parameter edge connections
+    args = dict(node.data.get("args", {}))
+    step_name = node.data["name"]
+    for (target, handle), param_name in param_edges.items():
+        if target == step_name:
+            args[handle] = f"${param_name}"
+    if args:
+        step["args"] = args
+
+    if node.data.get("optional"):
+        step["optional"] = True
+    if node.data.get("disabled"):
+        step["disabled"] = True
+    return step
+
+
 def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     """Convert YAML pipeline to React Flow graph format."""
     parameters = data.get("parameters", {})
@@ -21,9 +67,12 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
 
+    # Flatten group blocks so all step entries are plain step dicts with optional "group" key
+    all_steps = _flatten_pipeline(pipeline)
+
     # Step 1: Identify output data nodes (produced by steps)
     output_data: dict[str, dict[str, str]] = {}  # data_name -> {step, flag}
-    for step in pipeline:
+    for step in all_steps:
         for out_flag, out_ref in step.get("outputs", {}).items():
             if out_ref.startswith("$"):
                 data_name = out_ref[1:]
@@ -32,7 +81,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     # Step 2: Create step nodes and track their positions
     # Use saved layout positions if available, otherwise compute default positions
     step_positions: dict[str, dict[str, float]] = {}
-    for i, step in enumerate(pipeline):
+    for i, step in enumerate(all_steps):
         step_id = step["name"]
         # Check if we have a saved position for this node
         if step_id in layout:
@@ -55,6 +104,8 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
         }
         if step.get("loop"):
             step_data["loop"] = step["loop"]
+        if step.get("group"):
+            step_data["group"] = step["group"]
         nodes.append(
             GraphNode(
                 id=step_id,
@@ -132,7 +183,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
             )
 
     # 4b: Edges from data nodes to steps that consume them
-    for step in pipeline:
+    for step in all_steps:
         step_id = step["name"]
         for input_name, data_ref in step.get("inputs", {}).items():
             if data_ref.startswith("$"):
@@ -149,7 +200,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                     )
 
     # 4c: Edges from parameters to steps that use them in args
-    for step in pipeline:
+    for step in all_steps:
         step_id = step["name"]
         for arg_key, arg_value in step.get("args", {}).items():
             if isinstance(arg_value, str) and arg_value.startswith("$"):
@@ -167,7 +218,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                     )
 
     # 4d: Loop edges — data node → step (loop-over) and step → data node (loop-into)
-    for step in pipeline:
+    for step in all_steps:
         step_id = step["name"]
         loop = step.get("loop")
         if loop:
@@ -253,40 +304,33 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
                 param_edges[(edge.target, edge.targetHandle)] = param_name
 
     # Build pipeline from step nodes
-    pipeline = []
     step_nodes = [n for n in graph.nodes if n.type == "step"]
 
     # Sort by y,x position for consistent ordering
     step_nodes.sort(key=lambda n: (n.position.get("y", 0), n.position.get("x", 0)))
 
+    # Emit steps, collecting grouped steps into group blocks (first-appearance order).
+    # Ungrouped steps appear at their natural sorted position;
+    # grouped steps are collected into a single block placed at the position of the
+    # first member encountered.
+    pipeline: list[dict[str, Any]] = []
+    seen_groups: set[str] = set()
+    group_block_index: dict[str, int] = {}  # group_name -> index in pipeline list
+
     for node in step_nodes:
-        step: dict[str, Any] = {
-            "name": node.data["name"],
-            "task": node.data["task"],
-        }
+        step_dict = _build_step_dict(node, param_edges)
+        group = node.data.get("group")
 
-        if node.data.get("loop"):
-            step["loop"] = node.data["loop"]
-        if node.data.get("inputs"):
-            step["inputs"] = node.data["inputs"]
-        if node.data.get("outputs"):
-            step["outputs"] = node.data["outputs"]
-
-        # Build args: merge node data args with parameter edge connections
-        args = dict(node.data.get("args", {}))
-        step_name = node.data["name"]
-        for (target, handle), param_name in param_edges.items():
-            if target == step_name:
-                args[handle] = f"${param_name}"
-
-        if args:
-            step["args"] = args
-        if node.data.get("optional"):
-            step["optional"] = True
-        if node.data.get("disabled"):
-            step["disabled"] = True
-
-        pipeline.append(step)
+        if not group:
+            pipeline.append(step_dict)
+        else:
+            if group not in seen_groups:
+                seen_groups.add(group)
+                group_block_index[group] = len(pipeline)
+                pipeline.append({"group": group, "steps": [step_dict]})
+            else:
+                # Add to existing group block
+                pipeline[group_block_index[group]]["steps"].append(step_dict)
 
     # Extract layout (positions) from all nodes — only if layout should be preserved
     layout: dict[str, dict[str, float]] = {}
@@ -416,9 +460,9 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
             if edge.targetHandle:
                 param_edges[(edge.target, edge.targetHandle)] = param_name
 
-    # Build step lookup from graph
+    # Build step lookup from graph (include "group" metadata for new step placement)
     step_nodes = [n for n in graph.nodes if n.type == "step"]
-    graph_steps = {}
+    graph_steps: dict[str, dict[str, Any]] = {}
     for node in step_nodes:
         step_name = node.data["name"]
         step_data: dict[str, Any] = {
@@ -444,55 +488,85 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
             step_data["optional"] = True
         if node.data.get("disabled"):
             step_data["disabled"] = True
+        # Store group for new-step placement (not written into individual step dicts)
+        if node.data.get("group"):
+            step_data["group"] = node.data["group"]
         graph_steps[step_name] = step_data
 
-    # Update pipeline steps in-place, preserving order
+    # Update pipeline steps in-place, preserving order and group block structure
     if "pipeline" not in data:
         data["pipeline"] = []
 
-    # Update existing steps in-place
-    existing_names = set()
-    for step in data["pipeline"]:
-        name = step["name"]
-        existing_names.add(name)
-        if name in graph_steps:
-            graph_step = graph_steps[name]
-            step["task"] = graph_step["task"]
-            # Update loop
-            if "loop" in graph_step:
-                step["loop"] = graph_step["loop"]
-            elif "loop" in step:
-                del step["loop"]
-            # Update inputs
-            if "inputs" in graph_step:
-                step["inputs"] = graph_step["inputs"]
-            elif "inputs" in step:
-                del step["inputs"]
-            # Update outputs
-            if "outputs" in graph_step:
-                step["outputs"] = graph_step["outputs"]
-            elif "outputs" in step:
-                del step["outputs"]
-            # Update args
-            if "args" in graph_step:
-                step["args"] = graph_step["args"]
-            elif "args" in step:
-                del step["args"]
-            # Update optional
-            if graph_step.get("optional"):
-                step["optional"] = True
-            elif "optional" in step:
-                del step["optional"]
-            # Update disabled
-            if graph_step.get("disabled"):
-                step["disabled"] = True
-            elif "disabled" in step:
-                del step["disabled"]
+    def _apply_step_update(step: dict[str, Any], graph_step: dict[str, Any]) -> None:
+        """Update a single flat step dict in-place from graph_step."""
+        step["task"] = graph_step["task"]
+        # Update loop
+        if "loop" in graph_step:
+            step["loop"] = graph_step["loop"]
+        elif "loop" in step:
+            del step["loop"]
+        # Update inputs
+        if "inputs" in graph_step:
+            step["inputs"] = graph_step["inputs"]
+        elif "inputs" in step:
+            del step["inputs"]
+        # Update outputs
+        if "outputs" in graph_step:
+            step["outputs"] = graph_step["outputs"]
+        elif "outputs" in step:
+            del step["outputs"]
+        # Update args
+        if "args" in graph_step:
+            step["args"] = graph_step["args"]
+        elif "args" in step:
+            del step["args"]
+        # Update optional
+        if graph_step.get("optional"):
+            step["optional"] = True
+        elif "optional" in step:
+            del step["optional"]
+        # Update disabled
+        if graph_step.get("disabled"):
+            step["disabled"] = True
+        elif "disabled" in step:
+            del step["disabled"]
 
-    # Add any new steps from the graph
+    # Walk pipeline entries (flat steps and group blocks) updating in-place
+    existing_names: set[str] = set()
+    for entry in data["pipeline"]:
+        if "group" in entry and "steps" in entry:
+            # Group block — update each member step individually
+            for step in entry["steps"]:
+                name = step["name"]
+                existing_names.add(name)
+                if name in graph_steps:
+                    _apply_step_update(step, graph_steps[name])
+        else:
+            # Flat (ungrouped) step
+            name = entry["name"]
+            existing_names.add(name)
+            if name in graph_steps:
+                _apply_step_update(entry, graph_steps[name])
+
+    # Add any new steps from the graph (not already in existing YAML)
     for name, graph_step in graph_steps.items():
         if name not in existing_names:
-            data["pipeline"].append(graph_step)
+            group = graph_step.get("group")
+            # Build the plain step dict (no "group" key inside the step)
+            plain_step = {k: v for k, v in graph_step.items() if k != "group"}
+            if group:
+                # Try to append into an existing group block
+                appended = False
+                for entry in data["pipeline"]:
+                    if "group" in entry and entry["group"] == group:
+                        entry["steps"].append(plain_step)
+                        appended = True
+                        break
+                if not appended:
+                    # Create a new group block
+                    data["pipeline"].append({"group": group, "steps": [plain_step]})
+            else:
+                data["pipeline"].append(plain_step)
 
     # Update layout (positions) — only if layout should be preserved
     if graph.hasLayout:
