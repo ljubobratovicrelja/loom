@@ -1,5 +1,7 @@
 # Groups (Visual Step Grouping)
 
+![screenshot](https://raw.githubusercontent.com/ljubobratovicrelja/loom/main/examples/groups/media/screenshot.png)
+
 Organize related steps into named groups for a cleaner visual layout in the editor.
 
 ```
