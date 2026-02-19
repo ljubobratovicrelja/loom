@@ -1621,7 +1621,7 @@ export default function App() {
           {/* Left sidebar with collapsible toggle strip */}
           <div
             style={{ width: leftCollapsed ? 0 : sidebarWidth }}
-            className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full"
+            className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full flex flex-col"
           >
             <Sidebar
               tasks={tasks}
@@ -1640,7 +1640,7 @@ export default function App() {
           </div>
 
           {/* Left toggle strip: collapse button + drag-resize handle */}
-          <div className="w-5 flex-shrink-0 flex flex-col h-full">
+          <div className="w-3 flex-shrink-0 flex flex-col h-full">
             <button
               onClick={() => setLeftCollapsed((v) => !v)}
               className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
@@ -1675,7 +1675,7 @@ export default function App() {
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}
-          <div className="w-5 flex-shrink-0 flex flex-col h-full">
+          <div className="w-3 flex-shrink-0 flex flex-col h-full">
             <button
               onClick={() => setRightCollapsed((v) => !v)}
               className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
@@ -1697,7 +1697,7 @@ export default function App() {
           {/* Right sidebar with collapsible toggle */}
           <div
             style={{ width: rightCollapsed ? 0 : propertiesWidth }}
-            className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full"
+            className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full flex flex-col"
           >
             <PropertiesPanel
               selectedNode={selectedNode}

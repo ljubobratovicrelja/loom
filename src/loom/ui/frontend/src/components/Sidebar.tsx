@@ -102,7 +102,7 @@ export default function Sidebar({
   }
 
   return (
-    <div className="flex-1 bg-slate-100 dark:bg-slate-900 border-r border-slate-300 dark:border-slate-700 flex flex-col overflow-hidden">
+    <div className="flex-1 bg-slate-100 dark:bg-slate-900 flex flex-col overflow-hidden">
       <div className="p-4 border-b border-slate-300 dark:border-slate-700 shrink-0">
         <h2 className="text-slate-900 dark:text-white font-semibold text-sm uppercase tracking-wide">Add Nodes</h2>
       </div>
