@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from loom.runner.config import PipelineConfig, StepConfig
+from loom.runner.config import LoopConfig, PipelineConfig, StepConfig
 
 
 class TestStepConfig:
@@ -618,3 +618,200 @@ pipeline: []
 
         assert config.parallel is True
         assert config.max_workers is None
+
+
+class TestLoopConfig:
+    """Tests for LoopConfig dataclass."""
+
+    def test_from_dict_minimal(self) -> None:
+        """Test creating LoopConfig with required fields only."""
+        data = {"over": "$raw_images", "into": "$processed_images"}
+        loop = LoopConfig.from_dict(data)
+
+        assert loop.over == "$raw_images"
+        assert loop.into == "$processed_images"
+        assert loop.parallel is None
+        assert loop.filter is None
+
+    def test_from_dict_full(self) -> None:
+        """Test creating LoopConfig with all fields."""
+        data = {
+            "over": "$raw_images",
+            "into": "$processed_images",
+            "parallel": True,
+            "filter": "*.jpg",
+        }
+        loop = LoopConfig.from_dict(data)
+
+        assert loop.over == "$raw_images"
+        assert loop.into == "$processed_images"
+        assert loop.parallel is True
+        assert loop.filter == "*.jpg"
+
+    def test_from_dict_missing_over_raises(self) -> None:
+        """Test that missing 'over' raises KeyError."""
+        with pytest.raises(KeyError, match="over"):
+            LoopConfig.from_dict({"into": "$processed"})
+
+    def test_from_dict_missing_into_raises(self) -> None:
+        """Test that missing 'into' raises KeyError."""
+        with pytest.raises(KeyError, match="into"):
+            LoopConfig.from_dict({"over": "$raw"})
+
+
+class TestStepConfigLoop:
+    """Tests for loop field in StepConfig."""
+
+    def test_from_dict_without_loop(self) -> None:
+        """Test StepConfig without loop field."""
+        data = {"name": "step1", "task": "task.py"}
+        step = StepConfig.from_dict(data)
+        assert step.loop is None
+
+    def test_from_dict_with_loop(self) -> None:
+        """Test StepConfig with loop field."""
+        data = {
+            "name": "resize_each",
+            "task": "tasks/resize.py",
+            "loop": {
+                "over": "$raw_images",
+                "into": "$processed_images",
+                "parallel": True,
+                "filter": "*.jpg",
+            },
+            "inputs": {"image": "$loop_item"},
+            "outputs": {"--output": "$loop_output"},
+        }
+        step = StepConfig.from_dict(data)
+
+        assert step.loop is not None
+        assert step.loop.over == "$raw_images"
+        assert step.loop.into == "$processed_images"
+        assert step.loop.parallel is True
+        assert step.loop.filter == "*.jpg"
+        assert step.inputs == {"image": "$loop_item"}
+        assert step.outputs == {"--output": "$loop_output"}
+
+
+class TestLoopDependencyTracking:
+    """Tests for loop step dependency and producer tracking."""
+
+    @pytest.fixture
+    def loop_config(self) -> PipelineConfig:
+        """Config with a loop step."""
+        return PipelineConfig(
+            variables={
+                "raw": "data/raw",
+                "processed": "data/processed",
+                "summary": "data/summary.json",
+            },
+            parameters={},
+            steps=[
+                StepConfig(
+                    name="prepare",
+                    script="prepare.py",
+                    outputs={"-o": "$raw"},
+                ),
+                StepConfig(
+                    name="process_each",
+                    script="process.py",
+                    inputs={"image": "$loop_item"},
+                    outputs={"--output": "$loop_output"},
+                    loop=LoopConfig(over="$raw", into="$processed"),
+                ),
+                StepConfig(
+                    name="summarize",
+                    script="summarize.py",
+                    inputs={"folder": "$processed"},
+                    outputs={"-o": "$summary"},
+                ),
+            ],
+        )
+
+    def test_loop_into_registered_as_produced(self, loop_config: PipelineConfig) -> None:
+        """Test that loop.into is registered as produced by the loop step."""
+        assert loop_config._output_producers["processed"] == "process_each"
+
+    def test_loop_over_creates_dependency(self, loop_config: PipelineConfig) -> None:
+        """Test that loop.over creates a dependency on the step producing it."""
+        process_step = loop_config.get_step_by_name("process_each")
+        deps = loop_config.get_step_dependencies(process_step)
+        assert "prepare" in deps
+
+    def test_downstream_step_depends_on_loop(self, loop_config: PipelineConfig) -> None:
+        """Test that a step consuming loop.into depends on the loop step."""
+        summarize = loop_config.get_step_by_name("summarize")
+        deps = loop_config.get_step_dependencies(summarize)
+        assert "process_each" in deps
+
+    def test_loop_step_from_yaml(self, tmp_path: Path) -> None:
+        """Test loading a pipeline with a loop step from YAML."""
+        yaml_content = """
+data:
+  raw_images:
+    type: image_directory
+    path: data/raw
+  processed_images:
+    type: image_directory
+    path: data/processed
+
+parameters:
+  width: 512
+
+pipeline:
+  - name: resize_each
+    task: tasks/resize.py
+    loop:
+      over: $raw_images
+      into: $processed_images
+      parallel: true
+      filter: "*.jpg"
+    inputs:
+      image: $loop_item
+    outputs:
+      --output: $loop_output
+    args:
+      --width: $width
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        step = config.get_step_by_name("resize_each")
+        assert step.loop is not None
+        assert step.loop.over == "$raw_images"
+        assert step.loop.into == "$processed_images"
+        assert step.loop.parallel is True
+        assert step.loop.filter == "*.jpg"
+        assert config._output_producers["processed_images"] == "resize_each"
+
+
+class TestResolveValueWithLoop:
+    """Tests for PipelineConfig.resolve_value_with_loop method."""
+
+    @pytest.fixture
+    def config(self) -> PipelineConfig:
+        """Config for testing loop resolution."""
+        return PipelineConfig(
+            variables={"src_dir": "data/source"},
+            parameters={"width": 512},
+            steps=[],
+        )
+
+    def test_resolves_loop_binding_first(self, config: PipelineConfig) -> None:
+        """Test that loop bindings take priority over variables."""
+        bindings = {"loop_item": "/data/raw/foo.jpg", "loop_output": "/data/processed/foo.jpg"}
+        assert config.resolve_value_with_loop("$loop_item", bindings) == "/data/raw/foo.jpg"
+        assert config.resolve_value_with_loop("$loop_output", bindings) == "/data/processed/foo.jpg"
+
+    def test_falls_back_to_regular_resolution(self, config: PipelineConfig) -> None:
+        """Test that non-loop refs fall back to resolve_value."""
+        bindings = {"loop_item": "/data/raw/foo.jpg"}
+        assert config.resolve_value_with_loop("$src_dir", bindings) == "data/source"
+        assert config.resolve_value_with_loop("$width", bindings) == 512
+
+    def test_non_reference_returned_as_is(self, config: PipelineConfig) -> None:
+        """Test that non-reference values are returned unchanged."""
+        bindings = {"loop_item": "/data/raw/foo.jpg"}
+        assert config.resolve_value_with_loop("plain_string", bindings) == "plain_string"
+        assert config.resolve_value_with_loop(42, bindings) == 42

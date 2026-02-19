@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import type { Node, Edge } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion, Link } from 'lucide-react'
-import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState } from '../types/pipeline'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion, Link, RefreshCw } from 'lucide-react'
+import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState, LoopConfig } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 import type { FreshnessInfo } from '../hooks/useFreshness'
@@ -191,6 +191,18 @@ export default function PropertiesPanel({
     const inputs = { ...(editData.inputs as Record<string, string> || {}) }
     inputs[inputKey] = value
     handleChange('inputs', inputs)
+  }
+
+  const handleLoopChange = (field: keyof LoopConfig, value: string | boolean | undefined) => {
+    const loop = { ...(editData.loop as LoopConfig || { over: '', into: '' }) }
+    if (field === 'parallel') {
+      loop.parallel = value as boolean | undefined
+    } else if (field === 'filter') {
+      loop.filter = value as string | undefined
+    } else {
+      (loop as Record<string, unknown>)[field] = value
+    }
+    handleChange('loop', loop)
   }
 
   const handleAddArg = (argKey: string) => {
@@ -498,6 +510,62 @@ export default function PropertiesPanel({
                 Disabled (skip during execution)
               </label>
             </div>
+
+            {/* Loop config */}
+            {editData.loop && (
+              <div className="border border-violet-300 dark:border-violet-700 rounded p-3 bg-violet-50 dark:bg-violet-900/10">
+                <div className="flex items-center gap-2 mb-3">
+                  <RefreshCw className="w-3 h-3 text-violet-500 dark:text-violet-400" />
+                  <label className="text-violet-600 dark:text-violet-400 text-xs font-semibold">Loop</label>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Over (input collection)</label>
+                    <input
+                      type="text"
+                      value={(editData.loop as LoopConfig).over || ''}
+                      onChange={(e) => handleLoopChange('over', e.target.value)}
+                      placeholder="$input_dir"
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-violet-300 dark:border-violet-700 rounded text-slate-900 dark:text-white text-xs font-mono focus:border-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Into (output collection)</label>
+                    <input
+                      type="text"
+                      value={(editData.loop as LoopConfig).into || ''}
+                      onChange={(e) => handleLoopChange('into', e.target.value)}
+                      placeholder="$output_dir"
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-violet-300 dark:border-violet-700 rounded text-slate-900 dark:text-white text-xs font-mono focus:border-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={(editData.loop as LoopConfig).parallel || false}
+                        onChange={(e) => handleLoopChange('parallel', e.target.checked || undefined)}
+                        className="rounded"
+                      />
+                      Run iterations in parallel
+                    </label>
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Filter (glob, optional)</label>
+                    <input
+                      type="text"
+                      value={(editData.loop as LoopConfig).filter || ''}
+                      onChange={(e) => handleLoopChange('filter', e.target.value || undefined)}
+                      placeholder="*.jpg"
+                      className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-violet-300 dark:border-violet-700 rounded text-slate-900 dark:text-white text-xs font-mono focus:border-violet-500"
+                    />
+                  </div>
+                  <p className="text-violet-400 dark:text-violet-500 text-[10px]">
+                    Use <code className="font-mono">$loop_item</code> in inputs and <code className="font-mono">$loop_output</code> in outputs
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Inputs */}
             <div>

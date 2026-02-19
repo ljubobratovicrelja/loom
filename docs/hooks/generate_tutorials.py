@@ -29,6 +29,7 @@ EXAMPLES = {
     "optional_steps": ("optional-steps.md", "Optional Steps"),
     "curve-fitting": ("curve-fitting.md", "Scientific Workflow"),
     "image-processing": ("image-processing.md", "Image Processing"),
+    "loop": ("loop.md", "Loop (Per-Item Processing)"),
 }
 
 

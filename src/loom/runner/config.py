@@ -10,6 +10,30 @@ from .url import URL_CACHE_DIR_NAME, ensure_url_downloaded, is_url
 
 
 @dataclass
+class LoopConfig:
+    """Configuration for a loop block on a pipeline step."""
+
+    over: str  # e.g. "$raw_images" — data var referencing an image_directory or data_folder
+    into: str  # e.g. "$processed_images" — data var where per-item outputs are collected
+    parallel: bool | None = None  # None = use pipeline-level setting
+    filter: str | None = None  # Glob pattern to filter files, e.g. "*.jpg"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "LoopConfig":
+        """Create LoopConfig from YAML dict."""
+        if "over" not in data:
+            raise KeyError("Loop config must have 'over' field")
+        if "into" not in data:
+            raise KeyError("Loop config must have 'into' field")
+        return cls(
+            over=data["over"],
+            into=data["into"],
+            parallel=data.get("parallel"),
+            filter=data.get("filter"),
+        )
+
+
+@dataclass
 class StepConfig:
     """Configuration for a single pipeline step."""
 
@@ -20,6 +44,7 @@ class StepConfig:
     args: dict[str, Any] = field(default_factory=dict)
     optional: bool = False
     disabled: bool = False
+    loop: LoopConfig | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StepConfig":
@@ -28,6 +53,9 @@ class StepConfig:
         script = data.get("task") or data.get("script")
         if not script:
             raise KeyError("Step must have 'task' or 'script' field")
+        loop: LoopConfig | None = None
+        if "loop" in data:
+            loop = LoopConfig.from_dict(data["loop"])
         return cls(
             name=data["name"],
             script=script,
@@ -36,6 +64,7 @@ class StepConfig:
             args=data.get("args", {}),
             optional=data.get("optional", False),
             disabled=data.get("disabled", False),
+            loop=loop,
         )
 
 
@@ -58,6 +87,10 @@ class PipelineConfig:
         for step in self.steps:
             for var_ref in step.outputs.values():
                 var_name = var_ref.lstrip("$")
+                self._output_producers[var_name] = step.name
+            # Register loop.into as produced by this step
+            if step.loop is not None:
+                var_name = step.loop.into.lstrip("$")
                 self._output_producers[var_name] = step.name
 
     @classmethod
@@ -113,6 +146,24 @@ class PipelineConfig:
             parallel=parallel,
             max_workers=max_workers,
         )
+
+    def resolve_value_with_loop(self, value: Any, loop_bindings: dict[str, str]) -> Any:
+        """Resolve $variable references, checking loop bindings first.
+
+        Args:
+            value: Value to resolve. If string starting with $, checks
+                   loop_bindings first, then falls back to resolve_value.
+            loop_bindings: Per-iteration bindings, e.g. {"loop_item": "/path/to/file"}.
+
+        Returns:
+            Resolved value.
+        """
+        if not isinstance(value, str) or not value.startswith("$"):
+            return value
+        ref_name = value[1:]
+        if ref_name in loop_bindings:
+            return loop_bindings[ref_name]
+        return self.resolve_value(value)
 
     def resolve_value(self, value: Any) -> Any:
         """Resolve $variable and $parameter references.
@@ -193,6 +244,12 @@ class PipelineConfig:
         # Check each input to see if it's produced by another step
         for var_ref in step.inputs.values():
             var_name = var_ref.lstrip("$")
+            if var_name in self._output_producers:
+                dependencies.add(self._output_producers[var_name])
+
+        # If this is a loop step, also depend on the step that produces loop.over
+        if step.loop is not None:
+            var_name = step.loop.over.lstrip("$")
             if var_name in self._output_producers:
                 dependencies.add(self._output_producers[var_name])
 

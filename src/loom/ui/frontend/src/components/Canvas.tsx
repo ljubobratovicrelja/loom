@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css'
 import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
-import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType } from '../types/pipeline'
+import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 
 const nodeTypes = {
@@ -252,6 +252,66 @@ export default function Canvas({
         // Get source and target nodes for validation
         const sourceNode = nodesRef.current.find((n) => n.id === params.source)
         const targetNode = nodesRef.current.find((n) => n.id === params.target)
+
+        // Loop-over connection: data node → step (targetHandle = 'loop-over')
+        if (params.targetHandle === 'loop-over' && targetNode?.type === 'step') {
+          if (sourceNode?.type !== 'data') {
+            alert('Loop "over" connections must come from a data node.')
+            return
+          }
+          const dataKey = (sourceNode.data as DataNodeData).key
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.id === params.target && node.type === 'step') {
+                const stepData = node.data as StepData
+                const loop: LoopConfig = { ...(stepData.loop || { over: '', into: '' }), over: `$${dataKey}` }
+                return { ...node, data: { ...stepData, loop } }
+              }
+              return node
+            }) as PipelineNode[]
+          )
+          setEdges((eds) => {
+            // Remove any existing loop-over edge for this step
+            const filtered = eds.filter(
+              (e) => !(e.target === params.target && e.targetHandle === 'loop-over')
+            )
+            return addEdge(
+              { ...params, id: `e_loop_over_${params.source}_${params.target}` },
+              filtered
+            )
+          })
+          return
+        }
+
+        // Loop-into connection: step → data node (sourceHandle = 'loop-into')
+        if (params.sourceHandle === 'loop-into' && sourceNode?.type === 'step') {
+          if (targetNode?.type !== 'data') {
+            alert('Loop "into" connections must go to a data node.')
+            return
+          }
+          const dataKey = (targetNode.data as DataNodeData).key
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.id === params.source && node.type === 'step') {
+                const stepData = node.data as StepData
+                const loop: LoopConfig = { ...(stepData.loop || { over: '', into: '' }), into: `$${dataKey}` }
+                return { ...node, data: { ...stepData, loop } }
+              }
+              return node
+            }) as PipelineNode[]
+          )
+          setEdges((eds) => {
+            // Remove any existing loop-into edge for this step
+            const filtered = eds.filter(
+              (e) => !(e.source === params.source && e.sourceHandle === 'loop-into')
+            )
+            return addEdge(
+              { ...params, id: `e_loop_into_${params.source}_${params.target}` },
+              filtered
+            )
+          })
+          return
+        }
 
         // Auto-create data node for step-to-step connections
         if (sourceNode?.type === 'step' && targetNode?.type === 'step') {
