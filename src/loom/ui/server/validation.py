@@ -16,9 +16,17 @@ def validate_pipeline(
     3. Warns about missing type annotations
     """
     warnings: list[ValidationWarning] = []
-    pipeline = yaml_data.get("pipeline", [])
+    raw_pipeline = yaml_data.get("pipeline", [])
     data_section = yaml_data.get("data", {})
     variables = yaml_data.get("variables", {})
+
+    # Flatten group blocks so steps inside groups are validated
+    pipeline = []
+    for entry in raw_pipeline:
+        if "group" in entry and "steps" in entry:
+            pipeline.extend(entry["steps"])
+        else:
+            pipeline.append(entry)
 
     for step in pipeline:
         step_name = step.get("name", "unknown")

@@ -33,6 +33,23 @@ class LoopConfig:
         )
 
 
+def _flatten_pipeline(pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten grouped pipeline entries into a flat list with group tag injected.
+
+    Group blocks of the form ``{"group": name, "steps": [...]}`` are expanded
+    into flat step dicts with a ``"group"`` key added to each step.
+    Ungrouped steps are passed through unchanged.
+    """
+    flat = []
+    for entry in pipeline:
+        if "group" in entry and "steps" in entry:
+            for step in entry["steps"]:
+                flat.append({**step, "group": entry["group"]})
+        else:
+            flat.append(entry)
+    return flat
+
+
 @dataclass
 class StepConfig:
     """Configuration for a single pipeline step."""
@@ -45,6 +62,7 @@ class StepConfig:
     optional: bool = False
     disabled: bool = False
     loop: LoopConfig | None = None
+    group: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StepConfig":
@@ -65,6 +83,7 @@ class StepConfig:
             optional=data.get("optional", False),
             disabled=data.get("disabled", False),
             loop=loop,
+            group=data.get("group"),
         )
 
 
@@ -111,7 +130,7 @@ class PipelineConfig:
                 "See examples for the new format."
             )
 
-        steps = [StepConfig.from_dict(s) for s in data.get("pipeline", [])]
+        steps = [StepConfig.from_dict(s) for s in _flatten_pipeline(data.get("pipeline", []))]
 
         # Load variables from 'data' section
         # Data nodes provide typed file/dir references

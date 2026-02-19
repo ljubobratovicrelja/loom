@@ -613,3 +613,210 @@ class TestDataSectionRoundTrip:
         assert yaml_out["data"]["video"]["path"] == "data/videos/test.mp4"
         assert yaml_out["data"]["gaze_csv"]["type"] == "csv"
         assert yaml_out["data"]["fixations_csv"]["type"] == "csv"
+
+
+# ---------------------------------------------------------------------------
+# Group block tests
+# ---------------------------------------------------------------------------
+
+SAMPLE_YAML_WITH_GROUPS = """\
+pipeline:
+  - group: preprocessing
+    steps:
+      - name: preprocess
+        task: tasks/preprocess.py
+      - name: normalize
+        task: tasks/normalize.py
+  - name: train
+    task: tasks/train.py
+"""
+
+
+class TestGroupBlockYamlToGraph:
+    """Test yaml_to_graph with group blocks."""
+
+    def test_step_nodes_have_group_field(self) -> None:
+        """Step nodes from grouped steps should carry a 'group' field in data."""
+        import yaml
+
+        data = yaml.safe_load(SAMPLE_YAML_WITH_GROUPS)
+        graph = yaml_to_graph(data)
+
+        step_nodes = {n.id: n for n in graph.nodes if n.type == "step"}
+        assert step_nodes["preprocess"].data["group"] == "preprocessing"
+        assert step_nodes["normalize"].data["group"] == "preprocessing"
+
+    def test_ungrouped_step_has_no_group_field(self) -> None:
+        """Ungrouped step nodes should not have a 'group' key in data."""
+        import yaml
+
+        data = yaml.safe_load(SAMPLE_YAML_WITH_GROUPS)
+        graph = yaml_to_graph(data)
+
+        step_nodes = {n.id: n for n in graph.nodes if n.type == "step"}
+        assert (
+            "group" not in step_nodes["train"].data or step_nodes["train"].data.get("group") is None
+        )
+
+    def test_all_steps_become_nodes(self) -> None:
+        """All steps (inside groups and ungrouped) should become graph nodes."""
+        import yaml
+
+        data = yaml.safe_load(SAMPLE_YAML_WITH_GROUPS)
+        graph = yaml_to_graph(data)
+
+        step_ids = {n.id for n in graph.nodes if n.type == "step"}
+        assert step_ids == {"preprocess", "normalize", "train"}
+
+
+class TestGroupBlockGraphToYaml:
+    """Test graph_to_yaml with group-tagged step nodes."""
+
+    def test_grouped_steps_emit_group_blocks(self) -> None:
+        """Step nodes with 'group' in data should be emitted as nested group blocks."""
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            data={},
+            nodes=[
+                GraphNode(
+                    id="preprocess",
+                    type="step",
+                    position={"x": 300, "y": 50},
+                    data={
+                        "name": "preprocess",
+                        "task": "tasks/preprocess.py",
+                        "inputs": {},
+                        "outputs": {},
+                        "args": {},
+                        "optional": False,
+                        "group": "preprocessing",
+                    },
+                ),
+                GraphNode(
+                    id="normalize",
+                    type="step",
+                    position={"x": 300, "y": 300},
+                    data={
+                        "name": "normalize",
+                        "task": "tasks/normalize.py",
+                        "inputs": {},
+                        "outputs": {},
+                        "args": {},
+                        "optional": False,
+                        "group": "preprocessing",
+                    },
+                ),
+                GraphNode(
+                    id="train",
+                    type="step",
+                    position={"x": 700, "y": 50},
+                    data={
+                        "name": "train",
+                        "task": "tasks/train.py",
+                        "inputs": {},
+                        "outputs": {},
+                        "args": {},
+                        "optional": False,
+                    },
+                ),
+            ],
+            edges=[],
+        )
+
+        yaml_out = graph_to_yaml(graph)
+        pipeline = yaml_out["pipeline"]
+
+        # First entry should be the group block
+        assert pipeline[0]["group"] == "preprocessing"
+        assert len(pipeline[0]["steps"]) == 2
+        step_names = [s["name"] for s in pipeline[0]["steps"]]
+        assert "preprocess" in step_names
+        assert "normalize" in step_names
+
+        # Second entry should be the ungrouped step
+        assert pipeline[1]["name"] == "train"
+
+    def test_group_key_not_inside_step_dicts(self) -> None:
+        """The 'group' key should NOT appear inside individual step dicts."""
+        graph = PipelineGraph(
+            variables={},
+            parameters={},
+            data={},
+            nodes=[
+                GraphNode(
+                    id="preprocess",
+                    type="step",
+                    position={"x": 300, "y": 50},
+                    data={
+                        "name": "preprocess",
+                        "task": "tasks/preprocess.py",
+                        "inputs": {},
+                        "outputs": {},
+                        "args": {},
+                        "optional": False,
+                        "group": "preprocessing",
+                    },
+                ),
+            ],
+            edges=[],
+        )
+
+        yaml_out = graph_to_yaml(graph)
+        group_block = yaml_out["pipeline"][0]
+        inner_step = group_block["steps"][0]
+        assert "group" not in inner_step
+
+
+class TestGroupBlockRoundTrip:
+    """Round-trip tests: YAML with groups → graph → YAML."""
+
+    def test_group_structure_preserved(self) -> None:
+        """Group block structure should be preserved through yaml → graph → yaml."""
+        import yaml
+
+        data = yaml.safe_load(SAMPLE_YAML_WITH_GROUPS)
+        graph = yaml_to_graph(data)
+        yaml_out = graph_to_yaml(graph)
+
+        pipeline = yaml_out["pipeline"]
+
+        # Find the group block
+        group_blocks = [e for e in pipeline if "group" in e]
+        flat_steps = [e for e in pipeline if "name" in e]
+
+        assert len(group_blocks) == 1
+        assert group_blocks[0]["group"] == "preprocessing"
+        assert len(group_blocks[0]["steps"]) == 2
+
+        assert len(flat_steps) == 1
+        assert flat_steps[0]["name"] == "train"
+
+    def test_update_yaml_handles_group_blocks(self, tmp_path: Path) -> None:
+        """update_yaml_from_graph should update steps inside group blocks in-place."""
+        yaml_content = """\
+pipeline:
+  - group: preprocessing
+    steps:
+      - name: preprocess
+        task: tasks/old_preprocess.py
+"""
+        yaml_file = tmp_path / "pipeline.yml"
+        yaml_file.write_text(yaml_content)
+
+        with open(yaml_file) as f:
+            data = _yaml.load(f)
+
+        # Update the task path via graph
+        graph = yaml_to_graph(dict(data))
+        # Modify the task in graph nodes
+        for node in graph.nodes:
+            if node.id == "preprocess":
+                node.data["task"] = "tasks/new_preprocess.py"
+
+        _update_yaml_from_graph(data, graph)
+
+        # The update should have gone into the group block's step
+        pipeline = data["pipeline"]
+        assert pipeline[0]["group"] == "preprocessing"
+        assert pipeline[0]["steps"][0]["task"] == "tasks/new_preprocess.py"

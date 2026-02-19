@@ -815,3 +815,72 @@ class TestResolveValueWithLoop:
         bindings = {"loop_item": "/data/raw/foo.jpg"}
         assert config.resolve_value_with_loop("plain_string", bindings) == "plain_string"
         assert config.resolve_value_with_loop(42, bindings) == 42
+
+
+class TestGroupBlockParsing:
+    """Tests for group block support in PipelineConfig."""
+
+    def test_group_blocks_are_flattened(self, tmp_path: Path) -> None:
+        """Steps inside group blocks should be parsed as normal steps with group set."""
+        yaml_content = """
+pipeline:
+  - group: preprocessing
+    steps:
+      - name: preprocess
+        task: tasks/preprocess.py
+      - name: normalize
+        task: tasks/normalize.py
+  - name: train
+    task: tasks/train.py
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        assert len(config.steps) == 3
+        assert config.steps[0].name == "preprocess"
+        assert config.steps[0].group == "preprocessing"
+        assert config.steps[1].name == "normalize"
+        assert config.steps[1].group == "preprocessing"
+        assert config.steps[2].name == "train"
+        assert config.steps[2].group is None
+
+    def test_ungrouped_steps_have_none_group(self, tmp_path: Path) -> None:
+        """Steps not inside a group block should have group=None."""
+        yaml_content = """
+pipeline:
+  - name: step1
+    task: tasks/step1.py
+  - name: step2
+    task: tasks/step2.py
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        for step in config.steps:
+            assert step.group is None
+
+    def test_multiple_groups_are_parsed(self, tmp_path: Path) -> None:
+        """Multiple group blocks should all be flattened correctly."""
+        yaml_content = """
+pipeline:
+  - group: group_a
+    steps:
+      - name: step_a1
+        task: tasks/a1.py
+  - group: group_b
+    steps:
+      - name: step_b1
+        task: tasks/b1.py
+      - name: step_b2
+        task: tasks/b2.py
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+
+        assert len(config.steps) == 3
+        assert config.steps[0].group == "group_a"
+        assert config.steps[1].group == "group_b"
+        assert config.steps[2].group == "group_b"
