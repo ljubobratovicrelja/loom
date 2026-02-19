@@ -104,11 +104,29 @@ export default function App() {
   const [propertiesWidth, setPropertiesWidth] = useState(320) // Default w-80
 
   // Collapsible sidebar state
-  const [leftCollapsed, setLeftCollapsed] = useState(false)
-  const [rightCollapsed, setRightCollapsed] = useState(false)
+  const [leftCollapsed, setLeftCollapsed] = useState(
+    () => localStorage.getItem('loom-ui:leftCollapsed') === 'true'
+  )
+  const [rightCollapsed, setRightCollapsed] = useState(
+    () => localStorage.getItem('loom-ui:rightCollapsed') === 'true'
+  )
+
+  useEffect(() => {
+    localStorage.setItem('loom-ui:leftCollapsed', String(leftCollapsed))
+  }, [leftCollapsed])
+
+  useEffect(() => {
+    localStorage.setItem('loom-ui:rightCollapsed', String(rightCollapsed))
+  }, [rightCollapsed])
 
   // Parameter nodes visibility
-  const [showParameterNodes, setShowParameterNodes] = useState(true)
+  const [showParameterNodes, setShowParameterNodes] = useState(
+    () => localStorage.getItem('loom-ui:showParameterNodes') !== 'false'
+  )
+
+  useEffect(() => {
+    localStorage.setItem('loom-ui:showParameterNodes', String(showParameterNodes))
+  }, [showParameterNodes])
 
   // Auto-layout confirm dialog
   const [showAutoLayoutConfirm, setShowAutoLayoutConfirm] = useState(false)
