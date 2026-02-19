@@ -1672,6 +1672,7 @@ export default function App() {
             onNodeDoubleClick={handleNodeDoubleClick}
             onParameterDrop={handleParameterDrop}
             hideParameterNodes={!showParameterNodes}
+            selectedNodes={selectedNodes}
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}

@@ -1,7 +1,8 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useContext, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder, RefreshCw } from 'lucide-react'
 import type { StepNode as StepNodeType, DataType } from '../types/pipeline'
+import { HighlightContext } from '../contexts/HighlightContext'
 
 // Color configuration for data types - support both light and dark modes
 const TYPE_COLORS: Record<DataType, { bg: string; border: string; text: string }> = {
@@ -27,7 +28,9 @@ const TYPE_ICONS: Record<DataType, ReactNode> = {
   data_folder: <Folder className="w-3 h-3" />,
 }
 
-function StepNode({ data, selected }: NodeProps<StepNodeType>) {
+function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
+  const { neighborNodeIds } = useContext(HighlightContext)
+  const isNeighbor = neighborNodeIds.has(id)
   const inputNames = Object.keys(data.inputs || {})
   const outputNames = Object.keys(data.outputs || {})
   const isDisabled = data.disabled === true
@@ -64,7 +67,10 @@ function StepNode({ data, selected }: NodeProps<StepNodeType>) {
       return 'border-red-500 shadow-red-500/30 shadow-md'
     }
     if (selected) {
-      return 'border-blue-500'
+      return 'border-blue-500 shadow-lg shadow-blue-500/50'
+    }
+    if (isNeighbor) {
+      return 'border-teal-400/60 shadow-md shadow-teal-400/20'
     }
     return 'border-slate-400 dark:border-slate-600'
   }
