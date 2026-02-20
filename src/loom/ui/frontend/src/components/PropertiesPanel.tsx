@@ -332,6 +332,11 @@ export default function PropertiesPanel({
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm focus:border-purple-500"
               />
             </div>
+            {selectedNode.id !== `param_${editData.name}` && (
+              <div className="text-xs text-purple-500 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 rounded px-2 py-1">
+                Reference of <span className="font-mono">${(editData.name as string)}</span>
+              </div>
+            )}
             <div className="text-xs text-slate-400 dark:text-slate-500">
               <p>This parameter is shared across the pipeline.</p>
               <p>Editing here updates all references.</p>
