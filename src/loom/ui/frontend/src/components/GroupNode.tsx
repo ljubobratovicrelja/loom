@@ -22,6 +22,11 @@ function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<Group
 
   const fontSize = zoomed ? centeredFontSize : cornerFontSize
 
+  // Selection visual state
+  const { anyGroupSelected, isSelected } = data
+  const selectionFilter = anyGroupSelected && !isSelected ? 'saturate(0.3) brightness(0.85)' : 'none'
+  const selectionScale = anyGroupSelected && isSelected ? 'scale(1.02)' : 'none'
+
   const { onGroupClick, onGroupDoubleClick } = data
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -60,7 +65,9 @@ function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<Group
         userSelect: 'none',
         position: 'relative',
         cursor: zoomed ? 'pointer' : 'default',
-        transition: 'background-color 0.4s ease, border-color 0.4s ease',
+        filter: selectionFilter,
+        transform: selectionScale,
+        transition: 'background-color 0.4s ease, border-color 0.4s ease, transform 0.3s ease, filter 0.3s ease',
       }}
     >
       <span
