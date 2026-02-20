@@ -39,7 +39,10 @@ def _resolve_param_name(edge_source: str, nodes: list[GraphNode]) -> str | None:
     """
     for node in nodes:
         if node.id == edge_source and node.type == "parameter":
-            return node.data.get("name")
+            name = node.data.get("name")
+            if name:
+                return str(name)
+            break
     if edge_source.startswith("param_"):
         return edge_source[6:]
     return None
@@ -54,13 +57,14 @@ def _collect_param_refs(
     for node in nodes:
         if node.type == "parameter":
             name = node.data.get("name", "")
-            if node.id != f"param_{name}":
-                ref_edges = [
-                    f"{e.target}:{e.targetHandle}"
-                    for e in edges
-                    if e.source == node.id and e.targetHandle
-                ]
-                param_refs[node.id] = {"parameter": name, "edges": ref_edges}
+            if not name or node.id == f"param_{name}":
+                continue
+            ref_edges = sorted(
+                f"{e.target}:{e.targetHandle}"
+                for e in edges
+                if e.source == node.id and e.targetHandle
+            )
+            param_refs[node.id] = {"parameter": name, "edges": ref_edges}
     return param_refs
 
 
@@ -271,8 +275,14 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                 param_name = arg_value[1:]
                 # Only create edge if parameter exists
                 if param_name in parameters:
-                    # Route to clone node if mapped, otherwise primary node
-                    source_id = clone_edge_lookup.get(f"{step_id}:{arg_key}", f"param_{param_name}")
+                    # Route to clone node if mapped to same parameter, otherwise primary
+                    source_id = f"param_{param_name}"
+                    clone_key = f"{step_id}:{arg_key}"
+                    clone_id = clone_edge_lookup.get(clone_key)
+                    if clone_id is not None:
+                        ref_info = param_refs.get(clone_id)
+                        if ref_info and ref_info.get("parameter") == param_name:
+                            source_id = clone_id
                     edges.append(
                         GraphEdge(
                             id=f"e_{source_id}_{step_id}_{arg_key}",
