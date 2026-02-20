@@ -190,7 +190,8 @@ def build_pipeline_commands(
         # Filter like other modes: skip disabled, exclude optional unless included.
         # Always keep the target step itself (user explicitly selected it).
         steps = [
-            s for s in raw_steps
+            s
+            for s in raw_steps
             if s.name == step_name
             or (
                 not s.disabled
