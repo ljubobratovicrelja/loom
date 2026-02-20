@@ -12,6 +12,7 @@ interface ToolbarProps {
   hasChanges: boolean
   selectedStepName: string | null
   selectedStepNames: string[]
+  selectedDataKey: string | null
   executionStatus: ExecutionStatus
   onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[], groupName?: string) => void
   onRunStep?: (stepName: string) => void  // Independent step execution
@@ -44,6 +45,7 @@ export default function Toolbar({
   hasChanges,
   selectedStepName,
   selectedStepNames,
+  selectedDataKey,
   executionStatus,
   onRun,
   onRunStep,
@@ -96,6 +98,7 @@ export default function Toolbar({
         <RunControls
           selectedStepName={selectedStepName}
           selectedStepNames={selectedStepNames}
+          selectedDataKey={selectedDataKey}
           status={executionStatus}
           onRun={onRun}
           onRunStep={onRunStep}
