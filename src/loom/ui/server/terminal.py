@@ -73,6 +73,28 @@ async def terminal_websocket(websocket: WebSocket) -> None:
 
         config = PipelineConfig.from_yaml(state.config_path)
 
+        # Handle group mode: resolve to step commands and run sequentially/parallel
+        if run_request.mode == "group" and run_request.group_name:
+            from ..execution import build_group_commands
+
+            try:
+                group_commands = build_group_commands(state.config_path, run_request.group_name)
+            except ValueError as e:
+                await websocket.send_text(f"\x1b[31m[ERROR]\x1b[0m {e}\r\n")
+                return
+
+            if config.parallel:
+                # Run group steps with parallel orchestrator
+                await _run_config_parallel_pipeline_with_commands(
+                    websocket,
+                    config,
+                    group_commands,
+                    get_step_output_dirs,
+                )
+            else:
+                await _run_sequential_commands(websocket, group_commands, get_step_output_dirs)
+            return
+
         if config.parallel and run_request.mode == "all":
             # Use parallel execution for "Run All" when config.parallel is True
             await _run_config_parallel_pipeline(
@@ -930,6 +952,435 @@ async def _run_config_parallel_pipeline(
                     gen.send(StepResult(step_name, success))
 
         # Report final status
+        final_results = orch.results
+        success_count = sum(1 for v in final_results.values() if v)
+        total = len(final_results)
+
+        if success_count == total:
+            await websocket.send_text(
+                f"\x1b[32m[COMPLETED]\x1b[0m {total} step(s) succeeded in parallel\r\n"
+            )
+            state.execution_state["status"] = "completed"
+        else:
+            await websocket.send_text(
+                f"\x1b[33m[PARTIAL]\x1b[0m {success_count}/{total} steps succeeded\r\n"
+            )
+            state.execution_state["status"] = "failed" if success_count == 0 else "completed"
+
+    finally:
+        cancel_task.cancel()
+        try:
+            await cancel_task
+        except asyncio.CancelledError:
+            pass
+
+
+async def _run_sequential_commands(
+    websocket: WebSocket,
+    commands: list[tuple[str, list[str]]],
+    get_step_output_dirs: Any,
+) -> None:
+    """Run pre-built commands sequentially.
+
+    This is a lighter variant of _run_sequential_pipeline that accepts
+    pre-built (step_name, cmd) pairs instead of building them from a RunRequest.
+
+    Args:
+        websocket: WebSocket connection for streaming output.
+        commands: List of (step_name, command) tuples.
+        get_step_output_dirs: Function to get output directories for a step.
+    """
+    if not commands:
+        await websocket.send_text("\x1b[33m[WARN]\x1b[0m No steps to run\r\n")
+        return
+
+    state.execution_state["status"] = "running"
+
+    for step_name, cmd in commands:
+        state.execution_state["current_step"] = step_name
+
+        # Create output directories
+        try:
+            for dir_path in get_step_output_dirs(state.config_path, step_name):
+                dir_path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            await websocket.send_text(
+                f"\x1b[31m[ERROR]\x1b[0m Failed to create output dirs: {e}\r\n"
+            )
+            state.execution_state["status"] = "failed"
+            return
+
+        # Send step status
+        await websocket.send_text(
+            json.dumps({"type": "step_status", "step": step_name, "status": "running"})
+        )
+
+        cmd_str = " ".join(cmd)
+        await websocket.send_text(f"\x1b[36m[RUNNING]\x1b[0m {step_name}\r\n")
+        await websocket.send_text(f"  {cmd_str}\r\n")
+
+        # Create PTY
+        master_fd, slave_fd = pty.openpty()
+        state.execution_state["master_fd"] = master_fd
+
+        pid = os.fork()
+        if pid == 0:
+            os.setsid()
+            os.dup2(slave_fd, 0)
+            os.dup2(slave_fd, 1)
+            os.dup2(slave_fd, 2)
+            os.close(master_fd)
+            os.close(slave_fd)
+            os.execvp(cmd[0], cmd)
+        else:
+            os.close(slave_fd)
+            state.execution_state["pid"] = pid
+
+            flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+            fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+            cancelled = False
+
+            async def listen_for_cancel() -> None:
+                nonlocal cancelled
+                try:
+                    while True:
+                        msg = await websocket.receive_text()
+                        if msg == "__CANCEL__":
+                            cancelled = True
+                            state.execution_state["status"] = "cancelled"
+                            try:
+                                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                            except (ProcessLookupError, PermissionError):
+                                pass
+                            return
+                except Exception:
+                    pass
+
+            cancel_task = asyncio.create_task(listen_for_cancel())
+
+            try:
+                while True:
+                    if cancelled:
+                        break
+
+                    wpid, wait_status = os.waitpid(pid, os.WNOHANG)
+                    if wpid != 0:
+                        try:
+                            while True:
+                                data_bytes = os.read(master_fd, 4096)
+                                if not data_bytes:
+                                    break
+                                await websocket.send_bytes(data_bytes)
+                        except (OSError, BlockingIOError):
+                            pass
+                        break
+
+                    try:
+                        data_bytes = os.read(master_fd, 4096)
+                        if data_bytes:
+                            await websocket.send_bytes(data_bytes)
+                    except BlockingIOError:
+                        pass
+                    except OSError:
+                        break
+
+                    await asyncio.sleep(0.01)
+            finally:
+                cancel_task.cancel()
+                try:
+                    await cancel_task
+                except asyncio.CancelledError:
+                    pass
+
+            os.close(master_fd)
+            state.execution_state["master_fd"] = None
+            state.execution_state["pid"] = None
+
+            if cancelled:
+                await websocket.send_text(f"\x1b[33m[CANCELLED]\x1b[0m {step_name}\r\n")
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "cancelled"})
+                )
+                return
+
+            if os.WIFEXITED(wait_status):
+                exit_code = os.WEXITSTATUS(wait_status)
+                if exit_code == 0:
+                    await websocket.send_text(f"\x1b[32m[SUCCESS]\x1b[0m {step_name}\r\n")
+                    await websocket.send_text(
+                        json.dumps(
+                            {"type": "step_status", "step": step_name, "status": "completed"}
+                        )
+                    )
+                else:
+                    await websocket.send_text(
+                        f"\x1b[31m[FAILED]\x1b[0m {step_name} (exit code {exit_code})\r\n"
+                    )
+                    await websocket.send_text(
+                        json.dumps({"type": "step_status", "step": step_name, "status": "failed"})
+                    )
+                    state.execution_state["status"] = "failed"
+                    return
+            elif state.execution_state["status"] == "cancelled":
+                await websocket.send_text(f"\x1b[33m[CANCELLED]\x1b[0m {step_name}\r\n")
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "cancelled"})
+                )
+                return
+            else:
+                await websocket.send_text(f"\x1b[31m[FAILED]\x1b[0m {step_name} (signal)\r\n")
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "failed"})
+                )
+                state.execution_state["status"] = "failed"
+                return
+
+    await websocket.send_text(f"\x1b[32m[COMPLETED]\x1b[0m {len(commands)} step(s) succeeded\r\n")
+    state.execution_state["status"] = "completed"
+
+
+async def _run_config_parallel_pipeline_with_commands(
+    websocket: WebSocket,
+    config: Any,
+    commands: list[tuple[str, list[str]]],
+    get_step_output_dirs: Any,
+) -> None:
+    """Run pre-built commands with parallel orchestrator.
+
+    Similar to _run_config_parallel_pipeline but accepts pre-built commands
+    (e.g. from a group) instead of building from a RunRequest.
+
+    Args:
+        websocket: WebSocket connection for streaming output.
+        config: Pipeline configuration.
+        commands: Pre-built (step_name, command) tuples.
+        get_step_output_dirs: Function to get output directories for a step.
+    """
+    from loom.runner import EventType, PipelineOrchestrator, StepResult
+
+    if not commands:
+        await websocket.send_text("\x1b[33m[WARN]\x1b[0m No steps to run\r\n")
+        return
+
+    state.execution_state["status"] = "running"
+
+    step_names_list = [name for name, _ in commands]
+    orch = PipelineOrchestrator(
+        config,
+        parallel=True,
+        max_workers=config.max_workers,
+    )
+
+    running_tasks: dict[str, asyncio.Task] = {}
+    cancelled_steps: set[str] = set()
+    ws_closed = False
+
+    async def listen_for_cancel() -> None:
+        nonlocal ws_closed
+        try:
+            while True:
+                msg = await websocket.receive_text()
+                if msg.startswith("__CANCEL__:"):
+                    step_to_cancel = msg.split(":", 1)[1]
+                    cancelled_steps.add(step_to_cancel)
+                elif msg == "__CANCEL__":
+                    for name in running_tasks:
+                        cancelled_steps.add(name)
+        except Exception:
+            ws_closed = True
+
+    async def run_step_pty(step_name: str, cmd: list[str]) -> tuple[str, bool]:
+        """Run a single step in its own PTY."""
+        try:
+            for dir_path in get_step_output_dirs(state.config_path, step_name):
+                dir_path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            try:
+                await websocket.send_bytes(
+                    f"[OUTPUT:{step_name}]\x1b[31m[ERROR]\x1b[0m Failed to create output dirs: {e}\r\n".encode()
+                )
+            except Exception:
+                pass
+            return step_name, False
+
+        try:
+            await websocket.send_text(
+                json.dumps({"type": "step_status", "step": step_name, "status": "running"})
+            )
+            cmd_str = " ".join(cmd)
+            await websocket.send_bytes(
+                f"[OUTPUT:{step_name}]\x1b[36m[RUNNING]\x1b[0m {step_name}\r\n  {cmd_str}\r\n".encode()
+            )
+        except Exception:
+            pass
+
+        step_master_fd, step_slave_fd = pty.openpty()
+        step_pid = os.fork()
+        if step_pid == 0:
+            os.setsid()
+            os.dup2(step_slave_fd, 0)
+            os.dup2(step_slave_fd, 1)
+            os.dup2(step_slave_fd, 2)
+            os.close(step_master_fd)
+            os.close(step_slave_fd)
+            os.execvp(cmd[0], cmd)
+        else:
+            os.close(step_slave_fd)
+            flags = fcntl.fcntl(step_master_fd, fcntl.F_GETFL)
+            fcntl.fcntl(step_master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+            try:
+                while True:
+                    if step_name in cancelled_steps:
+                        try:
+                            os.killpg(os.getpgid(step_pid), signal.SIGTERM)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+                        break
+
+                    wpid, wait_status = os.waitpid(step_pid, os.WNOHANG)
+                    if wpid != 0:
+                        try:
+                            while True:
+                                data_bytes = os.read(step_master_fd, 4096)
+                                if not data_bytes:
+                                    break
+                                await websocket.send_bytes(
+                                    f"[OUTPUT:{step_name}]".encode() + data_bytes
+                                )
+                        except (OSError, BlockingIOError):
+                            pass
+
+                        os.close(step_master_fd)
+
+                        if os.WIFEXITED(wait_status) and os.WEXITSTATUS(wait_status) == 0:
+                            await websocket.send_bytes(
+                                f"[OUTPUT:{step_name}]\x1b[32m[SUCCESS]\x1b[0m {step_name}\r\n".encode()
+                            )
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "step_status",
+                                        "step": step_name,
+                                        "status": "completed",
+                                    }
+                                )
+                            )
+                            return step_name, True
+                        else:
+                            exit_code = (
+                                os.WEXITSTATUS(wait_status) if os.WIFEXITED(wait_status) else -1
+                            )
+                            await websocket.send_bytes(
+                                f"[OUTPUT:{step_name}]\x1b[31m[FAILED]\x1b[0m {step_name} (exit code {exit_code})\r\n".encode()
+                            )
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "step_status",
+                                        "step": step_name,
+                                        "status": "failed",
+                                    }
+                                )
+                            )
+                            return step_name, False
+
+                    try:
+                        data_bytes = os.read(step_master_fd, 4096)
+                        if data_bytes:
+                            await websocket.send_bytes(
+                                f"[OUTPUT:{step_name}]".encode() + data_bytes
+                            )
+                    except BlockingIOError:
+                        pass
+                    except OSError:
+                        break
+
+                    await asyncio.sleep(0.01)
+            finally:
+                try:
+                    os.close(step_master_fd)
+                except OSError:
+                    pass
+
+            if step_name in cancelled_steps:
+                try:
+                    await websocket.send_bytes(
+                        f"[OUTPUT:{step_name}]\x1b[33m[CANCELLED]\x1b[0m {step_name}\r\n".encode()
+                    )
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "step_status",
+                                "step": step_name,
+                                "status": "cancelled",
+                            }
+                        )
+                    )
+                except Exception:
+                    pass
+                return step_name, False
+
+        return step_name, False
+
+    cmd_map = {name: cmd for name, cmd in commands}
+    cancel_task = asyncio.create_task(listen_for_cancel())
+
+    try:
+        gen = orch.orchestrate(steps=step_names_list)
+        event = next(gen)
+
+        while event.type != EventType.PIPELINE_COMPLETE:
+            if event.type == EventType.STEP_READY:
+                assert event.step_name is not None
+                sn = event.step_name
+                if sn in cmd_map:
+                    task = asyncio.create_task(run_step_pty(sn, cmd_map[sn]))
+                    running_tasks[sn] = task
+                event = next(gen)
+
+            elif event.type == EventType.STEP_SKIPPED:
+                try:
+                    await websocket.send_bytes(
+                        f"[OUTPUT:{event.step_name}]\x1b[33m[SKIPPED]\x1b[0m {event.step_name} (dependencies failed: {event.failed_deps})\r\n".encode()
+                    )
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "step_status",
+                                "step": event.step_name,
+                                "status": "skipped",
+                            }
+                        )
+                    )
+                except Exception:
+                    pass
+                event = next(gen)
+
+            elif event.type == EventType.WAITING:
+                if running_tasks:
+                    done, _ = await asyncio.wait(
+                        running_tasks.values(),
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in done:
+                        sn, success = task.result()
+                        del running_tasks[sn]
+                        event = gen.send(StepResult(sn, success))
+                        break
+                else:
+                    event = next(gen)
+            else:
+                event = next(gen)
+
+        if running_tasks:
+            gather_results = await asyncio.gather(*running_tasks.values(), return_exceptions=True)
+            for gather_result in gather_results:
+                if isinstance(gather_result, tuple):
+                    sn, success = gather_result
+                    gen.send(StepResult(sn, success))
+
         final_results = orch.results
         success_count = sum(1 for v in final_results.values() if v)
         total = len(final_results)

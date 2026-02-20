@@ -169,6 +169,31 @@ def build_pipeline_commands(
     return commands
 
 
+def build_group_commands(config_path: Path, group_name: str) -> list[tuple[str, list[str]]]:
+    """Build commands for all steps in a named group.
+
+    Args:
+        config_path: Path to pipeline YAML.
+        group_name: Name of the group to build commands for.
+
+    Returns:
+        List of (step_name, command) tuples in pipeline order.
+
+    Raises:
+        ValueError: If group not found.
+    """
+    config = PipelineConfig.from_yaml(config_path)
+    executor = PipelineExecutor(config, dry_run=True)
+    group_steps = config.get_steps_by_group(group_name)
+
+    commands = []
+    for step in group_steps:
+        cmd = executor.build_command(step)
+        commands.append((step.name, cmd))
+
+    return commands
+
+
 def validate_parallel_execution(config_path: Path, step_names: list[str]) -> tuple[bool, str]:
     """Check if steps can run in parallel (no shared outputs).
 

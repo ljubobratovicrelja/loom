@@ -586,3 +586,151 @@ pipeline:
 
         captured = capsys.readouterr()
         assert "Error" in captured.err
+
+
+class TestCLIGroup:
+    """Tests for --group CLI option."""
+
+    @pytest.fixture
+    def group_config_file(self, tmp_path: Path) -> Path:
+        """Create a pipeline config with grouped steps."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+
+        # Create simple task scripts
+        for name in ("gen.py", "load.py", "stats.py", "merge.py"):
+            (tasks_dir / name).write_text(f'"""Task: {name}."""\n')
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text("""
+data:
+  raw:
+    type: csv
+    path: data/raw.csv
+  validated:
+    type: csv
+    path: data/validated.csv
+  stats:
+    type: json
+    path: data/stats.json
+  report:
+    type: json
+    path: data/report.json
+
+parameters: {}
+
+pipeline:
+  - group: ingestion
+    steps:
+      - name: generate_data
+        task: tasks/gen.py
+        outputs:
+          -o: $raw
+      - name: load_data
+        task: tasks/load.py
+        inputs:
+          raw: $raw
+        outputs:
+          -o: $validated
+
+  - group: analysis
+    steps:
+      - name: compute_stats
+        task: tasks/stats.py
+        inputs:
+          data: $validated
+        outputs:
+          -o: $stats
+
+  - name: merge_results
+    task: tasks/merge.py
+    inputs:
+      stats: $stats
+    outputs:
+      -o: $report
+""")
+        return config
+
+    def test_group_dry_run(
+        self, group_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --group with --dry-run runs only group steps."""
+        with patch(
+            "sys.argv",
+            ["loom", str(group_config_file), "--group", "ingestion", "--dry-run"],
+        ):
+            result = main()
+            assert result == 0
+
+        captured = capsys.readouterr()
+        assert "generate_data" in captured.out
+        assert "load_data" in captured.out
+        assert "compute_stats" not in captured.out
+        assert "merge_results" not in captured.out
+
+    def test_group_unknown_fails(
+        self, group_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --group with unknown group name returns exit code 1."""
+        with patch(
+            "sys.argv",
+            ["loom", str(group_config_file), "--group", "nonexistent", "--dry-run"],
+        ):
+            result = main()
+            assert result == 1
+
+        captured = capsys.readouterr()
+        assert "Error" in captured.err
+        assert "nonexistent" in captured.err
+
+    def test_group_mutual_exclusion_with_step(self, group_config_file: Path) -> None:
+        """Test --group and --step are mutually exclusive."""
+        with patch(
+            "sys.argv",
+            ["loom", str(group_config_file), "--group", "ingestion", "--step", "foo"],
+        ):
+            with pytest.raises(SystemExit):
+                main()
+
+    def test_group_mutual_exclusion_with_from(self, group_config_file: Path) -> None:
+        """Test --group and --from are mutually exclusive."""
+        with patch(
+            "sys.argv",
+            ["loom", str(group_config_file), "--group", "ingestion", "--from", "foo"],
+        ):
+            with pytest.raises(SystemExit):
+                main()
+
+    def test_group_investigate(
+        self, group_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --group with --investigate shows group info."""
+        with patch(
+            "sys.argv",
+            ["loom", str(group_config_file), "--group", "ingestion", "--investigate"],
+        ):
+            result = main()
+            assert result == 0
+
+        captured = capsys.readouterr()
+        assert "Group: ingestion" in captured.out
+        assert "Steps: 2" in captured.out
+        assert "generate_data" in captured.out
+        assert "load_data" in captured.out
+        assert "depends on (in-group): generate_data" in captured.out
+
+    def test_list_shows_groups(
+        self, group_config_file: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --list on grouped pipeline shows Group: sections."""
+        with patch(
+            "sys.argv",
+            ["loom", str(group_config_file), "--list"],
+        ):
+            result = main()
+            assert result == 0
+
+        captured = capsys.readouterr()
+        assert "Group: ingestion" in captured.out
+        assert "Group: analysis" in captured.out
+        assert "merge_results" in captured.out
