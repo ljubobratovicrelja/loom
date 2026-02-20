@@ -247,6 +247,25 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
           )
         })}
 
+        {/* Feedback target handles (multi_pass) */}
+        {(data.feedbackTargets ?? [])
+          .filter((flag) => !(data.args && flag in data.args))
+          .map((flag) => (
+            <div key={`feedback-${flag}`} className="flex items-center py-1 relative">
+              <Handle
+                type="target"
+                position={Position.Left}
+                id={flag}
+                className="!bg-purple-500 !border-2 !border-purple-300"
+                style={{ top: 'auto', position: 'relative', transform: 'none' }}
+              />
+              <span className="ml-2 text-purple-400 dark:text-purple-300 text-[10px] flex items-center gap-1">
+                ↩ {flag.replace(/^-+/, '')}
+                <span className="text-purple-400/60 text-[9px]">feedback</span>
+              </span>
+            </div>
+          ))}
+
         {/* Output handles */}
         {outputNames.map((flag) => {
           const outputType = data.outputTypes?.[flag]

@@ -1,83 +1,60 @@
-"""Multi-pass expansion for pipeline groups.
+"""Multi-pass configuration for pipeline groups.
 
-Expands ``multi_pass:`` blocks into concrete flat steps during pipeline
-flattening. Each pass generates suffixed copies of the template steps with
-per-pass parameters, output path suffixing, and chaining between consecutive
-passes.
+Parses ``multi_pass:`` blocks into ``MultiPassGroupConfig`` objects that the
+executor uses at runtime to iterate template steps.  No parse-time unrolling —
+template steps appear once and are executed in a loop by the executor.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-
-@dataclass
-class PassConfig:
-    """Configuration for a single pass in a multi-pass group."""
-
-    name: str
-    params: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class MultiPassConfig:
-    """Parsed multi_pass configuration block."""
-
-    passes: list[PassConfig]
-    chain: dict[str, str] = field(default_factory=dict)
-    # chain maps "step.--output-flag" -> "step.--input-flag"
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MultiPassConfig":
-        """Parse a multi_pass dict from YAML.
-
-        Args:
-            data: The ``multi_pass:`` dict containing ``passes`` and
-                optionally ``chain``.
-
-        Returns:
-            Parsed MultiPassConfig.
-
-        Raises:
-            KeyError: If ``passes`` is missing.
-            ValueError: If passes list is empty or a pass is missing ``name``.
-        """
-        if "passes" not in data:
-            raise KeyError("multi_pass config must have 'passes' field")
-        raw_passes = data["passes"]
-        if not raw_passes:
-            raise ValueError("multi_pass must have at least one pass")
-
-        passes = []
-        for p in raw_passes:
-            if "name" not in p:
-                raise ValueError("Each pass must have a 'name' field")
-            passes.append(PassConfig(name=p["name"], params=p.get("params", {})))
-
-        chain = data.get("chain", {})
-        return cls(passes=passes, chain=chain)
+# Safe builtins allowed in eval() for expressions and until conditions
+SAFE_BUILTINS: dict[str, Any] = {
+    "min": min,
+    "max": max,
+    "abs": abs,
+    "round": round,
+    "int": int,
+    "float": float,
+    "True": True,
+    "False": False,
+    "__builtins__": {},
+}
 
 
 @dataclass
-class MultiPassExpansion:
-    """Result of expanding a multi_pass group into flat steps."""
+class MultiPassGroupConfig:
+    """Stored on PipelineConfig for each multi_pass group."""
 
-    steps: list[dict[str, Any]]
-    extra_variables: dict[str, str]
-    extra_data_types: dict[str, str]
-    variable_overrides: dict[str, str]
-    producer_overrides: dict[str, str]  # unsuffixed var_name -> last pass step name
+    group_name: str
+    template_step_dicts: list[dict[str, Any]]
+    schedule: list[dict[str, Any]] | None = None
+    expressions: dict[str, str] | None = None
+    count: int = 1
+    until: str | None = None
+    feedback: dict[str, str] = field(default_factory=dict)
+    internal_outputs: set[str] = field(default_factory=set)
+
+    @property
+    def iteration_count(self) -> int:
+        """Return the number of iterations."""
+        if self.schedule is not None:
+            return len(self.schedule)
+        return self.count
 
 
 def _suffix_path(path: str, suffix: str) -> str:
     """Append a suffix to a file path before the extension.
 
     Examples:
-        >>> _suffix_path("results/graph.npz", "coarse")
-        'results/graph_coarse.npz'
-        >>> _suffix_path("data/output/", "fine")
-        'data/output_fine/'
-        >>> _suffix_path("results/mesh", "medium")
-        'results/mesh_medium'
+        >>> _suffix_path("results/graph.npz", "iter0")
+        'results/graph_iter0.npz'
+        >>> _suffix_path("data/output/", "iter1")
+        'data/output_iter1/'
+        >>> _suffix_path("results/mesh", "iter2")
+        'results/mesh_iter2'
     """
     if not path:
         return f"_{suffix}"
@@ -98,163 +75,146 @@ def _suffix_path(path: str, suffix: str) -> str:
         return f"{path}_{suffix}"
 
 
-def expand_multi_pass(
-    group_name: str,
-    multi_pass_data: dict[str, Any],
-    template_steps: list[dict[str, Any]],
-    data_section: dict[str, Any],
-) -> MultiPassExpansion:
-    """Expand a multi_pass group into concrete flat steps.
+def _validate_expression(expr: str, label: str) -> None:
+    """Validate a Python expression via compile().
 
     Args:
-        group_name: Name of the group (used as the ``group`` field on each step).
-        multi_pass_data: The raw ``multi_pass:`` dict from YAML.
-        template_steps: The ``steps:`` list from the group block.
-        data_section: The pipeline's ``data:`` section for resolving paths/types.
+        expr: Python expression string.
+        label: Human-readable label for error messages.
+
+    Raises:
+        ValueError: If the expression has a syntax error.
+    """
+    try:
+        compile(expr, f"<{label}>", "eval")
+    except SyntaxError as e:
+        raise ValueError(f"Invalid syntax in {label}: {expr!r} — {e}") from e
+
+
+def parse_multi_pass_config(
+    group_name: str,
+    multi_pass_data: dict[str, Any],
+    template_step_dicts: list[dict[str, Any]],
+    data_section: dict[str, Any],
+) -> MultiPassGroupConfig:
+    """Parse and validate multi_pass YAML block.
+
+    Args:
+        group_name: Name of the pipeline group.
+        multi_pass_data: The ``multi_pass:`` dict from YAML.
+        template_step_dicts: The ``steps:`` list from the group block.
+        data_section: The pipeline's ``data:`` section.
 
     Returns:
-        A ``MultiPassExpansion`` with flat steps, extra variables, data types,
-        and variable overrides for the last pass.
+        Parsed MultiPassGroupConfig (no expansion).
+
+    Raises:
+        ValueError: On validation errors.
     """
-    config = MultiPassConfig.from_dict(multi_pass_data)
+    schedule = multi_pass_data.get("schedule")
+    expressions = multi_pass_data.get("expressions")
+    count = multi_pass_data.get("count")
+    until = multi_pass_data.get("until")
+    feedback = multi_pass_data.get("feedback", {})
 
-    # Identify internal output variables — all $var refs in outputs of template steps
+    # --- Mutual exclusivity ---
+    if schedule is not None and expressions is not None:
+        raise ValueError(
+            f"multi_pass group '{group_name}': 'schedule' and 'expressions' are mutually exclusive"
+        )
+
+    # --- Schedule validation ---
+    if schedule is not None:
+        if not isinstance(schedule, list) or len(schedule) == 0:
+            raise ValueError(
+                f"multi_pass group '{group_name}': 'schedule' must be a non-empty list"
+            )
+        inferred_count = len(schedule)
+    else:
+        inferred_count = None
+
+    # --- Expressions validation ---
+    if expressions is not None:
+        if count is None:
+            raise ValueError(
+                f"multi_pass group '{group_name}': 'count' is required when using 'expressions'"
+            )
+        if not isinstance(expressions, dict) or len(expressions) == 0:
+            raise ValueError(
+                f"multi_pass group '{group_name}': 'expressions' must be a non-empty dict"
+            )
+        for param_name, expr in expressions.items():
+            _validate_expression(expr, f"expressions.{param_name}")
+
+    # --- Count validation ---
+    if count is not None and not isinstance(count, int):
+        raise ValueError(f"multi_pass group '{group_name}': 'count' must be an integer")
+    if count is not None and count < 1:
+        raise ValueError(f"multi_pass group '{group_name}': 'count' must be >= 1")
+
+    # --- Until validation ---
+    if until is not None:
+        _validate_expression(until, "until")
+
+    # --- Identify internal output variables ---
     internal_outputs: set[str] = set()
-    for step in template_steps:
-        for out_ref in step.get("outputs", {}).values():
-            if out_ref.startswith("$"):
-                internal_outputs.add(out_ref[1:])
+    for step in template_step_dicts:
+        for ref in step.get("outputs", {}).values():
+            if isinstance(ref, str) and ref.startswith("$"):
+                internal_outputs.add(ref[1:])
 
-    # Parse chain mappings: resolve "step.--flag" pairs to variable names
-    # chain maps source_step.source_flag -> target_step.target_flag
-    # We need to find which variable the source flag produces
-    chain_source_vars: dict[str, str] = {}  # "target_step.target_flag" -> source var name
-    for source_spec, target_spec in config.chain.items():
-        src_step_name, src_flag = source_spec.split(".", 1)
-        # Find the source variable from template steps
-        for step in template_steps:
-            if step["name"] == src_step_name:
-                for flag, ref in step.get("outputs", {}).items():
-                    if flag == src_flag and ref.startswith("$"):
-                        chain_source_vars[target_spec] = ref[1:]
-                        break
+    # --- Feedback validation ---
+    if feedback:
+        # Collect step names and their output/input flags
+        step_output_flags: dict[str, set[str]] = {}
+        step_names: set[str] = set()
+        for step in template_step_dicts:
+            sname = step["name"]
+            step_names.add(sname)
+            step_output_flags[sname] = set(step.get("outputs", {}).keys())
 
-    flat_steps: list[dict[str, Any]] = []
-    extra_variables: dict[str, str] = {}
-    extra_data_types: dict[str, str] = {}
-    variable_overrides: dict[str, str] = {}
+        for source_spec, target_spec in feedback.items():
+            # Validate source
+            if "." not in source_spec:
+                raise ValueError(
+                    f"multi_pass group '{group_name}': "
+                    f"feedback source '{source_spec}' must be 'step.--flag'"
+                )
+            src_step, src_flag = source_spec.split(".", 1)
+            if src_step not in step_names:
+                raise ValueError(
+                    f"multi_pass group '{group_name}': "
+                    f"feedback source step '{src_step}' not found in group"
+                )
+            if src_flag not in step_output_flags[src_step]:
+                raise ValueError(
+                    f"multi_pass group '{group_name}': "
+                    f"feedback source flag '{src_flag}' not found in "
+                    f"outputs of step '{src_step}'"
+                )
 
-    for pass_idx, pass_cfg in enumerate(config.passes):
-        pass_name = pass_cfg.name
-        prev_pass_name = config.passes[pass_idx - 1].name if pass_idx > 0 else None
+            # Validate target
+            if "." not in target_spec:
+                raise ValueError(
+                    f"multi_pass group '{group_name}': "
+                    f"feedback target '{target_spec}' must be 'step.--flag'"
+                )
+            tgt_step, _tgt_flag = target_spec.split(".", 1)
+            if tgt_step not in step_names:
+                raise ValueError(
+                    f"multi_pass group '{group_name}': "
+                    f"feedback target step '{tgt_step}' not found in group"
+                )
 
-        for step in template_steps:
-            step_name = step["name"]
-            concrete_name = f"{step_name}_{pass_name}"
+    final_count = inferred_count if inferred_count is not None else (count or 1)
 
-            concrete_step: dict[str, Any] = {
-                "name": concrete_name,
-                "task": step.get("task") or step.get("script", ""),
-                "group": group_name,
-            }
-
-            # Copy optional/disabled flags
-            if step.get("optional"):
-                concrete_step["optional"] = True
-            if step.get("disabled"):
-                concrete_step["disabled"] = True
-
-            # Process outputs: suffix internal output variables
-            if step.get("outputs"):
-                new_outputs: dict[str, str] = {}
-                for flag, ref in step["outputs"].items():
-                    if ref.startswith("$") and ref[1:] in internal_outputs:
-                        var_name = ref[1:]
-                        suffixed_var = f"{var_name}_{pass_name}"
-                        new_outputs[flag] = f"${suffixed_var}"
-
-                        # Register the suffixed variable
-                        original_entry = data_section.get(var_name, {})
-                        if isinstance(original_entry, dict):
-                            original_path = original_entry.get("path", "")
-                            original_type = original_entry.get("type", "")
-                        else:
-                            original_path = str(original_entry)
-                            original_type = ""
-                        extra_variables[suffixed_var] = _suffix_path(original_path, pass_name)
-                        if original_type:
-                            extra_data_types[suffixed_var] = original_type
-                    else:
-                        new_outputs[flag] = ref
-                concrete_step["outputs"] = new_outputs
-
-            # Process inputs: rewrite internal refs to suffixed versions
-            if step.get("inputs"):
-                new_inputs: dict[str, str] = {}
-                for input_name, ref in step["inputs"].items():
-                    if ref.startswith("$") and ref[1:] in internal_outputs:
-                        var_name = ref[1:]
-                        new_inputs[input_name] = f"${var_name}_{pass_name}"
-                    else:
-                        new_inputs[input_name] = ref
-                concrete_step["inputs"] = new_inputs
-
-            # Process args: inline pass params, rewrite internal refs
-            if step.get("args"):
-                new_args: dict[str, Any] = {}
-                for arg_key, arg_value in step["args"].items():
-                    if isinstance(arg_value, str) and arg_value.startswith("$"):
-                        param_name = arg_value[1:]
-                        if param_name in pass_cfg.params:
-                            # Inline the pass-specific parameter value
-                            new_args[arg_key] = pass_cfg.params[param_name]
-                        elif param_name in internal_outputs:
-                            # Rewrite internal variable ref
-                            new_args[arg_key] = f"${param_name}_{pass_name}"
-                        else:
-                            # External ref — keep as-is
-                            new_args[arg_key] = arg_value
-                    else:
-                        new_args[arg_key] = arg_value
-                concrete_step["args"] = new_args
-
-            # Apply chain connections for pass N+1
-            if prev_pass_name is not None:
-                for target_spec, source_var in chain_source_vars.items():
-                    tgt_step, tgt_flag = target_spec.split(".", 1)
-                    if tgt_step == step_name:
-                        suffixed_source = f"${source_var}_{prev_pass_name}"
-                        # Add to args so it appears as a --flag on the command line
-                        if "args" not in concrete_step:
-                            concrete_step["args"] = {}
-                        concrete_step["args"][tgt_flag] = suffixed_source
-
-            # Copy loop if present
-            if step.get("loop"):
-                concrete_step["loop"] = step["loop"]
-
-            flat_steps.append(concrete_step)
-
-    # Register last-pass aliases: unsuffixed var -> last pass's suffixed path
-    # Also track which step produces each unsuffixed variable (for dependency tracking)
-    producer_overrides: dict[str, str] = {}
-    if config.passes:
-        last_pass_name = config.passes[-1].name
-        for var_name in internal_outputs:
-            suffixed_var = f"{var_name}_{last_pass_name}"
-            if suffixed_var in extra_variables:
-                variable_overrides[var_name] = extra_variables[suffixed_var]
-            # Find the step that produces this var in the last pass
-            for step in template_steps:
-                for flag, ref in step.get("outputs", {}).items():
-                    if ref.startswith("$") and ref[1:] == var_name:
-                        producer_overrides[var_name] = f"{step['name']}_{last_pass_name}"
-                        break
-
-    return MultiPassExpansion(
-        steps=flat_steps,
-        extra_variables=extra_variables,
-        extra_data_types=extra_data_types,
-        variable_overrides=variable_overrides,
-        producer_overrides=producer_overrides,
+    return MultiPassGroupConfig(
+        group_name=group_name,
+        template_step_dicts=template_step_dicts,
+        schedule=schedule,
+        expressions=expressions,
+        count=final_count,
+        until=until,
+        feedback=feedback,
+        internal_outputs=internal_outputs,
     )

@@ -41,6 +41,8 @@ class GraphEdge(BaseModel):
     target: str
     sourceHandle: str | None = None  # noqa: N815 - React Flow requires camelCase
     targetHandle: str | None = None  # noqa: N815 - React Flow requires camelCase
+    type: str | None = None  # Edge type (e.g. "feedback" for multi_pass)
+    data: dict[str, Any] | None = None  # Edge metadata (feedback info, etc.)
 
 
 class EditorOptions(BaseModel):

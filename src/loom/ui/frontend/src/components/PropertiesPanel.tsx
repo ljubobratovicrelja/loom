@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion, Link, RefreshCw } from 'lucide-react'
-import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState, LoopConfig } from '../types/pipeline'
+import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState, LoopConfig, FeedbackEdgeData } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 import type { FreshnessInfo } from '../hooks/useFreshness'
@@ -59,6 +59,7 @@ const isDirectoryType = (type: DataType): boolean => {
 
 interface PropertiesPanelProps {
   selectedNode: Node | null
+  selectedEdge?: Edge | null
   edges: Edge[]
   onUpdateNode: (id: string, data: Partial<StepData | ParameterData | DataNodeData>) => void
   onDeleteNode: (id: string) => void
@@ -76,6 +77,7 @@ interface PropertiesPanelProps {
 
 export default function PropertiesPanel({
   selectedNode,
+  selectedEdge,
   edges,
   onUpdateNode,
   onDeleteNode,
@@ -158,6 +160,76 @@ export default function PropertiesPanel({
   }, [selectedNode, paramEdgesToStep])
 
   if (!selectedNode) {
+    // Show feedback edge properties if selected
+    if (selectedEdge?.type === 'feedback' && selectedEdge.data) {
+      const feedbackData = selectedEdge.data as FeedbackEdgeData
+      const mp = feedbackData.multiPass
+      const iterCount = mp?.schedule?.length ?? mp?.count ?? '?'
+
+      return (
+        <div className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-900 flex flex-col">
+          <div className="p-4 border-b border-slate-300 dark:border-slate-700">
+            <h2 className="text-slate-900 dark:text-white font-semibold text-sm">Multi-Pass Feedback</h2>
+          </div>
+          <div className="p-4 space-y-4 overflow-y-auto flex-1">
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Iterations</label>
+              <div className="px-3 py-2 bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700 rounded text-purple-700 dark:text-purple-300 text-sm font-mono">
+                {String(iterCount)}
+              </div>
+            </div>
+            {mp?.schedule && (
+              <div>
+                <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Schedule</label>
+                <div className="space-y-1">
+                  {mp.schedule.map((params, i) => (
+                    <div key={i} className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded text-xs font-mono text-slate-700 dark:text-slate-300">
+                      {i}: {JSON.stringify(params)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {mp?.expressions && (
+              <div>
+                <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Expressions</label>
+                <div className="space-y-1">
+                  {Object.entries(mp.expressions).map(([name, expr]) => (
+                    <div key={name} className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded text-xs font-mono text-slate-700 dark:text-slate-300">
+                      {name} = {expr}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {mp?.until && (
+              <div>
+                <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Exit Condition</label>
+                <div className="px-3 py-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-amber-700 dark:text-amber-300 text-xs font-mono">
+                  until {mp.until}
+                </div>
+              </div>
+            )}
+            {mp?.feedback && Object.keys(mp.feedback).length > 0 && (
+              <div>
+                <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Feedback Connections</label>
+                <div className="space-y-1">
+                  {Object.entries(mp.feedback).map(([src, tgt]) => (
+                    <div key={src} className="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded text-xs font-mono text-purple-600 dark:text-purple-400">
+                      {src} &rarr; {tgt}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-slate-400 dark:text-slate-500 text-xs">
+              Multi-pass config is read-only in the visual editor.
+            </p>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="flex-1 bg-slate-100 dark:bg-slate-900 border-l border-slate-300 dark:border-slate-700 p-4">
         <p className="text-slate-400 dark:text-slate-500 text-sm">Select a node to edit its properties</p>

@@ -6,20 +6,16 @@ from typing import Any
 
 import yaml
 
-from .multi_pass import MultiPassExpansion, expand_multi_pass
+from .multi_pass import MultiPassGroupConfig, parse_multi_pass_config
 from .url import URL_CACHE_DIR_NAME, ensure_url_downloaded, is_url
 
 
 @dataclass
 class FlattenResult:
-    """Result of flattening a pipeline with possible multi_pass expansions."""
+    """Result of flattening a pipeline with possible multi_pass groups."""
 
     steps: list[dict[str, Any]]
-    extra_variables: dict[str, str] = field(default_factory=dict)
-    extra_data_types: dict[str, str] = field(default_factory=dict)
-    variable_overrides: dict[str, str] = field(default_factory=dict)
-    producer_overrides: dict[str, str] = field(default_factory=dict)
-    multi_pass_groups: set[str] = field(default_factory=set)
+    multi_pass_configs: dict[str, MultiPassGroupConfig] = field(default_factory=dict)
 
 
 @dataclass
@@ -46,6 +42,38 @@ class LoopConfig:
         )
 
 
+def _merge_external_inputs(
+    mp_config: MultiPassGroupConfig,
+) -> dict[str, str]:
+    """Collect external inputs for a multi_pass group's synthetic step.
+
+    External inputs are $var references in template step inputs/args that are
+    NOT produced by a step within the group.
+    """
+    inputs: dict[str, str] = {}
+    for step_dict in mp_config.template_step_dicts:
+        for input_name, var_ref in step_dict.get("inputs", {}).items():
+            if isinstance(var_ref, str) and var_ref.startswith("$"):
+                var_name = var_ref[1:]
+                if var_name not in mp_config.internal_outputs:
+                    inputs[input_name] = var_ref
+    return inputs
+
+
+def _merge_unsuffixed_outputs(
+    mp_config: MultiPassGroupConfig,
+) -> dict[str, str]:
+    """Collect unsuffixed output refs for the synthetic step."""
+    outputs: dict[str, str] = {}
+    for step_dict in mp_config.template_step_dicts:
+        for flag, var_ref in step_dict.get("outputs", {}).items():
+            if isinstance(var_ref, str) and var_ref.startswith("$"):
+                var_name = var_ref[1:]
+                if var_name in mp_config.internal_outputs:
+                    outputs[flag] = var_ref
+    return outputs
+
+
 def _flatten_pipeline(
     pipeline: list[dict[str, Any]],
     data_section: dict[str, Any] | None = None,
@@ -54,41 +82,43 @@ def _flatten_pipeline(
 
     Group blocks of the form ``{"group": name, "steps": [...]}`` are expanded
     into flat step dicts with a ``"group"`` key added to each step.
-    Multi-pass groups (with ``"multi_pass"`` key) are expanded into concrete
-    per-pass steps via :func:`expand_multi_pass`.
+    Multi-pass groups (with ``"multi_pass"`` key) emit a single synthetic
+    group step that the executor handles at runtime.
     Ungrouped steps are passed through unchanged.
 
     Args:
         pipeline: Raw pipeline list from YAML.
         data_section: The ``data:`` section from YAML, needed for multi_pass
-            path suffixing. May be ``None`` if no multi_pass blocks are present.
+            validation. May be ``None`` if no multi_pass blocks are present.
 
     Returns:
-        A ``FlattenResult`` with flat steps and any multi_pass metadata.
+        A ``FlattenResult`` with flat steps and multi_pass configs.
     """
     flat: list[dict[str, Any]] = []
-    extra_variables: dict[str, str] = {}
-    extra_data_types: dict[str, str] = {}
-    variable_overrides: dict[str, str] = {}
-    producer_overrides: dict[str, str] = {}
-    multi_pass_groups: set[str] = set()
+    multi_pass_configs: dict[str, MultiPassGroupConfig] = {}
 
     for entry in pipeline:
         if "group" in entry and "steps" in entry:
             if "multi_pass" in entry:
-                # Multi-pass group: expand into concrete steps
-                expansion: MultiPassExpansion = expand_multi_pass(
+                # Multi-pass group: parse config, emit synthetic step
+                mp_config = parse_multi_pass_config(
                     group_name=entry["group"],
                     multi_pass_data=entry["multi_pass"],
-                    template_steps=entry["steps"],
+                    template_step_dicts=entry["steps"],
                     data_section=data_section or {},
                 )
-                flat.extend(expansion.steps)
-                extra_variables.update(expansion.extra_variables)
-                extra_data_types.update(expansion.extra_data_types)
-                variable_overrides.update(expansion.variable_overrides)
-                producer_overrides.update(expansion.producer_overrides)
-                multi_pass_groups.add(entry["group"])
+                multi_pass_configs[entry["group"]] = mp_config
+
+                # Synthetic step: group as single unit for orchestrator
+                synthetic: dict[str, Any] = {
+                    "name": entry["group"],
+                    "task": "__multi_pass__",
+                    "group": entry["group"],
+                    "inputs": _merge_external_inputs(mp_config),
+                    "outputs": _merge_unsuffixed_outputs(mp_config),
+                    "args": {},
+                }
+                flat.append(synthetic)
             else:
                 # Regular group: flatten steps with group tag
                 for step in entry["steps"]:
@@ -98,11 +128,7 @@ def _flatten_pipeline(
 
     return FlattenResult(
         steps=flat,
-        extra_variables=extra_variables,
-        extra_data_types=extra_data_types,
-        variable_overrides=variable_overrides,
-        producer_overrides=producer_overrides,
-        multi_pass_groups=multi_pass_groups,
+        multi_pass_configs=multi_pass_configs,
     )
 
 
@@ -154,6 +180,7 @@ class PipelineConfig:
     data_types: dict[str, str] = field(default_factory=dict)
     parallel: bool = False
     max_workers: int | None = None
+    multi_pass_groups: dict[str, MultiPassGroupConfig] = field(default_factory=dict)
     _output_producers: dict[str, str] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -206,11 +233,6 @@ class PipelineConfig:
                 variables[name] = str(entry)
                 data_types[name] = ""
 
-        # Merge multi_pass extra variables and overrides
-        variables.update(result.extra_variables)
-        data_types.update(result.extra_data_types)
-        variables.update(result.variable_overrides)
-
         # Store the pipeline file's directory for relative path resolution
         base_dir = path.parent.resolve()
 
@@ -227,10 +249,8 @@ class PipelineConfig:
             data_types=data_types,
             parallel=parallel,
             max_workers=max_workers,
+            multi_pass_groups=result.multi_pass_configs,
         )
-
-        # Apply producer overrides so unsuffixed vars resolve to last-pass steps
-        config._output_producers.update(result.producer_overrides)
 
         return config
 

@@ -87,6 +87,7 @@ export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<PipelineNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNodes, setSelectedNodes] = useState<PipelineNode[]>([])
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
   const [configPath, setConfigPath] = useState<string | null>(null)
   const [parameters, setParameters] = useState<Record<string, unknown>>({})
   const [hasChanges, setHasChanges] = useState(false)
@@ -98,6 +99,9 @@ export default function App() {
   // Execution options state
   const [parallelEnabled, setParallelEnabled] = useState(false)
   const [maxWorkers, setMaxWorkers] = useState<number | null>(null)
+
+  // Multi-pass groups metadata (from graph response)
+  const [multiPassGroups, setMultiPassGroups] = useState<Record<string, unknown>>({})
 
   // Resizable sidebar widths
   const [sidebarWidth, setSidebarWidth] = useState(256) // Default w-64
@@ -524,6 +528,9 @@ export default function App() {
           setNodes(layoutedNodes)
           setEdges(graph.edges)
           setParameters(graph.parameters)
+          if ((graph as Record<string, unknown>).multiPassGroups) {
+            setMultiPassGroups((graph as Record<string, unknown>).multiPassGroups as Record<string, unknown>)
+          }
 
           // Load editor options
           if (graph.editor) {
@@ -734,9 +741,17 @@ export default function App() {
     snapshot(getCurrentState())
     const layoutedNodes = applyDagreLayout(nodes as Node[], edges) as PipelineNode[]
     setNodes(layoutedNodes)
+    // Reset dragged feedback edge label positions so they recompute from new node positions
+    setEdges((eds) =>
+      eds.map((e) =>
+        e.type === 'feedback' && e.data && ('labelOffsetX' in e.data || 'labelOffsetY' in e.data)
+          ? { ...e, data: { ...e.data, labelOffsetX: undefined, labelOffsetY: undefined } }
+          : e
+      )
+    )
     clearLayoutOnSave.current = true
     await performSave()
-  }, [snapshot, getCurrentState, nodes, edges, setNodes, performSave])
+  }, [snapshot, getCurrentState, nodes, edges, setNodes, setEdges, performSave])
 
   // Entry point for auto-layout: confirm when autosave is off
   const handleAutoLayout = useCallback(() => {
@@ -1173,6 +1188,9 @@ export default function App() {
         setNodes(layoutedNodes)
         setEdges(graph.edges)
         setParameters(graph.parameters)
+        if ((graph as Record<string, unknown>).multiPassGroups) {
+          setMultiPassGroups((graph as Record<string, unknown>).multiPassGroups as Record<string, unknown>)
+        }
 
         // Load editor options
         if (graph.editor) {
@@ -1444,10 +1462,16 @@ export default function App() {
 
   const handleSelectionChange = useCallback((nodes: PipelineNode[]) => {
     setSelectedNodes(nodes)
+    if (nodes.length > 0) setSelectedEdge(null)
     // If a single step is selected, show its terminal output
     if (nodes.length === 1 && nodes[0].type === 'step') {
       setActiveTerminalStep((nodes[0].data as StepData).name)
     }
+  }, [])
+
+  const handleEdgeSelect = useCallback((edge: Edge | null) => {
+    setSelectedEdge(edge)
+    if (edge) setSelectedNodes([])
   }, [])
 
   const handleNodeDoubleClick = useCallback((node: PipelineNode) => {
@@ -1733,6 +1757,7 @@ export default function App() {
             setNodes={setNodes}
             setEdges={setEdges}
             onSelectionChange={handleSelectionChange}
+            onEdgeSelect={handleEdgeSelect}
             onSnapshot={() => snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })}
             onNodeDoubleClick={handleNodeDoubleClick}
             onParameterDrop={handleParameterDrop}
@@ -1742,6 +1767,7 @@ export default function App() {
             onAddTask={handleAddTask}
             onAddData={handleAddData}
             parameters={parameters}
+            multiPassGroups={multiPassGroups}
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}
@@ -1771,6 +1797,7 @@ export default function App() {
           >
             <PropertiesPanel
               selectedNode={selectedNode}
+              selectedEdge={selectedEdge}
               edges={edges}
               onUpdateNode={handleUpdateNode}
               onDeleteNode={handleDeleteNode}

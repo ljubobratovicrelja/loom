@@ -63,6 +63,20 @@ def get_cleanable_paths(
             # Skip paths that can't be resolved
             pass
 
+    # For multi-pass groups, also clean _iter{N} files
+    for group in config.multi_pass_groups.values():
+        for var_name in group.internal_outputs:
+            try:
+                base_path = config.resolve_path(f"${var_name}")
+            except (ValueError, OSError):
+                continue
+            parent = base_path.parent
+            stem = base_path.stem
+            suffix = base_path.suffix
+            if parent.exists():
+                for match in parent.glob(f"{stem}_iter*{suffix}"):
+                    paths.append((f"{var_name}_iter", match, match.exists()))
+
     # Add thumbnail cache directory if requested
     if include_thumbnails:
         thumbnail_dir = config.base_dir / THUMBNAIL_DIR_NAME

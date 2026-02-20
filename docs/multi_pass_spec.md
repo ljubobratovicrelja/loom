@@ -1,4 +1,4 @@
-# Feature Spec: `multi_pass` — Sequential Multi-Pass Step Groups
+# Feature Spec: `multi_pass` — Iterative Multi-Pass Step Groups
 
 ## Motivation
 
@@ -6,8 +6,8 @@ In iterative optimization pipelines, a common pattern is **coarse-to-fine refine
 
 The concrete use case driving this feature is a **pyramidal non-rigid ICP** pipeline in a 3D face reconstruction project ([Vega](https://github.com/ljubobratovicrelja/vega)). The pipeline has two steps that need to repeat across pyramid levels:
 
-1. **`build_graph`** — samples control nodes on a mesh and builds a deformation graph (node positions, edges, interpolation weights)
-2. **`nonrigid_icp`** — optimizes the graph's deformation parameters (rotation, scale, translation per node) to fit a dense point cloud
+1. **`build_graph`** — samples control nodes on a mesh and builds a deformation graph
+2. **`nonrigid_icp`** — optimizes the graph's deformation parameters to fit a dense point cloud
 
 At each pyramid level, the graph gets denser and the optimizer gets less regularized:
 
@@ -17,55 +17,123 @@ At each pyramid level, the graph gets denser and the optimizer gets less regular
 | Medium | 100 | 0.1 | 0.5 | 5mm |
 | Fine | 200 | 0.05 | 0.1 | 3mm |
 
-The coarse level captures gross shape deformation. Each subsequent level builds a new, finer graph on the **deformed mesh from the previous level** and captures progressively finer detail.
-
-### Why existing loom features don't cover this
-
-**`loop:`** iterates over files in a folder with fixed parameters. It can't:
-- Vary parameters per iteration (all iterations get the same args)
-- Chain iterations sequentially (iteration N's output feeding iteration N+1)
-- Create per-iteration data nodes with distinct paths
-
-**Manual unrolling** (duplicating steps as `build_graph_L0`, `nricp_L0`, `build_graph_L1`, `nricp_L1`, ...) works but is verbose: 2 extra steps + 2 data nodes + ~4 parameters per level. For 3 levels that's 6 steps, 6 data nodes, 12 parameters, with the same task scripts repeated. Adding or removing levels requires manual pipeline surgery.
-
 ### Generality
 
-This pattern appears in many domains beyond this specific use case:
+This pattern appears in many domains:
 - **Progressive training schedules** (learning rate / loss weight annealing across stages)
 - **Multi-resolution processing** (process at 256px, then 512px, then 1024px)
 - **Iterative refinement** (run the same solver with tightening tolerances)
 - **Curriculum learning** (easy examples first, then harder)
 
-## Proposed Design
+### Why existing loom features don't cover this
 
-### YAML Syntax
+**`loop:`** on a step iterates over files in a folder with fixed parameters. It can't:
+- Vary parameters per iteration
+- Chain iterations sequentially (iteration N's output feeding iteration N+1)
+- Create per-iteration data nodes with distinct paths
+
+**Manual unrolling** works but doesn't scale — 2 steps × 3 passes = 6 step nodes, 6 data nodes, 12 parameters. The graph becomes unreadable.
+
+---
+
+## Design Overview
+
+### Core concept: runtime iteration, not parse-time unrolling
+
+Template steps appear **once** in the graph and YAML. The executor runs them in a loop at runtime. A **feedback connection** carries state from one iteration to the next. The graph stays compact regardless of iteration count.
+
+```
+         ┌──────────── refine (multi_pass: 3) ────────────────┐
+         │                                                     │
+ input ──┤→  smooth_signal  ──→  filter_signal  ──→ output    │
+         │       ↑                      │                      │
+         │       └── feedback ──────────┘                      │
+         │           (3 iterations)                            │
+         └─────────────────────────────────────────────────────┘
+```
+
+2 step nodes instead of 6. One feedback edge with a label. Downstream steps consume the final output.
+
+---
+
+## YAML Syntax
+
+### Example: explicit per-iteration parameters (`schedule:`)
+
+```yaml
+pipeline:
+  - group: refine
+    multi_pass:
+      # Explicit per-iteration parameters. Count inferred from list length.
+      schedule:
+        - {window_size: 20, threshold: 5.0}
+        - {window_size: 10, threshold: 2.0}
+        - {window_size: 5, threshold: 1.0}
+      feedback:
+        filter_signal.--output: smooth_signal.--warm-start
+    steps:
+      - name: smooth_signal
+        task: tasks/smooth_signal.py
+        inputs:
+          input_csv: $input_signal
+        outputs:
+          --output: $smoothed_signal
+        args:
+          --window-size: $window_size
+
+      - name: filter_signal
+        task: tasks/filter_signal.py
+        inputs:
+          input_csv: $smoothed_signal
+        outputs:
+          --output: $cleaned_signal
+        args:
+          --threshold: $threshold
+```
+
+### Example: dynamic expressions (`expressions:`)
+
+```yaml
+pipeline:
+  - group: refine
+    multi_pass:
+      count: 10
+      # Dynamic parameter expressions. `iter` is the 0-based iteration index.
+      expressions:
+        window_size: "max(5, 20 - iter * 2)"
+        threshold: "5.0 / (2 ** iter)"
+      # Optional break condition. Python expression, must return bool.
+      # In scope: `iter`, current parameter values.
+      until: "iter >= 3 and threshold < 0.5"
+      feedback:
+        filter_signal.--output: smooth_signal.--warm-start
+    steps:
+      - name: smooth_signal
+        ...
+      - name: filter_signal
+        ...
+```
+
+### Example: Vega pyramidal NRICP
 
 ```yaml
 pipeline:
   - group: nricp_pyramid
     multi_pass:
-      passes:
-        - name: coarse
-          params:
-            graph_n_nodes: 50
-            graph_support_scale: 0.2
-            nricp_w_arap: 1.0
-            nricp_p2s_max_distance: 0.01
-        - name: medium
-          params:
-            graph_n_nodes: 100
-            graph_support_scale: 0.1
-            nricp_w_arap: 0.5
-            nricp_p2s_max_distance: 0.005
-        - name: fine
-          params:
-            graph_n_nodes: 200
-            graph_support_scale: 0.05
-            nricp_w_arap: 0.1
-            nricp_p2s_max_distance: 0.003
-      chain:
-        # Maps: step_name.output_flag -> step_name.input_name
-        # Connects pass N's output to pass N+1's input
+      schedule:
+        - graph_n_nodes: 50
+          graph_support_scale: 0.2
+          nricp_w_arap: 1.0
+          nricp_p2s_max_distance: 0.01
+        - graph_n_nodes: 100
+          graph_support_scale: 0.1
+          nricp_w_arap: 0.5
+          nricp_p2s_max_distance: 0.005
+        - graph_n_nodes: 200
+          graph_support_scale: 0.05
+          nricp_w_arap: 0.1
+          nricp_p2s_max_distance: 0.003
+      feedback:
         nonrigid_icp.--output-graph-npz: build_graph.--warm-start-graph
     steps:
       - name: build_graph
@@ -95,103 +163,190 @@ pipeline:
           --p2s-max-distance: $nricp_p2s_max_distance
 ```
 
-### Semantics
+---
 
-#### Pass execution
+## YAML Schema
 
-Passes execute **sequentially** in declaration order. Within each pass, steps follow normal dependency resolution (same as a regular `group:`).
+### `multi_pass:` block (on a group)
 
-#### Parameter resolution
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schedule` | list[dict] | One of `schedule` or `count` | Explicit per-iteration parameter overrides. Iteration count inferred from list length. |
+| `count` | int | Required with `expressions` | Number of iterations when using dynamic expressions. |
+| `expressions` | dict[str, str] | Optional | Python expressions for parameter values. `iter` (0-based index) is in scope. |
+| `until` | str | Optional | Python expression returning bool. Loop terminates when true. `iter` and current param values are in scope. |
+| `feedback` | dict[str, str] | Optional | Maps `step.--output-flag` to `step.--input-flag`. Connects iteration N's output to iteration N+1's input. |
 
-Each pass's `params:` block **shadows** the global `parameters:` section for the duration of that pass. Parameters not listed in `params:` fall through to the global values. This means steps can reference `$graph_n_nodes` as usual — the multi_pass mechanism injects the per-pass value.
+**Validation rules:**
+- `schedule` and `expressions` are mutually exclusive
+- If `expressions` is present, `count` is required
+- If `schedule` is present, `count` is ignored (inferred)
+- `schedule` list must be non-empty
+- `count` must be >= 1
+- `until` expression must be valid Python syntax (checked at parse time with `compile()`)
+- `feedback` source must reference an `outputs:` flag of a step in the group
+- `feedback` target must reference a valid arg on a step in the group
 
-#### Data node suffixing
+---
 
-Data nodes referenced in `outputs:` are automatically suffixed with the pass name to avoid collisions:
+## Semantics
 
-- Pass `coarse`: `$deformation_graph` resolves to `results/deformation_graph_coarse.npz`
-- Pass `medium`: `$deformation_graph` resolves to `results/deformation_graph_medium.npz`
-- Pass `fine`: `$deformation_graph` resolves to `results/deformation_graph_fine.npz`
+### Iteration execution
 
-The **last pass owns the unsuffixed name**. So `$nricp_graph` after all passes = `$nricp_graph_fine`, which is what downstream steps (like `photometric_fit`) consume without any changes.
+Iterations execute **sequentially** in order (0, 1, 2, ...). Within each iteration, steps follow normal dependency resolution (same as a regular `group:`).
 
-Suffixed data nodes should be auto-registered so they appear in dependency tracking and `--clean`.
+### Parameter resolution
 
-#### Chaining
+For each iteration, parameter values are computed and **shadow** the global `parameters:` section:
 
-The `chain:` section defines how consecutive passes connect. Each entry maps an output flag of one step to an input (positional or flag) of another step:
+- **`schedule` mode**: iteration `i` uses `schedule[i]` as parameter overrides
+- **`expressions` mode**: each expression is evaluated with `iter = i` (and other param values in scope) via Python `eval()`
+
+Parameters not listed in `schedule`/`expressions` fall through to global values. Steps reference params as usual (e.g., `$window_size`) — the multi_pass mechanism injects per-iteration values.
+
+### Feedback (chaining between iterations)
+
+The `feedback:` section defines how consecutive iterations connect:
 
 ```yaml
-chain:
-  nonrigid_icp.--output-graph-npz: build_graph.--warm-start-graph
+feedback:
+  filter_signal.--output: smooth_signal.--warm-start
 ```
 
-This means: for pass N+1, the value that `build_graph` receives for `--warm-start-graph` is the path that `nonrigid_icp` wrote to `--output-graph-npz` in pass N.
+- **Iteration 0**: the feedback arg (`--warm-start`) is **omitted entirely**. The task script must handle its absence (e.g., argparse `default=None`).
+- **Iteration N (N > 0)**: the feedback arg receives the path from iteration N-1's output.
 
-For the **first pass**, chained inputs are simply absent (not passed). The task script should treat them as optional arguments (e.g., `argparse` with `default=None`).
+### Break condition (`until:`)
 
-#### Step naming
+After each iteration completes, `until` is evaluated. If it returns `True`, the loop terminates early. The final output is from the last completed iteration.
 
-Steps within the multi_pass group get prefixed with the pass name for display and logging:
+**v1 scope for `until:` eval():**
+- `iter`: 0-based iteration index (of the just-completed iteration)
+- All current parameter values by name (e.g., `threshold`, `window_size`)
 
-```
-[RUNNING] nricp_pyramid/coarse/build_graph
-[RUNNING] nricp_pyramid/coarse/nonrigid_icp
-[RUNNING] nricp_pyramid/medium/build_graph
-...
-```
+Future: expose step-written metrics for convergence-based stopping.
 
-#### External dependencies
+**Safety**: expressions are compiled at parse time with `compile()` to catch syntax errors. At runtime, eval is called in a restricted namespace (only `iter`, param values, and safe builtins like `min`, `max`, `abs`).
 
-Steps inside the multi_pass group can reference data nodes produced by steps outside the group (like `$trimmed_mesh`, `$fused_ply`). These resolve normally and don't get suffixed — they're external inputs, constant across all passes.
+### Output storage
 
-Only data nodes that appear in `outputs:` of steps **inside** the group get per-pass suffixing.
-
-### Dry-run output
+Internal output variables (those in `outputs:` of template steps) are stored per-iteration with `_iter{N}` suffixes:
 
 ```
-[DRY RUN] nricp_pyramid (multi_pass: 3 passes)
-  pass coarse:
-    build_graph: python tasks/build_graph.py ... --n-nodes 50 --support-scale 0.2
-    nonrigid_icp: python tasks/nonrigid_icp.py ... --w-arap 1.0 --p2s-max-distance 0.01
-  pass medium:
-    build_graph: python tasks/build_graph.py ... --n-nodes 100 --warm-start-graph results/nricp_graph_coarse.npz
-    nonrigid_icp: python tasks/nonrigid_icp.py ... --w-arap 0.5 --p2s-max-distance 0.005
-  pass fine:
-    build_graph: python tasks/build_graph.py ... --n-nodes 200 --warm-start-graph results/nricp_graph_medium.npz
-    nonrigid_icp: python tasks/nonrigid_icp.py ... --w-arap 0.1 --p2s-max-distance 0.003
+results/cleaned_iter0.csv    ← iteration 0
+results/cleaned_iter1.csv    ← iteration 1
+results/cleaned_iter2.csv    ← iteration 2 (final)
+results/cleaned.csv          ← copy of / symlink to final iteration
 ```
 
-### UI considerations
+The unsuffixed variable (`$cleaned_signal`) resolves to the final iteration's output. Downstream steps never need to know about iterations.
 
-In loom-ui, a multi_pass group could be rendered as:
-- A collapsible container node showing the pass names
-- Or: expanded as the full unrolled graph (with pass-prefixed step names and suffixed data nodes)
+Data nodes for **external inputs** (produced outside the group) are not suffixed — they're constant across all iterations.
 
-The expanded view is probably simpler to implement and more useful for debugging.
+### External dependencies
+
+Steps inside the multi_pass group can reference data nodes produced outside the group (like `$input_signal`). These resolve normally and don't get suffixed.
+
+---
+
+## UI Representation
+
+### Graph structure
+
+Template steps appear **once** in the graph, enclosed in the group bounding box. Data nodes that are outputs of multi-pass steps exist as normal data nodes.
+
+### Feedback edge
+
+The feedback connection is a visible edge in the graph, going from the output data node back to the input of a step within the same group (creating a visual cycle). This edge has a **label** displayed on the curve showing:
+- Iteration count (e.g., "3 iterations")
+- Exit condition if present (e.g., `until threshold < 0.5`)
+
+The cycle is the visual signal that multi-pass iteration is happening.
+
+### Data node indicators
+
+Data nodes that are internal to a multi-pass group should have a visual indicator (badge, icon, or border treatment) showing they store per-iteration outputs in series.
+
+### Interaction
+
+- **Clicking the feedback edge label** opens the multi-pass properties in the right sidebar: iteration count, schedule/expressions, exit condition
+- **Creating a feedback connection**: when a user drags a connection from a data node back to a step input within the same group (creating a cycle), the UI detects this and prompts to configure multi-pass iteration settings
+- **Validation/linting** is built into the UI:
+  - Detect potentially infinite loops (no `count` and no `until`)
+  - Validate `until` expression syntax
+  - Verify feedback source/target are valid step flags
+  - Verify `schedule` length matches across all params
+
+### Dry-run display
+
+```
+[DRY RUN] refine (multi_pass: 3 iterations)
+  iteration 0:
+    smooth_signal: python tasks/smooth_signal.py input.csv -o results/smoothed_iter0.csv --window-size 20
+    filter_signal: python tasks/filter_signal.py results/smoothed_iter0.csv -o results/cleaned_iter0.csv --threshold 5.0
+  iteration 1:
+    smooth_signal: python tasks/smooth_signal.py input.csv -o results/smoothed_iter1.csv --window-size 10 --warm-start results/cleaned_iter0.csv
+    filter_signal: python tasks/filter_signal.py results/smoothed_iter1.csv -o results/cleaned_iter1.csv --threshold 2.0
+  iteration 2:
+    smooth_signal: python tasks/smooth_signal.py input.csv -o results/smoothed_iter2.csv --window-size 5 --warm-start results/cleaned_iter1.csv
+    filter_signal: python tasks/filter_signal.py results/smoothed_iter2.csv -o results/cleaned_iter2.csv --threshold 1.0
+```
+
+---
 
 ## Implementation Scope
 
-### Config parsing (`config.py`)
+### Config parsing (`config.py` + `multi_pass.py`)
 
-- New `MultiPassConfig` dataclass: `passes` (list of `{name, params}`), `chain` (dict), `steps` (list of step configs)
-- Extend `PipelineConfig` to recognize `multi_pass:` on groups
-- Suffix logic for data node path resolution
+- `MultiPassConfig` dataclass: `schedule`, `count`, `expressions`, `until`, `feedback`
+- Validation: mutual exclusivity, syntax checking for `until` and `expressions`
+- Identify internal output variables for per-iteration suffixing
+- Register the unsuffixed variable as alias for the final iteration's output
+- No parse-time unrolling — config preserves the template structure
 
 ### Executor (`executor.py`)
 
-- `run_multi_pass_group()`: iterate over passes sequentially
-- Per-pass: create a parameter overlay, resolve data node paths with suffix, apply chain bindings
-- First pass: skip chained inputs (or pass None)
-- Error handling: stop on first failed pass (like sequential steps)
+- `run_multi_pass_group()`: the core iteration loop
+  - For each iteration: compute param values, resolve output paths with `_iter{N}`, apply feedback from previous iteration, execute template steps
+  - After each iteration: evaluate `until` condition if present
+  - After loop: copy/symlink final iteration outputs to unsuffixed paths
+- Iteration 0: omit feedback args
+- Iteration N > 0: inject feedback paths from iteration N-1
+- Steps within one iteration can run in parallel if independent; iterations are strictly sequential
 
 ### Dependency tracking
 
-- Register all suffixed output data nodes as produced by the multi_pass group
-- The unsuffixed name (= last pass) is the group's "final output" for downstream deps
+- Multi-pass group as a whole depends on external inputs
+- The unsuffixed output variable is the group's "final output" for downstream dependency resolution
+- `loom clean` removes all `_iter{N}` suffixed files
+
+### Graph / UI (`graph.py`, frontend)
+
+- `yaml_to_graph()`: create template step nodes once, create feedback edges (cycles allowed within multi-pass groups)
+- Feedback edge carries `multiPass` metadata (iteration count, schedule/expressions, until)
+- `graph_to_yaml()`: reconstruct `multi_pass:` block from feedback edges and metadata
+- Frontend: render feedback edge label, sidebar panel for multi-pass properties
+- Validation: cycle detection exemption for multi-pass groups, expression syntax checking
 
 ### Tests
 
-- Unit tests for config parsing (multi_pass YAML variants)
-- Integration test: simple two-step, two-pass pipeline (e.g., process -> refine, with chaining)
-- Edge cases: single pass (degenerates to normal group), empty chain, missing params
+- Config parsing: `schedule` vs `expressions`, validation errors, `until` syntax checking
+- Expression evaluation: `iter` in scope, param values, safe builtins
+- Executor: iteration loop, feedback injection, output suffixing, break condition, first iteration bootstrap
+- Graph round-trip: feedback edges, multi-pass metadata preservation
+- Example pipeline: end-to-end execution
+
+---
+
+## Relationship to existing `loop:` on steps
+
+The existing `loop:` keyword on individual steps (iterate over files in a data folder) is unrelated. A step inside a multi-pass group can have its own `loop:` for file iteration within each pass — there is no conflict since `multi_pass:` lives on the group, not the step.
+
+---
+
+## Future extensions
+
+- **Metrics-based `until:`** — steps write metrics to a JSON sidecar, `until` can reference `metrics['convergence']`
+- **Per-feedback-edge transforms** — e.g., downsample an output before feeding it back
+- **Nested multi-pass** — multi-pass group inside another multi-pass group (pyramid within pyramid)
+- **Partial re-execution** — resume from iteration N if iterations 0..N-1 outputs exist

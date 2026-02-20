@@ -32,6 +32,7 @@ export interface StepData {
   disabled?: boolean
   loop?: LoopConfig
   group?: string
+  feedbackTargets?: string[]
   executionState?: StepExecutionState
   freshnessStatus?: FreshnessStatus
   // Type information from task schema (populated on load)
@@ -99,6 +100,17 @@ export interface DataEntry {
   pattern?: string
 }
 
+export interface FeedbackEdgeData {
+  feedback: true
+  multiPass: {
+    schedule?: Record<string, unknown>[]
+    expressions?: Record<string, string>
+    count?: number
+    until?: string
+    feedback: Record<string, string>
+  }
+}
+
 export interface PipelineGraph {
   variables: Record<string, string>
   parameters: Record<string, unknown>
@@ -108,6 +120,7 @@ export interface PipelineGraph {
   editor?: EditorOptions
   execution?: ExecutionOptions
   hasLayout?: boolean  // True if positions were loaded from YAML
+  multiPassGroups?: Record<string, unknown>
 }
 
 export interface EditorState {
