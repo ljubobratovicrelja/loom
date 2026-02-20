@@ -21,6 +21,7 @@ import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
 import GroupNode from './GroupNode'
+import NodeHotbox from './NodeHotbox'
 import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig, GroupNode as GroupNodeType } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 import { HighlightContext } from '../contexts/HighlightContext'
@@ -63,6 +64,8 @@ interface CanvasProps {
   hideParameterNodes?: boolean
   selectedNodes?: PipelineNode[]
   detectedGroupName?: string | null
+  onAddTask?: (task: TaskInfo, position: { x: number; y: number }) => void
+  onAddData?: (dataType: DataType, position: { x: number; y: number }) => void
 }
 
 export default function Canvas({
@@ -80,6 +83,8 @@ export default function Canvas({
   hideParameterNodes,
   selectedNodes,
   detectedGroupName,
+  onAddTask,
+  onAddData,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -91,6 +96,15 @@ export default function Canvas({
     ({ zoom }: Viewport) => setIsZoomedOut(zoom < ZOOM_THRESHOLD),
     [ZOOM_THRESHOLD]
   )
+
+  // Mouse position tracking for hotbox placement
+  const mousePositionRef = useRef({ x: 0, y: 0 })
+
+  // Hotbox state
+  const [hotbox, setHotbox] = useState<{
+    screenPosition: { x: number; y: number }
+    flowPosition: { x: number; y: number }
+  } | null>(null)
 
   // Store copied nodes and their edges for paste operation
   const copiedNodesRef = useRef<PipelineNode[]>([])
@@ -223,6 +237,36 @@ export default function Canvas({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [setNodes, setEdges, onSnapshot])
+
+  // Tab key handler for hotbox toggle
+  useEffect(() => {
+    const handleTabKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
+
+      const tag = (e.target as HTMLElement).tagName
+      if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(tag)) return
+
+      e.preventDefault()
+
+      if (hotbox) {
+        setHotbox(null)
+        return
+      }
+
+      // Check handlers are available and mouse is within canvas bounds
+      if (!onAddTask || !onAddData) return
+      if (!reactFlowWrapper.current || !reactFlowInstance.current) return
+      const rect = reactFlowWrapper.current.getBoundingClientRect()
+      const { x, y } = mousePositionRef.current
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return
+
+      const flowPos = reactFlowInstance.current.screenToFlowPosition({ x, y })
+      setHotbox({ screenPosition: { x, y }, flowPosition: flowPos })
+    }
+
+    document.addEventListener('keydown', handleTabKey)
+    return () => document.removeEventListener('keydown', handleTabKey)
+  }, [hotbox, onAddTask, onAddData])
 
   const onConnect: OnConnect = useCallback(
     (params) => {
@@ -826,6 +870,23 @@ export default function Canvas({
     return [...groupNodes, ...styledRegularNodes]
   }, [nodes, edges, hideParameterNodes, isZoomedOut, handleGroupClick, handleGroupDoubleClick, detectedGroupName])
 
+  // Hotbox handlers
+  const handleHotboxAddTask = useCallback((task: TaskInfo, position: { x: number; y: number }) => {
+    onAddTask?.(task, position)
+  }, [onAddTask])
+
+  const handleHotboxAddData = useCallback((dataType: DataType, position: { x: number; y: number }) => {
+    onAddData?.(dataType, position)
+  }, [onAddData])
+
+  const handleHotboxClose = useCallback(() => {
+    setHotbox(null)
+  }, [])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    mousePositionRef.current = { x: e.clientX, y: e.clientY }
+  }, [])
+
   return (
     <HighlightContext.Provider value={{ neighborNodeIds }}>
     <div
@@ -833,6 +894,7 @@ export default function Canvas({
       className="flex-1 bg-slate-100 dark:bg-slate-950"
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onMouseMove={handleMouseMove}
     >
       <ReactFlow
         nodes={displayNodes}
@@ -890,6 +952,16 @@ export default function Canvas({
           }}
         />
       </ReactFlow>
+      {hotbox && onAddTask && onAddData && (
+        <NodeHotbox
+          position={hotbox.screenPosition}
+          flowPosition={hotbox.flowPosition}
+          tasks={tasks}
+          onAddTask={handleHotboxAddTask}
+          onAddData={handleHotboxAddData}
+          onClose={handleHotboxClose}
+        />
+      )}
     </div>
     </HighlightContext.Provider>
   )
