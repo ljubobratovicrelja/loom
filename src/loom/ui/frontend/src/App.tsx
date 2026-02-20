@@ -792,8 +792,8 @@ export default function App() {
             setShowParameterNodes((v) => !v)
           }
         }
-      } else if (e.key === 'Tab') {
-        // Tab = Toggle sidebars (collapse both or expand both)
+      } else if (e.key === 'Tab' && e.ctrlKey) {
+        // Ctrl+Tab = Toggle sidebars (collapse both or expand both)
         const tag = (e.target as HTMLElement).tagName
         if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(tag)) return
         e.preventDefault()
@@ -871,7 +871,7 @@ export default function App() {
     URL.revokeObjectURL(url)
   }, [nodes, parameters])
 
-  const handleAddTask = useCallback((task: TaskInfo) => {
+  const handleAddTask = useCallback((task: TaskInfo, position?: { x: number; y: number }) => {
     // Snapshot before change for undo
     snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
 
@@ -927,7 +927,7 @@ export default function App() {
     const newNode: StepNode = {
       id: `step_${Date.now()}`,
       type: 'step',
-      position: { x: 400, y: 100 + nodes.length * 50 },
+      position: position ?? { x: 400, y: 100 + nodes.length * 50 },
       data: {
         name: stepName,
         task: task.path,
@@ -943,7 +943,7 @@ export default function App() {
     setNodes((nds) => [...nds, newNode])
   }, [nodes.length, setNodes, snapshot])
 
-  const handleAddData = useCallback((dataType: DataType) => {
+  const handleAddData = useCallback((dataType: DataType, position?: { x: number; y: number }) => {
     // Snapshot before change for undo
     snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
     const dataCount = nodes.filter((n) => n.type === 'data').length
@@ -968,7 +968,7 @@ export default function App() {
     const newNode: DataNode = {
       id: `data_${Date.now()}`,
       type: 'data',
-      position: { x: 50, y: 50 + dataCount * 80 },
+      position: position ?? { x: 50, y: 50 + dataCount * 80 },
       data: {
         key,
         name: dataName,
@@ -1705,7 +1705,7 @@ export default function App() {
             <button
               onClick={() => setLeftCollapsed((v) => !v)}
               className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
-              title={leftCollapsed ? 'Expand sidebar (Tab)' : 'Collapse sidebar (Tab)'}
+              title={leftCollapsed ? 'Expand sidebar (Ctrl+Tab)' : 'Collapse sidebar (Ctrl+Tab)'}
             >
               {leftCollapsed
                 ? <ChevronRight className="w-3 h-3" />
@@ -1735,6 +1735,8 @@ export default function App() {
             hideParameterNodes={!showParameterNodes}
             selectedNodes={selectedNodes}
             detectedGroupName={detectedGroupName}
+            onAddTask={handleAddTask}
+            onAddData={handleAddData}
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}
@@ -1742,7 +1744,7 @@ export default function App() {
             <button
               onClick={() => setRightCollapsed((v) => !v)}
               className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
-              title={rightCollapsed ? 'Expand panel (Tab)' : 'Collapse panel (Tab)'}
+              title={rightCollapsed ? 'Expand panel (Ctrl+Tab)' : 'Collapse panel (Ctrl+Tab)'}
             >
               {rightCollapsed
                 ? <ChevronLeft className="w-3 h-3" />
