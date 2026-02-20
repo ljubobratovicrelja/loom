@@ -62,6 +62,7 @@ interface CanvasProps {
   onParameterDrop?: (name: string, value: unknown, position: { x: number; y: number }) => void
   hideParameterNodes?: boolean
   selectedNodes?: PipelineNode[]
+  detectedGroupName?: string | null
 }
 
 export default function Canvas({
@@ -78,6 +79,7 @@ export default function Canvas({
   onParameterDrop,
   hideParameterNodes,
   selectedNodes,
+  detectedGroupName,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -801,6 +803,8 @@ export default function Canvas({
           memberIds,
           color,
           isZoomedOut,
+          isSelected: detectedGroupName === groupName,
+          anyGroupSelected: detectedGroupName != null,
           onGroupClick: () => handleGroupClick(memberIds),
           onGroupDoubleClick: () => handleGroupDoubleClick(centerX, centerY),
         },
@@ -820,7 +824,7 @@ export default function Canvas({
         })
 
     return [...groupNodes, ...styledRegularNodes]
-  }, [nodes, edges, hideParameterNodes, isZoomedOut, handleGroupClick, handleGroupDoubleClick])
+  }, [nodes, edges, hideParameterNodes, isZoomedOut, handleGroupClick, handleGroupDoubleClick, detectedGroupName])
 
   return (
     <HighlightContext.Provider value={{ neighborNodeIds }}>

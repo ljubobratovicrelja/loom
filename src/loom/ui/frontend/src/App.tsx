@@ -1730,6 +1730,7 @@ export default function App() {
             onParameterDrop={handleParameterDrop}
             hideParameterNodes={!showParameterNodes}
             selectedNodes={selectedNodes}
+            detectedGroupName={detectedGroupName}
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}
