@@ -29,6 +29,45 @@ def _flatten_pipeline(pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return flat
 
 
+def _resolve_param_name(edge_source: str, nodes: list[GraphNode]) -> str | None:
+    """Resolve the parameter name from a parameter node ID.
+
+    For clone nodes (e.g. ``param_threshold_ref_1``), the name cannot simply be
+    derived by stripping the ``param_`` prefix.  Instead we look up the node's
+    ``data.name`` field which always contains the canonical parameter name.
+    Falls back to stripping the ``param_`` prefix for backwards-compatibility.
+    """
+    for node in nodes:
+        if node.id == edge_source and node.type == "parameter":
+            name = node.data.get("name")
+            if name:
+                return str(name)
+            break
+    if edge_source.startswith("param_"):
+        return edge_source[6:]
+    return None
+
+
+def _collect_param_refs(
+    nodes: list[GraphNode],
+    edges: list[GraphEdge],
+) -> dict[str, dict[str, Any]]:
+    """Detect parameter reference (clone) nodes and build parameterRefs dict."""
+    param_refs: dict[str, dict[str, Any]] = {}
+    for node in nodes:
+        if node.type == "parameter":
+            name = node.data.get("name", "")
+            if not name or node.id == f"param_{name}":
+                continue
+            ref_edges = sorted(
+                f"{e.target}:{e.targetHandle}"
+                for e in edges
+                if e.source == node.id and e.targetHandle
+            )
+            param_refs[node.id] = {"parameter": name, "edges": ref_edges}
+    return param_refs
+
+
 def _build_step_dict(node: GraphNode, param_edges: dict[tuple[str, str], str]) -> dict[str, Any]:
     """Build a YAML step dict from a graph node (without group key)."""
     step: dict[str, Any] = {
@@ -138,6 +177,29 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
             )
         )
 
+    # Step 3b: Create parameter reference (clone) nodes from editor.parameterRefs
+    param_refs = data.get("editor", {}).get("parameterRefs", {})
+    for ref_id, ref_info in param_refs.items():
+        param_name = ref_info.get("parameter")
+        if param_name not in parameters:
+            continue
+        if ref_id in layout:
+            saved = layout[ref_id]
+            position = {"x": float(saved.get("x", 0)), "y": float(saved.get("y", 0))}
+        else:
+            position = {"x": 50, "y": 0}
+        nodes.append(
+            GraphNode(
+                id=ref_id,
+                type="parameter",
+                position=position,
+                data={
+                    "name": param_name,
+                    "value": parameters[param_name],
+                },
+            )
+        )
+
     # Step 3c: Create data nodes (typed file/directory nodes)
     data_section = data.get("data", {})
     for data_idx, (data_name, data_info) in enumerate(data_section.items()):
@@ -200,6 +262,12 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                     )
 
     # 4c: Edges from parameters to steps that use them in args
+    # Build lookup from "step:handle" -> clone node ID for edge routing
+    clone_edge_lookup: dict[str, str] = {}  # "step_id:arg_key" -> clone_node_id
+    for ref_id, ref_info in param_refs.items():
+        for edge_spec in ref_info.get("edges", []):
+            clone_edge_lookup[edge_spec] = ref_id
+
     for step in all_steps:
         step_id = step["name"]
         for arg_key, arg_value in step.get("args", {}).items():
@@ -207,10 +275,18 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                 param_name = arg_value[1:]
                 # Only create edge if parameter exists
                 if param_name in parameters:
+                    # Route to clone node if mapped to same parameter, otherwise primary
+                    source_id = f"param_{param_name}"
+                    clone_key = f"{step_id}:{arg_key}"
+                    clone_id = clone_edge_lookup.get(clone_key)
+                    if clone_id is not None:
+                        ref_info = param_refs.get(clone_id)
+                        if ref_info and ref_info.get("parameter") == param_name:
+                            source_id = clone_id
                     edges.append(
                         GraphEdge(
-                            id=f"e_param_{param_name}_{step_id}_{arg_key}",
-                            source=f"param_{param_name}",
+                            id=f"e_{source_id}_{step_id}_{arg_key}",
+                            source=source_id,
                             target=step_id,
                             sourceHandle="value",
                             targetHandle=arg_key,
@@ -299,8 +375,8 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
     param_edges: dict[tuple[str, str], str] = {}
     for edge in graph.edges:
         if edge.source.startswith("param_"):
-            param_name = edge.source[6:]  # Strip "param_" prefix
-            if edge.targetHandle:
+            param_name = _resolve_param_name(edge.source, graph.nodes)
+            if param_name and edge.targetHandle:
                 param_edges[(edge.target, edge.targetHandle)] = param_name
 
     # Build pipeline from step nodes
@@ -379,6 +455,11 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
     if graph.editor.autoSave:
         editor["autoSave"] = True
 
+    # Persist parameter reference (clone) nodes
+    param_refs = _collect_param_refs(graph.nodes, graph.edges)
+    if param_refs:
+        editor["parameterRefs"] = param_refs
+
     result: dict[str, Any] = {
         "parameters": parameters,
         "pipeline": pipeline,
@@ -456,8 +537,8 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
     param_edges: dict[tuple[str, str], str] = {}
     for edge in graph.edges:
         if edge.source.startswith("param_"):
-            param_name = edge.source[6:]  # Strip "param_" prefix
-            if edge.targetHandle:
+            param_name = _resolve_param_name(edge.source, graph.nodes)
+            if param_name and edge.targetHandle:
                 param_edges[(edge.target, edge.targetHandle)] = param_name
 
     # Build step lookup from graph (include "group" metadata for new step placement)
@@ -588,9 +669,19 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
         data["editor"]["autoSave"] = True
     elif "editor" in data and "autoSave" in data["editor"]:
         del data["editor"]["autoSave"]
-        # Clean up empty editor section
-        if not data["editor"]:
-            del data["editor"]
+
+    # Persist parameter reference (clone) nodes
+    param_refs = _collect_param_refs(graph.nodes, graph.edges)
+    if param_refs:
+        if "editor" not in data:
+            data["editor"] = {}
+        data["editor"]["parameterRefs"] = param_refs
+    elif "editor" in data and "parameterRefs" in data["editor"]:
+        del data["editor"]["parameterRefs"]
+
+    # Clean up empty editor section
+    if "editor" in data and not data["editor"]:
+        del data["editor"]
 
     # Update execution options (only include non-default values)
     has_execution_settings = graph.execution.parallel or graph.execution.maxWorkers

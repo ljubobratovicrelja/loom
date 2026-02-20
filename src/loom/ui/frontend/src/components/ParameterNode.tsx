@@ -6,6 +6,8 @@ import { HighlightContext } from '../contexts/HighlightContext'
 function ParameterNode({ data, id, selected }: NodeProps<ParameterNodeType>) {
   const { neighborNodeIds } = useContext(HighlightContext)
   const isNeighbor = neighborNodeIds.has(id)
+  const isReference = id !== `param_${data.name}`
+
   // Format value for display
   const displayValue = () => {
     if (typeof data.value === 'boolean') {
@@ -36,6 +38,11 @@ function ParameterNode({ data, id, selected }: NodeProps<ParameterNodeType>) {
           <span className="text-purple-600 dark:text-purple-400 text-[10px] bg-purple-200 dark:bg-purple-800 px-1 rounded">
             {typeBadge()}
           </span>
+          {isReference && (
+            <span className="text-purple-500 dark:text-purple-400 text-[10px] bg-purple-200/50 dark:bg-purple-800/50 px-1 rounded">
+              ref
+            </span>
+          )}
         </div>
         <Handle
           type="source"

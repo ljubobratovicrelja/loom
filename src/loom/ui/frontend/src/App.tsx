@@ -1510,9 +1510,13 @@ export default function App() {
       // Snapshot for undo
       snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
 
-      // Create a new parameter node at the drop position
+      // Create a new parameter node at the drop position with sequential ref ID
+      let refIndex = 1
+      const existingIds = new Set(nodesRef.current.map((n) => n.id))
+      while (existingIds.has(`param_${name}_ref_${refIndex}`)) refIndex++
+
       const newNode: ParameterNode = {
-        id: `param_${name}_${Date.now()}`,
+        id: `param_${name}_ref_${refIndex}`,
         type: 'parameter',
         position,
         data: { name, value },
