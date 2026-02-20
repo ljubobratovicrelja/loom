@@ -31,6 +31,7 @@ EXAMPLES = {
     "image-processing": ("image-processing.md", "Image Processing"),
     "loop": ("loop.md", "Loop (Per-Item Processing)"),
     "groups": ("groups.md", "Groups"),
+    "multi_pass": ("multi-pass.md", "Multi-Pass Refinement"),
 }
 
 

@@ -1,0 +1,62 @@
+data:
+  input_signal:
+    type: csv
+    path: data/signal.csv
+  smoothed_signal:
+    type: csv
+    path: results/smoothed.csv
+  cleaned_signal:
+    type: csv
+    path: results/cleaned.csv
+
+parameters:
+  num_samples: 200
+
+pipeline:
+  - name: generate_signal
+    task: tasks/generate_signal.py
+    outputs:
+      --output: $input_signal
+    args:
+      --samples: $num_samples
+
+  - group: refine
+    multi_pass:
+      passes:
+        - name: coarse
+          params:
+            window_size: 20
+            threshold: 5.0
+        - name: medium
+          params:
+            window_size: 10
+            threshold: 2.0
+        - name: fine
+          params:
+            window_size: 5
+            threshold: 1.0
+      chain:
+        filter_signal.--output: smooth_signal.--warm-start
+    steps:
+      - name: smooth_signal
+        task: tasks/smooth_signal.py
+        inputs:
+          input_csv: $input_signal
+        outputs:
+          --output: $smoothed_signal
+        args:
+          --window-size: $window_size
+
+      - name: filter_signal
+        task: tasks/filter_signal.py
+        inputs:
+          input_csv: $smoothed_signal
+        outputs:
+          --output: $cleaned_signal
+        args:
+          --threshold: $threshold
+
+  - name: summarize
+    task: tasks/summarize.py
+    inputs:
+      input_csv: $cleaned_signal

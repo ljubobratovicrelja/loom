@@ -6,7 +6,20 @@ from typing import Any
 
 import yaml
 
+from .multi_pass import MultiPassExpansion, expand_multi_pass
 from .url import URL_CACHE_DIR_NAME, ensure_url_downloaded, is_url
+
+
+@dataclass
+class FlattenResult:
+    """Result of flattening a pipeline with possible multi_pass expansions."""
+
+    steps: list[dict[str, Any]]
+    extra_variables: dict[str, str] = field(default_factory=dict)
+    extra_data_types: dict[str, str] = field(default_factory=dict)
+    variable_overrides: dict[str, str] = field(default_factory=dict)
+    producer_overrides: dict[str, str] = field(default_factory=dict)
+    multi_pass_groups: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -33,21 +46,64 @@ class LoopConfig:
         )
 
 
-def _flatten_pipeline(pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _flatten_pipeline(
+    pipeline: list[dict[str, Any]],
+    data_section: dict[str, Any] | None = None,
+) -> FlattenResult:
     """Flatten grouped pipeline entries into a flat list with group tag injected.
 
     Group blocks of the form ``{"group": name, "steps": [...]}`` are expanded
     into flat step dicts with a ``"group"`` key added to each step.
+    Multi-pass groups (with ``"multi_pass"`` key) are expanded into concrete
+    per-pass steps via :func:`expand_multi_pass`.
     Ungrouped steps are passed through unchanged.
+
+    Args:
+        pipeline: Raw pipeline list from YAML.
+        data_section: The ``data:`` section from YAML, needed for multi_pass
+            path suffixing. May be ``None`` if no multi_pass blocks are present.
+
+    Returns:
+        A ``FlattenResult`` with flat steps and any multi_pass metadata.
     """
-    flat = []
+    flat: list[dict[str, Any]] = []
+    extra_variables: dict[str, str] = {}
+    extra_data_types: dict[str, str] = {}
+    variable_overrides: dict[str, str] = {}
+    producer_overrides: dict[str, str] = {}
+    multi_pass_groups: set[str] = set()
+
     for entry in pipeline:
         if "group" in entry and "steps" in entry:
-            for step in entry["steps"]:
-                flat.append({**step, "group": entry["group"]})
+            if "multi_pass" in entry:
+                # Multi-pass group: expand into concrete steps
+                expansion: MultiPassExpansion = expand_multi_pass(
+                    group_name=entry["group"],
+                    multi_pass_data=entry["multi_pass"],
+                    template_steps=entry["steps"],
+                    data_section=data_section or {},
+                )
+                flat.extend(expansion.steps)
+                extra_variables.update(expansion.extra_variables)
+                extra_data_types.update(expansion.extra_data_types)
+                variable_overrides.update(expansion.variable_overrides)
+                producer_overrides.update(expansion.producer_overrides)
+                multi_pass_groups.add(entry["group"])
+            else:
+                # Regular group: flatten steps with group tag
+                for step in entry["steps"]:
+                    flat.append({**step, "group": entry["group"]})
         else:
             flat.append(entry)
-    return flat
+
+    return FlattenResult(
+        steps=flat,
+        extra_variables=extra_variables,
+        extra_data_types=extra_data_types,
+        variable_overrides=variable_overrides,
+        producer_overrides=producer_overrides,
+        multi_pass_groups=multi_pass_groups,
+    )
 
 
 @dataclass
@@ -130,7 +186,9 @@ class PipelineConfig:
                 "See examples for the new format."
             )
 
-        steps = [StepConfig.from_dict(s) for s in _flatten_pipeline(data.get("pipeline", []))]
+        data_section = data.get("data", {})
+        result = _flatten_pipeline(data.get("pipeline", []), data_section)
+        steps = [StepConfig.from_dict(s) for s in result.steps]
 
         # Load variables from 'data' section
         # Data nodes provide typed file/dir references
@@ -138,7 +196,7 @@ class PipelineConfig:
         data_types: dict[str, str] = {}
 
         # Extract path and type from each data entry
-        for name, entry in data.get("data", {}).items():
+        for name, entry in data_section.items():
             if isinstance(entry, dict):
                 # New format: {type: ..., path: ..., ...}
                 variables[name] = entry.get("path", "")
@@ -148,6 +206,11 @@ class PipelineConfig:
                 variables[name] = str(entry)
                 data_types[name] = ""
 
+        # Merge multi_pass extra variables and overrides
+        variables.update(result.extra_variables)
+        data_types.update(result.extra_data_types)
+        variables.update(result.variable_overrides)
+
         # Store the pipeline file's directory for relative path resolution
         base_dir = path.parent.resolve()
 
@@ -156,7 +219,7 @@ class PipelineConfig:
         parallel = execution.get("parallel", False)
         max_workers = execution.get("max_workers")
 
-        return cls(
+        config = cls(
             variables=variables,
             parameters=data.get("parameters", {}),
             steps=steps,
@@ -165,6 +228,11 @@ class PipelineConfig:
             parallel=parallel,
             max_workers=max_workers,
         )
+
+        # Apply producer overrides so unsuffixed vars resolve to last-pass steps
+        config._output_producers.update(result.producer_overrides)
+
+        return config
 
     def resolve_value_with_loop(self, value: Any, loop_bindings: dict[str, str]) -> Any:
         """Resolve $variable references, checking loop bindings first.
@@ -297,6 +365,13 @@ class PipelineConfig:
             var_name = var_ref.lstrip("$")
             if var_name in self._output_producers:
                 dependencies.add(self._output_producers[var_name])
+
+        # Check args for $var references (e.g. multi_pass chain connections)
+        for arg_value in step.args.values():
+            if isinstance(arg_value, str) and arg_value.startswith("$"):
+                var_name = arg_value[1:]
+                if var_name in self._output_producers:
+                    dependencies.add(self._output_producers[var_name])
 
         # If this is a loop step, also depend on the step that produces loop.over
         if step.loop is not None:

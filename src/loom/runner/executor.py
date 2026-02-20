@@ -101,8 +101,19 @@ class PipelineExecutor:
                 if resolved:
                     cmd.append(flag)
             else:
+                # If the arg references a data variable (file path), resolve
+                # to an absolute path so scripts work regardless of CWD.
+                arg_str: str
+                if (
+                    isinstance(value, str)
+                    and value.startswith("$")
+                    and value[1:] in self.config.variables
+                ):
+                    arg_str = str(self.config.resolve_path(value))
+                else:
+                    arg_str = str(resolved)
                 cmd.append(flag)
-                cmd.append(str(resolved))
+                cmd.append(arg_str)
 
         # Add extra args if provided
         if extra_args:

@@ -77,6 +77,7 @@ class PipelineGraph(BaseModel):
     editor: EditorOptions = EditorOptions()
     execution: ExecutionOptions = ExecutionOptions()
     hasLayout: bool = False  # noqa: N815 - True if positions were loaded from YAML
+    multiPassGroups: dict[str, Any] = {}  # noqa: N815 - group_name -> original YAML block
 
 
 class ValidationWarning(BaseModel):
