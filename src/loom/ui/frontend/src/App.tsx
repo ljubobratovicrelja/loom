@@ -377,15 +377,23 @@ export default function App() {
       }
     }
 
-    // Find groups where ALL members are selected
+    // Find groups where ALL members are selected, and detect partial selections
     const matchingGroups: string[] = []
+    let hasPartialOtherGroup = false
     for (const [groupName, members] of groupMembers) {
-      if (members.length >= 2 && members.every(id => selectedIds.has(id))) {
+      const selectedCount = members.filter(id => selectedIds.has(id)).length
+      if (members.length >= 2 && selectedCount === members.length) {
         matchingGroups.push(groupName)
+      } else if (selectedCount > 0 && selectedCount < members.length) {
+        hasPartialOtherGroup = true
       }
     }
 
-    return matchingGroups.length === 1 ? matchingGroups[0] : null
+    // Only detect group when unambiguous: exactly one full group, no partial others
+    if (matchingGroups.length === 1 && !hasPartialOtherGroup) {
+      return matchingGroups[0]
+    }
+    return null
   }, [selectedStepNodes, nodes])
 
   // For PropertiesPanel - show first selected node (single selection behavior)
