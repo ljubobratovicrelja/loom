@@ -37,6 +37,7 @@ pipeline:
       --output: $smoothed_csv
     args:
       --window: $window_size
+      --threshold: $threshold
 
   - name: detect_peaks
     task: tasks/detect_peaks.py
@@ -46,3 +47,50 @@ pipeline:
       --output: $peaks_json
     args:
       --threshold: $threshold
+
+# Node positions for the visual editor
+layout:
+  generate_signal:
+    x: 400
+    y: 0
+  smooth_signal:
+    x: 400
+    y: 200
+  detect_peaks:
+    x: 400
+    y: 400
+  param_num_points:
+    x: 50
+    y: -60
+  param_noise_level:
+    x: 50
+    y: 0
+  param_frequency:
+    x: 50
+    y: 60
+  param_window_size:
+    x: 50
+    y: 150
+  param_threshold:
+    x: 50
+    y: 250
+  param_threshold_ref_1:
+    x: 50
+    y: 450
+  data_signal_csv:
+    x: 50
+    y: -200
+  data_smoothed_csv:
+    x: 50
+    y: -280
+  data_peaks_json:
+    x: 50
+    y: -360
+
+# Parameter reference nodes (clones) for cleaner edge routing
+editor:
+  parameterRefs:
+    param_threshold_ref_1:
+      parameter: threshold
+      edges:
+        - "detect_peaks:--threshold"

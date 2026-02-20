@@ -2,6 +2,7 @@
 """Smooth a signal using moving average.
 
 Applies a simple moving average filter to reduce noise.
+Values below an optional threshold are clipped to zero before smoothing.
 
 ---
 inputs:
@@ -17,6 +18,10 @@ args:
     type: int
     default: 5
     description: Window size for moving average
+  --threshold:
+    type: float
+    default: 0
+    description: Clip values below this threshold to zero before smoothing
 ---
 """
 
@@ -40,6 +45,9 @@ def main():
     parser.add_argument("signal", help="Input signal CSV")
     parser.add_argument("-o", "--output", required=True, help="Output CSV path")
     parser.add_argument("--window", type=int, default=5, help="Window size")
+    parser.add_argument(
+        "--threshold", type=float, default=0, help="Clip values below threshold to zero"
+    )
     args = parser.parse_args()
 
     # Read signal
@@ -50,6 +58,14 @@ def main():
         for row in reader:
             times.append(float(row["time"]))
             values.append(float(row["value"]))
+
+    # Clip values below threshold to zero
+    clipped = 0
+    if args.threshold > 0:
+        for i in range(len(values)):
+            if abs(values[i]) < args.threshold:
+                values[i] = 0.0
+                clipped += 1
 
     # Smooth
     smoothed = moving_average(values, args.window)
@@ -63,7 +79,11 @@ def main():
                 {"time": round(t, 4), "value": round(smooth, 4), "original": round(orig, 4)}
             )
 
-    print(f"Smoothed {len(values)} points (window={args.window}) -> {args.output}")
+    msg = f"Smoothed {len(values)} points (window={args.window}"
+    if args.threshold > 0:
+        msg += f", threshold={args.threshold}, clipped={clipped}"
+    msg += f") -> {args.output}"
+    print(msg)
 
 
 if __name__ == "__main__":
