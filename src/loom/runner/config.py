@@ -249,6 +249,38 @@ class PipelineConfig:
                 return step
         raise ValueError(f"Unknown step: {name}")
 
+    def get_steps_by_group(self, group_name: str) -> list[StepConfig]:
+        """Get all steps belonging to a named group, in pipeline order.
+
+        Args:
+            group_name: Name of the group to filter by.
+
+        Returns:
+            List of steps in the group, in pipeline order.
+
+        Raises:
+            ValueError: If no steps found for the given group name.
+        """
+        steps = [s for s in self.steps if s.group == group_name]
+        if not steps:
+            raise ValueError(f"Unknown group: {group_name}")
+        return steps
+
+    def get_group_names(self) -> list[str]:
+        """Get unique group names in pipeline order of first appearance.
+
+        Returns:
+            List of group names, preserving order of first appearance.
+            Empty list if no steps have groups.
+        """
+        seen: set[str] = set()
+        names: list[str] = []
+        for step in self.steps:
+            if step.group and step.group not in seen:
+                seen.add(step.group)
+                names.append(step.group)
+        return names
+
     def get_step_dependencies(self, step: StepConfig) -> set[str]:
         """Return names of steps that produce this step's inputs.
 

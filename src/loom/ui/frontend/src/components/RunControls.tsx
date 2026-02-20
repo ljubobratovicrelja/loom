@@ -6,10 +6,12 @@ interface RunControlsProps {
   selectedStepName: string | null
   selectedStepNames: string[]
   status: ExecutionStatus
-  onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[]) => void
+  onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[], groupName?: string) => void
   onRunStep?: (stepName: string) => void  // Independent step execution
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
+  groupEligibility?: RunEligibility
+  detectedGroupName?: string | null
 }
 
 export default function RunControls({
@@ -20,6 +22,8 @@ export default function RunControls({
   onRunStep,
   stepEligibility,
   parallelEligibility,
+  groupEligibility,
+  detectedGroupName,
 }: RunControlsProps) {
   const isRunning = status === 'running'
 
@@ -30,6 +34,10 @@ export default function RunControls({
   // Determine if parallel execution can run
   const canRunParallel = parallelEligibility?.canRun ?? !isRunning
   const parallelBlockReason = parallelEligibility ? getBlockReasonMessage(parallelEligibility) : null
+
+  // Determine if group execution can run (allows in-group deps, orchestrator handles ordering)
+  const canRunGroup = groupEligibility?.canRun ?? !isRunning
+  const groupBlockReason = groupEligibility ? getBlockReasonMessage(groupEligibility) : null
 
   return (
     <div className="flex items-center gap-2">
@@ -48,8 +56,25 @@ export default function RunControls({
         <span>&#9654;</span> Run All
       </button>
 
-      {/* Run Parallel - when 2+ steps selected */}
-      {selectedStepNames.length >= 2 && (
+      {/* Run Group - when selection matches exactly one group */}
+      {selectedStepNames.length >= 2 && detectedGroupName && (
+        <button
+          onClick={() => onRun('group', undefined, undefined, undefined, detectedGroupName)}
+          disabled={!canRunGroup}
+          className={`
+            px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
+            ${!canRunGroup
+              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+              : 'bg-teal-600 hover:bg-teal-500'}
+          `}
+          title={groupBlockReason || `Run all steps in group "${detectedGroupName}"`}
+        >
+          <span>&#9654;</span> Run {detectedGroupName}
+        </button>
+      )}
+
+      {/* Run Parallel - when 2+ steps selected and not a group */}
+      {selectedStepNames.length >= 2 && !detectedGroupName && (
         <button
           onClick={() => onRun('parallel', undefined, undefined, selectedStepNames)}
           disabled={!canRunParallel}

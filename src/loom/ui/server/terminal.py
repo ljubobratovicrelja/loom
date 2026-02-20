@@ -73,6 +73,28 @@ async def terminal_websocket(websocket: WebSocket) -> None:
 
         config = PipelineConfig.from_yaml(state.config_path)
 
+        # Handle group mode: resolve to step commands and run sequentially/parallel
+        if run_request.mode == "group" and run_request.group_name:
+            from ..execution import build_group_commands
+
+            try:
+                group_commands = build_group_commands(state.config_path, run_request.group_name)
+            except ValueError as e:
+                await websocket.send_text(f"\x1b[31m[ERROR]\x1b[0m {e}\r\n")
+                return
+
+            if config.parallel:
+                # Run group steps with parallel orchestrator
+                await _run_config_parallel_pipeline_with_commands(
+                    websocket,
+                    config,
+                    group_commands,
+                    get_step_output_dirs,
+                )
+            else:
+                await _run_sequential_commands(websocket, group_commands, get_step_output_dirs)
+            return
+
         if config.parallel and run_request.mode == "all":
             # Use parallel execution for "Run All" when config.parallel is True
             await _run_config_parallel_pipeline(
@@ -494,7 +516,10 @@ async def _run_sequential_pipeline(
     build_pipeline_commands: Any,
     get_step_output_dirs: Any,
 ) -> None:
-    """Run pipeline steps sequentially."""
+    """Run pipeline steps sequentially.
+
+    Builds commands from the RunRequest, then delegates to _run_sequential_commands.
+    """
     try:
         commands = build_pipeline_commands(
             state.config_path,
@@ -506,13 +531,65 @@ async def _run_sequential_pipeline(
         await websocket.send_text(f"\x1b[31m[ERROR]\x1b[0m {e}\r\n")
         return
 
+    await _run_sequential_commands(websocket, commands, get_step_output_dirs)
+
+
+async def _run_config_parallel_pipeline(
+    websocket: WebSocket,
+    run_request: RunRequest,
+    config: Any,
+    build_pipeline_commands: Any,
+    get_step_output_dirs: Any,
+) -> None:
+    """Run pipeline steps in parallel with dependency tracking using orchestrator.
+
+    Builds commands from the RunRequest, then delegates to
+    _run_config_parallel_pipeline_with_commands.
+
+    Args:
+        websocket: WebSocket connection for streaming output.
+        run_request: Run request with mode and options.
+        config: Pipeline configuration.
+        build_pipeline_commands: Function to build commands (for getting steps).
+        get_step_output_dirs: Function to get output directories for a step.
+    """
+    try:
+        commands = build_pipeline_commands(
+            state.config_path,
+            run_request.mode,
+            run_request.step_name,
+            run_request.data_name,
+        )
+    except ValueError as e:
+        await websocket.send_text(f"\x1b[31m[ERROR]\x1b[0m {e}\r\n")
+        return
+
+    await _run_config_parallel_pipeline_with_commands(
+        websocket, config, commands, get_step_output_dirs
+    )
+
+
+async def _run_sequential_commands(
+    websocket: WebSocket,
+    commands: list[tuple[str, list[str]]],
+    get_step_output_dirs: Any,
+) -> None:
+    """Run pre-built commands sequentially.
+
+    This is a lighter variant of _run_sequential_pipeline that accepts
+    pre-built (step_name, cmd) pairs instead of building them from a RunRequest.
+
+    Args:
+        websocket: WebSocket connection for streaming output.
+        commands: List of (step_name, command) tuples.
+        get_step_output_dirs: Function to get output directories for a step.
+    """
     if not commands:
         await websocket.send_text("\x1b[33m[WARN]\x1b[0m No steps to run\r\n")
         return
 
     state.execution_state["status"] = "running"
 
-    # Execute each step
     for step_name, cmd in commands:
         state.execution_state["current_step"] = step_name
 
@@ -527,7 +604,11 @@ async def _run_sequential_pipeline(
             state.execution_state["status"] = "failed"
             return
 
-        # Print step header
+        # Send step status
+        await websocket.send_text(
+            json.dumps({"type": "step_status", "step": step_name, "status": "running"})
+        )
+
         cmd_str = " ".join(cmd)
         await websocket.send_text(f"\x1b[36m[RUNNING]\x1b[0m {step_name}\r\n")
         await websocket.send_text(f"  {cmd_str}\r\n")
@@ -536,10 +617,8 @@ async def _run_sequential_pipeline(
         master_fd, slave_fd = pty.openpty()
         state.execution_state["master_fd"] = master_fd
 
-        # Fork and exec
         pid = os.fork()
         if pid == 0:
-            # Child process
             os.setsid()
             os.dup2(slave_fd, 0)
             os.dup2(slave_fd, 1)
@@ -548,18 +627,14 @@ async def _run_sequential_pipeline(
             os.close(slave_fd)
             os.execvp(cmd[0], cmd)
         else:
-            # Parent process
             os.close(slave_fd)
             state.execution_state["pid"] = pid
 
-            # Set non-blocking for PTY
             flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
             fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-            # Track if cancelled
             cancelled = False
 
-            # Task to listen for cancel messages
             async def listen_for_cancel() -> None:
                 nonlocal cancelled
                 try:
@@ -568,7 +643,6 @@ async def _run_sequential_pipeline(
                         if msg == "__CANCEL__":
                             cancelled = True
                             state.execution_state["status"] = "cancelled"
-                            # Kill the process group
                             try:
                                 os.killpg(os.getpgid(pid), signal.SIGTERM)
                             except (ProcessLookupError, PermissionError):
@@ -577,20 +651,15 @@ async def _run_sequential_pipeline(
                 except Exception:
                     pass
 
-            # Start cancel listener as background task
             cancel_task = asyncio.create_task(listen_for_cancel())
 
-            # Stream output while process runs
             try:
                 while True:
-                    # Check if cancelled
                     if cancelled:
                         break
 
-                    # Check if process exited
-                    wpid, status = os.waitpid(pid, os.WNOHANG)
+                    wpid, wait_status = os.waitpid(pid, os.WNOHANG)
                     if wpid != 0:
-                        # Process exited, read any remaining output
                         try:
                             while True:
                                 data_bytes = os.read(master_fd, 4096)
@@ -601,7 +670,6 @@ async def _run_sequential_pipeline(
                             pass
                         break
 
-                    # Try to read from PTY
                     try:
                         data_bytes = os.read(master_fd, 4096)
                         if data_bytes:
@@ -611,10 +679,8 @@ async def _run_sequential_pipeline(
                     except OSError:
                         break
 
-                    # Small delay to prevent busy waiting
                     await asyncio.sleep(0.01)
             finally:
-                # Clean up cancel listener
                 cancel_task.cancel()
                 try:
                     await cancel_task
@@ -625,67 +691,67 @@ async def _run_sequential_pipeline(
             state.execution_state["master_fd"] = None
             state.execution_state["pid"] = None
 
-            # Handle cancellation first
             if cancelled:
                 await websocket.send_text(f"\x1b[33m[CANCELLED]\x1b[0m {step_name}\r\n")
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "cancelled"})
+                )
                 return
 
-            # Check exit status
-            if os.WIFEXITED(status):
-                exit_code = os.WEXITSTATUS(status)
+            if os.WIFEXITED(wait_status):
+                exit_code = os.WEXITSTATUS(wait_status)
                 if exit_code == 0:
                     await websocket.send_text(f"\x1b[32m[SUCCESS]\x1b[0m {step_name}\r\n")
+                    await websocket.send_text(
+                        json.dumps(
+                            {"type": "step_status", "step": step_name, "status": "completed"}
+                        )
+                    )
                 else:
                     await websocket.send_text(
                         f"\x1b[31m[FAILED]\x1b[0m {step_name} (exit code {exit_code})\r\n"
+                    )
+                    await websocket.send_text(
+                        json.dumps({"type": "step_status", "step": step_name, "status": "failed"})
                     )
                     state.execution_state["status"] = "failed"
                     return
             elif state.execution_state["status"] == "cancelled":
                 await websocket.send_text(f"\x1b[33m[CANCELLED]\x1b[0m {step_name}\r\n")
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "cancelled"})
+                )
                 return
             else:
                 await websocket.send_text(f"\x1b[31m[FAILED]\x1b[0m {step_name} (signal)\r\n")
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "failed"})
+                )
                 state.execution_state["status"] = "failed"
                 return
 
-    # All steps completed
     await websocket.send_text(f"\x1b[32m[COMPLETED]\x1b[0m {len(commands)} step(s) succeeded\r\n")
     state.execution_state["status"] = "completed"
 
 
-async def _run_config_parallel_pipeline(
+async def _run_config_parallel_pipeline_with_commands(
     websocket: WebSocket,
-    run_request: RunRequest,
     config: Any,
-    build_pipeline_commands: Any,
+    commands: list[tuple[str, list[str]]],
     get_step_output_dirs: Any,
 ) -> None:
-    """Run pipeline steps in parallel with dependency tracking using orchestrator.
+    """Run pre-built commands with parallel orchestrator.
 
-    This function uses the shared PipelineOrchestrator to determine which steps
-    can run in parallel while respecting dependencies between steps.
+    Similar to _run_config_parallel_pipeline but accepts pre-built commands
+    (e.g. from a group) instead of building from a RunRequest.
 
     Args:
         websocket: WebSocket connection for streaming output.
-        run_request: Run request with mode and options.
         config: Pipeline configuration.
-        build_pipeline_commands: Function to build commands (for getting steps).
+        commands: Pre-built (step_name, command) tuples.
         get_step_output_dirs: Function to get output directories for a step.
     """
     from loom.runner import EventType, PipelineOrchestrator, StepResult
-
-    # Get steps to run based on mode
-    try:
-        commands = build_pipeline_commands(
-            state.config_path,
-            run_request.mode,
-            run_request.step_name,
-            run_request.data_name,
-        )
-    except ValueError as e:
-        await websocket.send_text(f"\x1b[31m[ERROR]\x1b[0m {e}\r\n")
-        return
 
     if not commands:
         await websocket.send_text("\x1b[33m[WARN]\x1b[0m No steps to run\r\n")
@@ -693,20 +759,18 @@ async def _run_config_parallel_pipeline(
 
     state.execution_state["status"] = "running"
 
-    # Create orchestrator for dependency-aware parallel execution
+    step_names_list = [name for name, _ in commands]
     orch = PipelineOrchestrator(
         config,
         parallel=True,
         max_workers=config.max_workers,
     )
 
-    # Track running steps and cancellation
     running_tasks: dict[str, asyncio.Task] = {}
     cancelled_steps: set[str] = set()
     ws_closed = False
 
     async def listen_for_cancel() -> None:
-        """Listen for cancel messages."""
         nonlocal ws_closed
         try:
             while True:
@@ -715,15 +779,13 @@ async def _run_config_parallel_pipeline(
                     step_to_cancel = msg.split(":", 1)[1]
                     cancelled_steps.add(step_to_cancel)
                 elif msg == "__CANCEL__":
-                    # Cancel all
                     for name in running_tasks:
                         cancelled_steps.add(name)
         except Exception:
             ws_closed = True
 
     async def run_step_pty(step_name: str, cmd: list[str]) -> tuple[str, bool]:
-        """Run a single step in its own PTY. Returns (step_name, success)."""
-        # Create output directories
+        """Run a single step in its own PTY."""
         try:
             for dir_path in get_step_output_dirs(state.config_path, step_name):
                 dir_path.mkdir(parents=True, exist_ok=True)
@@ -736,12 +798,10 @@ async def _run_config_parallel_pipeline(
                 pass
             return step_name, False
 
-        # Send step status
         try:
             await websocket.send_text(
                 json.dumps({"type": "step_status", "step": step_name, "status": "running"})
             )
-
             cmd_str = " ".join(cmd)
             await websocket.send_bytes(
                 f"[OUTPUT:{step_name}]\x1b[36m[RUNNING]\x1b[0m {step_name}\r\n  {cmd_str}\r\n".encode()
@@ -749,12 +809,9 @@ async def _run_config_parallel_pipeline(
         except Exception:
             pass
 
-        # Create PTY
         step_master_fd, step_slave_fd = pty.openpty()
-
         step_pid = os.fork()
         if step_pid == 0:
-            # Child process
             os.setsid()
             os.dup2(step_slave_fd, 0)
             os.dup2(step_slave_fd, 1)
@@ -763,16 +820,12 @@ async def _run_config_parallel_pipeline(
             os.close(step_slave_fd)
             os.execvp(cmd[0], cmd)
         else:
-            # Parent process
             os.close(step_slave_fd)
-
-            # Set non-blocking
             flags = fcntl.fcntl(step_master_fd, fcntl.F_GETFL)
             fcntl.fcntl(step_master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
             try:
                 while True:
-                    # Check if cancelled
                     if step_name in cancelled_steps:
                         try:
                             os.killpg(os.getpgid(step_pid), signal.SIGTERM)
@@ -780,10 +833,8 @@ async def _run_config_parallel_pipeline(
                             pass
                         break
 
-                    # Check if process exited
-                    wpid, status = os.waitpid(step_pid, os.WNOHANG)
+                    wpid, wait_status = os.waitpid(step_pid, os.WNOHANG)
                     if wpid != 0:
-                        # Read remaining output
                         try:
                             while True:
                                 data_bytes = os.read(step_master_fd, 4096)
@@ -797,7 +848,7 @@ async def _run_config_parallel_pipeline(
 
                         os.close(step_master_fd)
 
-                        if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0:
+                        if os.WIFEXITED(wait_status) and os.WEXITSTATUS(wait_status) == 0:
                             await websocket.send_bytes(
                                 f"[OUTPUT:{step_name}]\x1b[32m[SUCCESS]\x1b[0m {step_name}\r\n".encode()
                             )
@@ -812,7 +863,9 @@ async def _run_config_parallel_pipeline(
                             )
                             return step_name, True
                         else:
-                            exit_code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1
+                            exit_code = (
+                                os.WEXITSTATUS(wait_status) if os.WIFEXITED(wait_status) else -1
+                            )
                             await websocket.send_bytes(
                                 f"[OUTPUT:{step_name}]\x1b[31m[FAILED]\x1b[0m {step_name} (exit code {exit_code})\r\n".encode()
                             )
@@ -827,7 +880,6 @@ async def _run_config_parallel_pipeline(
                             )
                             return step_name, False
 
-                    # Read output
                     try:
                         data_bytes = os.read(step_master_fd, 4096)
                         if data_bytes:
@@ -846,7 +898,6 @@ async def _run_config_parallel_pipeline(
                 except OSError:
                     pass
 
-            # Handle cancellation
             if step_name in cancelled_steps:
                 try:
                     await websocket.send_bytes(
@@ -854,7 +905,11 @@ async def _run_config_parallel_pipeline(
                     )
                     await websocket.send_text(
                         json.dumps(
-                            {"type": "step_status", "step": step_name, "status": "cancelled"}
+                            {
+                                "type": "step_status",
+                                "step": step_name,
+                                "status": "cancelled",
+                            }
                         )
                     )
                 except Exception:
@@ -863,38 +918,34 @@ async def _run_config_parallel_pipeline(
 
         return step_name, False
 
-    # Build command map from the pipeline commands
     cmd_map = {name: cmd for name, cmd in commands}
-
-    # Start cancel listener
     cancel_task = asyncio.create_task(listen_for_cancel())
 
     try:
-        # Use orchestrator for dependency-aware execution
-        gen = orch.orchestrate()
+        gen = orch.orchestrate(steps=step_names_list)
         event = next(gen)
 
         while event.type != EventType.PIPELINE_COMPLETE:
             if event.type == EventType.STEP_READY:
-                # step_name is guaranteed to be set for STEP_READY events
                 assert event.step_name is not None
-                step_name = event.step_name
-                # Only run if this step is in our command list
-                if step_name in cmd_map:
-                    cmd = cmd_map[step_name]
-                    task = asyncio.create_task(run_step_pty(step_name, cmd))
-                    running_tasks[step_name] = task
+                sn = event.step_name
+                if sn in cmd_map:
+                    task = asyncio.create_task(run_step_pty(sn, cmd_map[sn]))
+                    running_tasks[sn] = task
                 event = next(gen)
 
             elif event.type == EventType.STEP_SKIPPED:
-                # Send skip notification
                 try:
                     await websocket.send_bytes(
                         f"[OUTPUT:{event.step_name}]\x1b[33m[SKIPPED]\x1b[0m {event.step_name} (dependencies failed: {event.failed_deps})\r\n".encode()
                     )
                     await websocket.send_text(
                         json.dumps(
-                            {"type": "step_status", "step": event.step_name, "status": "skipped"}
+                            {
+                                "type": "step_status",
+                                "step": event.step_name,
+                                "status": "skipped",
+                            }
                         )
                     )
                 except Exception:
@@ -902,34 +953,28 @@ async def _run_config_parallel_pipeline(
                 event = next(gen)
 
             elif event.type == EventType.WAITING:
-                # Wait for at least one task to complete
                 if running_tasks:
                     done, _ = await asyncio.wait(
                         running_tasks.values(),
                         return_when=asyncio.FIRST_COMPLETED,
                     )
-
-                    # Find which task completed
                     for task in done:
-                        step_name, success = task.result()
-                        del running_tasks[step_name]
-                        event = gen.send(StepResult(step_name, success))
+                        sn, success = task.result()
+                        del running_tasks[sn]
+                        event = gen.send(StepResult(sn, success))
                         break
                 else:
                     event = next(gen)
-
             else:
                 event = next(gen)
 
-        # Wait for any remaining tasks
         if running_tasks:
             gather_results = await asyncio.gather(*running_tasks.values(), return_exceptions=True)
             for gather_result in gather_results:
                 if isinstance(gather_result, tuple):
-                    step_name, success = gather_result
-                    gen.send(StepResult(step_name, success))
+                    sn, success = gather_result
+                    gen.send(StepResult(sn, success))
 
-        # Report final status
         final_results = orch.results
         success_count = sum(1 for v in final_results.values() if v)
         total = len(final_results)

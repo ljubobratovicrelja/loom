@@ -274,3 +274,85 @@ export function getParallelRunEligibility(
 
   return { canRun: true }
 }
+
+/**
+ * Compute eligibility for running a group of steps.
+ *
+ * Unlike parallel eligibility, this does NOT block when group members
+ * depend on each other — the backend orchestrator handles dependency
+ * ordering within the group.
+ */
+export function getGroupRunEligibility(
+  stepIds: string[],
+  nodes: Node[],
+  edges: Edge[],
+  stepStatuses: Map<string, StepExecutionState>
+): RunEligibility {
+  if (stepIds.length === 0) {
+    return { canRun: false, reason: 'running' }
+  }
+
+  const graph = buildDependencyGraph(nodes, edges)
+  const stepIdSet = new Set(stepIds)
+
+  const runningSteps = new Set<string>()
+  for (const [stepId, status] of stepStatuses) {
+    if (status === 'running') {
+      runningSteps.add(stepId)
+    }
+  }
+
+  // Any group step already running?
+  for (const stepId of stepIds) {
+    if (runningSteps.has(stepId)) {
+      const node = nodes.find((n) => n.id === stepId)
+      const stepName = node?.type === 'step' ? (node.data as StepData).name : stepId
+      return {
+        canRun: false,
+        reason: 'running',
+        blockedBy: [stepName],
+      }
+    }
+  }
+
+  // Check against currently running steps (external only)
+  for (const stepId of stepIds) {
+    const upstream = graph.getUpstream(stepId)
+    const downstream = graph.getDownstream(stepId)
+
+    for (const runningId of runningSteps) {
+      // Skip group members — the orchestrator handles in-group ordering
+      if (stepIdSet.has(runningId)) continue
+
+      if (upstream.has(runningId)) {
+        const node = nodes.find((n) => n.id === runningId)
+        const stepName = node?.type === 'step' ? (node.data as StepData).name : runningId
+        return {
+          canRun: false,
+          reason: 'upstream_running',
+          blockedBy: [stepName],
+        }
+      }
+      if (downstream.has(runningId)) {
+        const node = nodes.find((n) => n.id === runningId)
+        const stepName = node?.type === 'step' ? (node.data as StepData).name : runningId
+        return {
+          canRun: false,
+          reason: 'downstream_running',
+          blockedBy: [stepName],
+        }
+      }
+      if (graph.hasOutputConflict(stepId, runningId)) {
+        const node = nodes.find((n) => n.id === runningId)
+        const stepName = node?.type === 'step' ? (node.data as StepData).name : runningId
+        return {
+          canRun: false,
+          reason: 'output_conflict',
+          blockedBy: [stepName],
+        }
+      }
+    }
+  }
+
+  return { canRun: true }
+}

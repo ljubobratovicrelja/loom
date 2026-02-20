@@ -13,7 +13,7 @@ interface ToolbarProps {
   selectedStepName: string | null
   selectedStepNames: string[]
   executionStatus: ExecutionStatus
-  onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[]) => void
+  onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[], groupName?: string) => void
   onRunStep?: (stepName: string) => void  // Independent step execution
   onToggleTerminal: () => void
   onUndo: () => void
@@ -31,6 +31,8 @@ interface ToolbarProps {
   onMaxWorkersChange: (value: number | null) => void
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
+  groupEligibility?: RunEligibility
+  detectedGroupName?: string | null
 }
 
 export default function Toolbar({
@@ -61,6 +63,8 @@ export default function Toolbar({
   onMaxWorkersChange,
   stepEligibility,
   parallelEligibility,
+  groupEligibility,
+  detectedGroupName,
 }: ToolbarProps) {
   return (
     <div className="h-12 bg-slate-100 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between px-4">
@@ -97,6 +101,8 @@ export default function Toolbar({
           onRunStep={onRunStep}
           stepEligibility={stepEligibility}
           parallelEligibility={parallelEligibility}
+          groupEligibility={groupEligibility}
+          detectedGroupName={detectedGroupName}
         />
 
         {/* Divider */}

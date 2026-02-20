@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from loom.ui.execution import (
+    build_group_commands,
     build_parallel_commands,
     build_pipeline_commands,
     build_step_command,
@@ -356,3 +357,72 @@ pipeline:
 
         # Both outputs are in same directory, should only appear once
         assert len(dirs) == 1
+
+
+# Sample YAML with grouped steps
+SAMPLE_YAML_WITH_GROUPS = """\
+data:
+  raw:
+    type: csv
+    path: data/raw.csv
+  validated:
+    type: csv
+    path: data/validated.csv
+  stats:
+    type: json
+    path: data/stats.json
+
+pipeline:
+  - group: ingestion
+    steps:
+      - name: generate_data
+        task: tasks/generate.py
+        outputs:
+          -o: $raw
+      - name: load_data
+        task: tasks/load.py
+        inputs:
+          raw: $raw
+        outputs:
+          -o: $validated
+  - name: compute_stats
+    task: tasks/stats.py
+    inputs:
+      data: $validated
+    outputs:
+      -o: $stats
+"""
+
+
+@pytest.fixture
+def grouped_config(tmp_path: Path) -> Path:
+    """Create a config file with grouped steps."""
+    config_file = tmp_path / "pipeline.yml"
+    config_file.write_text(SAMPLE_YAML_WITH_GROUPS)
+    return config_file
+
+
+class TestBuildGroupCommands:
+    """Tests for build_group_commands function."""
+
+    def test_returns_correct_steps_for_group(self, grouped_config: Path) -> None:
+        """Test that group commands contain only steps in the named group."""
+        commands = build_group_commands(grouped_config, "ingestion")
+
+        step_names = [name for name, _ in commands]
+        assert step_names == ["generate_data", "load_data"]
+
+    def test_commands_have_correct_structure(self, grouped_config: Path) -> None:
+        """Test that returned commands are tuples of (name, cmd_list)."""
+        commands = build_group_commands(grouped_config, "ingestion")
+
+        for name, cmd in commands:
+            assert isinstance(name, str)
+            assert isinstance(cmd, list)
+            assert len(cmd) >= 2
+            assert cmd[0] == sys.executable
+
+    def test_unknown_group_raises(self, grouped_config: Path) -> None:
+        """Test that unknown group name raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown group"):
+            build_group_commands(grouped_config, "nonexistent")

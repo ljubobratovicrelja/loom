@@ -817,6 +817,55 @@ class TestResolveValueWithLoop:
         assert config.resolve_value_with_loop(42, bindings) == 42
 
 
+class TestGroupMethods:
+    """Tests for PipelineConfig group helper methods."""
+
+    @pytest.fixture
+    def grouped_config(self) -> PipelineConfig:
+        """Config with steps in groups."""
+        return PipelineConfig(
+            variables={},
+            parameters={},
+            steps=[
+                StepConfig(name="gen", script="gen.py", group="ingestion"),
+                StepConfig(name="load", script="load.py", group="ingestion"),
+                StepConfig(name="stats", script="stats.py", group="analysis"),
+                StepConfig(name="filter", script="filter.py", group="analysis"),
+                StepConfig(name="merge", script="merge.py"),
+            ],
+        )
+
+    def test_get_steps_by_group_returns_correct_steps(self, grouped_config: PipelineConfig) -> None:
+        """Test get_steps_by_group returns correct steps in order."""
+        steps = grouped_config.get_steps_by_group("ingestion")
+        assert [s.name for s in steps] == ["gen", "load"]
+
+        steps = grouped_config.get_steps_by_group("analysis")
+        assert [s.name for s in steps] == ["stats", "filter"]
+
+    def test_get_steps_by_group_unknown_raises(self, grouped_config: PipelineConfig) -> None:
+        """Test get_steps_by_group raises ValueError for unknown group."""
+        with pytest.raises(ValueError, match="Unknown group: nonexistent"):
+            grouped_config.get_steps_by_group("nonexistent")
+
+    def test_get_group_names_returns_unique_in_order(self, grouped_config: PipelineConfig) -> None:
+        """Test get_group_names returns unique names in pipeline order."""
+        names = grouped_config.get_group_names()
+        assert names == ["ingestion", "analysis"]
+
+    def test_get_group_names_empty_when_no_groups(self) -> None:
+        """Test get_group_names returns empty list when no steps have groups."""
+        config = PipelineConfig(
+            variables={},
+            parameters={},
+            steps=[
+                StepConfig(name="a", script="a.py"),
+                StepConfig(name="b", script="b.py"),
+            ],
+        )
+        assert config.get_group_names() == []
+
+
 class TestGroupBlockParsing:
     """Tests for group block support in PipelineConfig."""
 

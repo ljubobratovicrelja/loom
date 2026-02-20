@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .clean import clean_pipeline_data, get_cleanable_paths
-from .config import PipelineConfig
+from .config import PipelineConfig, StepConfig
 from .executor import PipelineExecutor, parse_key_value_args
 
 
@@ -26,8 +26,10 @@ Examples:
   %(prog)s pipeline.yml --parallel --max-workers 2
   %(prog)s pipeline.yml --clean            # Clean all data (move to trash)
   %(prog)s pipeline.yml --clean --permanent  # Permanently delete data
+  %(prog)s pipeline.yml --group ingestion     # Run all steps in a group
   %(prog)s pipeline.yml --list             # List all steps
   %(prog)s pipeline.yml --step foo --investigate  # Inspect step interface
+  %(prog)s pipeline.yml --group ingestion --investigate  # Inspect group
         """,
     )
 
@@ -41,6 +43,7 @@ Examples:
     step_group.add_argument(
         "--from", dest="from_step", metavar="NAME", help="Run from this step onward"
     )
+    step_group.add_argument("--group", metavar="NAME", help="Run all steps in the named group")
 
     # Optional steps
     parser.add_argument("--include", nargs="+", metavar="NAME", help="Include these optional steps")
@@ -159,15 +162,25 @@ Examples:
     if args.max_workers is not None:
         config.max_workers = args.max_workers
 
+    # Resolve --group to step names
+    steps_to_run = args.step
+    if args.group:
+        try:
+            group_steps = config.get_steps_by_group(args.group)
+        except ValueError:
+            print(f"Error: Group '{args.group}' not found in pipeline", file=sys.stderr)
+            return 1
+        steps_to_run = [s.name for s in group_steps]
+
     # Build extra args dict
     extra_args = {}
-    if args.extra and args.step and len(args.step) == 1:
-        extra_args[args.step[0]] = args.extra
+    if args.extra and steps_to_run and len(steps_to_run) == 1:
+        extra_args[steps_to_run[0]] = args.extra
 
     # Run pipeline
     executor = PipelineExecutor(config, dry_run=args.dry_run)
     results = executor.run_pipeline(
-        steps=args.step,
+        steps=steps_to_run,
         from_step=args.from_step,
         include_optional=args.include,
         extra_args=extra_args,
@@ -182,8 +195,25 @@ Examples:
     return 0
 
 
+def _step_tags(step: StepConfig) -> str:
+    """Build tag string for a step (e.g. '  [optional]  [disabled]').
+
+    Args:
+        step: Step configuration.
+
+    Returns:
+        Tag string with leading whitespace, or empty string if no tags.
+    """
+    tags = []
+    if step.optional:
+        tags.append("[optional]")
+    if step.disabled:
+        tags.append("[disabled]")
+    return "  " + "  ".join(tags) if tags else ""
+
+
 def _handle_list(config: PipelineConfig) -> int:
-    """List all steps in the pipeline.
+    """List all steps in the pipeline, grouped when groups exist.
 
     Args:
         config: Pipeline configuration.
@@ -193,34 +223,57 @@ def _handle_list(config: PipelineConfig) -> int:
     """
     steps = config.steps
     n = len(steps)
+    group_names = config.get_group_names()
     print(f"Pipeline steps ({n}):\n")
-    for i, step in enumerate(steps, 1):
-        tags = []
-        if step.optional:
-            tags.append("[optional]")
-        if step.disabled:
-            tags.append("[disabled]")
-        tag_str = "  " + "  ".join(tags) if tags else ""
-        print(f"  {i}. {step.name:<20} {step.script}{tag_str}")
+
+    if not group_names:
+        # Flat format — no groups
+        for i, step in enumerate(steps, 1):
+            print(f"  {i}. {step.name:<20} {step.script}{_step_tags(step)}")
+        return 0
+
+    # Grouped format
+    i = 1
+    current_group: str | None = None
+    for step in steps:
+        if step.group != current_group:
+            if step.group:
+                print(f"  Group: {step.group}")
+            current_group = step.group
+        indent = "    " if step.group else "  "
+        print(f"{indent}{i}. {step.name:<20} {step.script}{_step_tags(step)}")
+        i += 1
+        # Add blank line after last step of a group
+        next_idx = steps.index(step) + 1
+        if step.group and (next_idx >= len(steps) or steps[next_idx].group != step.group):
+            print()
+
     return 0
 
 
 def _handle_investigate(config: PipelineConfig, args: object) -> int:
-    """Show step interface (inputs/outputs/args) for a specific step.
+    """Show step or group interface.
 
     Args:
         config: Pipeline configuration.
-        args: Parsed CLI arguments (must have .step attribute).
+        args: Parsed CLI arguments (must have .step and .group attributes).
 
     Returns:
         Exit code (0 for success, 1 for failure).
     """
+    group_name = getattr(args, "group", None)
+    if group_name:
+        return _handle_investigate_group(config, group_name)
+
     from .task_schema import parse_task_schema
 
     step_names = getattr(args, "step", None)
 
     if not step_names:
-        print("Error: --investigate requires --step <name>", file=sys.stderr)
+        print(
+            "Error: --investigate requires --step <name> or --group <name>",
+            file=sys.stderr,
+        )
         return 1
 
     if len(step_names) != 1:
@@ -277,6 +330,40 @@ def _handle_investigate(config: PipelineConfig, args: object) -> int:
             print("(No interface schema found in task file)")
         else:
             print("(No interface schema found in task file — only description available)")
+
+    return 0
+
+
+def _handle_investigate_group(config: PipelineConfig, group_name: str) -> int:
+    """Show group information: member steps and their dependencies.
+
+    Args:
+        config: Pipeline configuration.
+        group_name: Name of the group to investigate.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    try:
+        group_steps = config.get_steps_by_group(group_name)
+    except ValueError:
+        print(f"Error: Group '{group_name}' not found in pipeline", file=sys.stderr)
+        return 1
+
+    group_step_names = {s.name for s in group_steps}
+    print(f"Group: {group_name}")
+    print(f"Steps: {len(group_steps)}\n")
+
+    for i, step in enumerate(group_steps, 1):
+        print(f"  {i}. {step.name:<20} {step.script}{_step_tags(step)}")
+        deps = config.get_step_dependencies(step)
+        if deps:
+            in_group = sorted(deps & group_step_names)
+            external = sorted(deps - group_step_names)
+            if in_group:
+                print(f"     depends on (in-group): {', '.join(in_group)}")
+            if external:
+                print(f"     depends on (external): {', '.join(external)}")
 
     return 0
 

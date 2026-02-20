@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react'
 import { useNodesState, useEdgesState, type Node, type Edge as FlowEdge, type NodeChange } from '@xyflow/react'
 import { AlertTriangle, Info, XCircle, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -14,7 +14,7 @@ import TerminalPanel from './components/TerminalPanel'
 import { useApi } from './hooks/useApi'
 import { useStepExecutions } from './hooks/useStepExecutions'
 import { useHistory, type HistoryState } from './hooks/useHistory'
-import { useRunEligibility, getParallelRunEligibility } from './hooks/useRunEligibility'
+import { useRunEligibility, getParallelRunEligibility, getGroupRunEligibility } from './hooks/useRunEligibility'
 import { useFreshness } from './hooks/useFreshness'
 import { applyDagreLayout } from './utils/layout'
 import type {
@@ -358,6 +358,44 @@ export default function App() {
   const selectedStepNames = selectedStepNodes.map((n) => (n.data as StepData).name)
   const selectedStepName = selectedStepNames.length === 1 ? selectedStepNames[0] : null
 
+  // Detect if selected steps include exactly one complete group
+  // (clicking a group node selects members + neighbors, so we check if any
+  // single group has ALL its members within the selection)
+  const detectedGroupName = useMemo(() => {
+    if (selectedStepNodes.length < 2) return null
+    const selectedIds = new Set(selectedStepNodes.map(n => n.id))
+
+    // Build map of group name → member node IDs
+    const groupMembers = new Map<string, string[]>()
+    for (const n of nodes) {
+      if (n.type === 'step') {
+        const group = (n.data as StepData).group
+        if (group) {
+          if (!groupMembers.has(group)) groupMembers.set(group, [])
+          groupMembers.get(group)!.push(n.id)
+        }
+      }
+    }
+
+    // Find groups where ALL members are selected, and detect partial selections
+    const matchingGroups: string[] = []
+    let hasPartialOtherGroup = false
+    for (const [groupName, members] of groupMembers) {
+      const selectedCount = members.filter(id => selectedIds.has(id)).length
+      if (members.length >= 2 && selectedCount === members.length) {
+        matchingGroups.push(groupName)
+      } else if (selectedCount > 0 && selectedCount < members.length) {
+        hasPartialOtherGroup = true
+      }
+    }
+
+    // Only detect group when unambiguous: exactly one full group, no partial others
+    if (matchingGroups.length === 1 && !hasPartialOtherGroup) {
+      return matchingGroups[0]
+    }
+    return null
+  }, [selectedStepNodes, nodes])
+
   // For PropertiesPanel - show first selected node (single selection behavior)
   const selectedNode = selectedNodes.length === 1 ? selectedNodes[0] : null
 
@@ -562,6 +600,7 @@ export default function App() {
       isLoadingRef.current = false
     }
     init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pipelines is intentionally omitted: used as a cache check, not a reactive dependency
   }, [loadConfig, loadState, loadTasks, loadDataStatus, validateConfig, listPipelines, openPipeline, setNodes, setEdges, clearHistory, refreshFreshness])
 
   // Flag to skip hashchange events triggered by our own programmatic hash updates
@@ -1294,7 +1333,8 @@ export default function App() {
     mode: RunMode,
     stepName?: string,
     variableName?: string,
-    stepNames?: string[]
+    stepNames?: string[],
+    groupName?: string,
   ) => {
     // Handle unsaved changes before running
     if (configPath && hasChanges) {
@@ -1318,7 +1358,7 @@ export default function App() {
     }
     setTerminalVisible(true)
     // Create a new request object to trigger the terminal
-    setRunRequest({ mode, step_name: stepName, data_name: variableName, step_names: stepNames })
+    setRunRequest({ mode, step_name: stepName, data_name: variableName, step_names: stepNames, group_name: groupName })
   }, [configPath, hasChanges, skipSaveConfirmation, performSave])
 
   // Handle per-step terminal output (for parallel execution)
@@ -1528,6 +1568,17 @@ export default function App() {
     selectedStepIds.length > 1
       ? getParallelRunEligibility(selectedStepIds, nodes, edges, independentStepStatuses)
       : undefined
+  // For group eligibility, use only the group's own member IDs (not neighbor nodes)
+  const groupStepIds = useMemo(() => {
+    if (!detectedGroupName) return []
+    return nodes
+      .filter(n => n.type === 'step' && (n.data as StepData).group === detectedGroupName)
+      .map(n => n.id)
+  }, [detectedGroupName, nodes])
+  const groupEligibility =
+    groupStepIds.length > 1
+      ? getGroupRunEligibility(groupStepIds, nodes, edges, independentStepStatuses)
+      : undefined
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
@@ -1559,6 +1610,8 @@ export default function App() {
         onMaxWorkersChange={setMaxWorkers}
         stepEligibility={selectedStepEligibility}
         parallelEligibility={parallelEligibility}
+        groupEligibility={groupEligibility}
+        detectedGroupName={detectedGroupName}
       />
 
       {/* Validation suggestions banner */}

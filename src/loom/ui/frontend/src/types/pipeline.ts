@@ -145,7 +145,7 @@ export interface TaskInfo {
 }
 
 // Execution types
-export type RunMode = 'step' | 'from_step' | 'to_data' | 'all' | 'parallel'
+export type RunMode = 'step' | 'from_step' | 'to_data' | 'all' | 'parallel' | 'group'
 
 export type ExecutionStatus = 'idle' | 'running' | 'cancelled' | 'completed' | 'failed'
 
@@ -154,6 +154,7 @@ export interface RunRequest {
   step_name?: string
   step_names?: string[]  // For parallel mode
   data_name?: string
+  group_name?: string  // For group mode
 }
 
 // Per-step terminal output for parallel execution

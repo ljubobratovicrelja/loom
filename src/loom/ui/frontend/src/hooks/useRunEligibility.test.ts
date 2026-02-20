@@ -4,6 +4,7 @@ import {
   useRunEligibility,
   getBlockReasonMessage,
   getParallelRunEligibility,
+  getGroupRunEligibility,
   type RunEligibility,
 } from './useRunEligibility'
 import type { Node, Edge } from '@xyflow/react'
@@ -347,5 +348,90 @@ describe('getParallelRunEligibility', () => {
     const result = getParallelRunEligibility(['step1'], nodes, edges, stepStatuses)
     expect(result.canRun).toBe(false)
     expect(result.reason).toBe('downstream_running')
+  })
+})
+
+// =============================================================================
+// getGroupRunEligibility Tests
+// =============================================================================
+
+describe('getGroupRunEligibility', () => {
+  it('should return canRun=false for empty step list', () => {
+    const result = getGroupRunEligibility([], [], [], new Map())
+    expect(result.canRun).toBe(false)
+  })
+
+  it('should allow running group steps that depend on each other', () => {
+    // step1 -> var1 -> step2 (in-group dependency chain)
+    const nodes = [
+      createStepNode('step1', 'extract'),
+      createStepNode('step2', 'process'),
+      createDataNode('var1', 'data'),
+    ]
+    const edges = [
+      createEdge('step1', 'var1'),
+      createEdge('var1', 'step2'),
+    ]
+
+    // This should be allowed for group run (orchestrator handles ordering)
+    const result = getGroupRunEligibility(['step1', 'step2'], nodes, edges, new Map())
+    expect(result.canRun).toBe(true)
+  })
+
+  it('should block if a group step is already running', () => {
+    const nodes = [
+      createStepNode('step1', 'extract'),
+      createStepNode('step2', 'process'),
+    ]
+    const stepStatuses = new Map<string, StepExecutionState>([['step1', 'running']])
+
+    const result = getGroupRunEligibility(['step1', 'step2'], nodes, [], stepStatuses)
+    expect(result.canRun).toBe(false)
+    expect(result.reason).toBe('running')
+  })
+
+  it('should block if external upstream step is running', () => {
+    // step0 -> var0 -> step1 -> var1 -> step2
+    // Group = [step1, step2], step0 is external and running
+    const nodes = [
+      createStepNode('step0', 'ingest'),
+      createStepNode('step1', 'extract'),
+      createStepNode('step2', 'process'),
+      createDataNode('var0', 'raw'),
+      createDataNode('var1', 'data'),
+    ]
+    const edges = [
+      createEdge('step0', 'var0'),
+      createEdge('var0', 'step1'),
+      createEdge('step1', 'var1'),
+      createEdge('var1', 'step2'),
+    ]
+    const stepStatuses = new Map<string, StepExecutionState>([['step0', 'running']])
+
+    const result = getGroupRunEligibility(['step1', 'step2'], nodes, edges, stepStatuses)
+    expect(result.canRun).toBe(false)
+    expect(result.reason).toBe('upstream_running')
+    expect(result.blockedBy).toContain('ingest')
+  })
+
+  it('should allow group run when external steps are not running', () => {
+    // step0 -> var0 -> step1 -> var1 -> step2
+    // Group = [step1, step2], step0 is external but idle
+    const nodes = [
+      createStepNode('step0', 'ingest'),
+      createStepNode('step1', 'extract'),
+      createStepNode('step2', 'process'),
+      createDataNode('var0', 'raw'),
+      createDataNode('var1', 'data'),
+    ]
+    const edges = [
+      createEdge('step0', 'var0'),
+      createEdge('var0', 'step1'),
+      createEdge('step1', 'var1'),
+      createEdge('var1', 'step2'),
+    ]
+
+    const result = getGroupRunEligibility(['step1', 'step2'], nodes, edges, new Map())
+    expect(result.canRun).toBe(true)
   })
 })
