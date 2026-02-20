@@ -426,3 +426,46 @@ class TestBuildGroupCommands:
         """Test that unknown group name raises ValueError."""
         with pytest.raises(ValueError, match="Unknown group"):
             build_group_commands(grouped_config, "nonexistent")
+
+
+class TestToStepMode:
+    """Tests for 'to_step' mode in build_pipeline_commands."""
+
+    def test_target_step_with_upstream_deps(self, data_section_config: Path) -> None:
+        """Test that to_step returns target step plus all upstream dependencies."""
+        commands = build_pipeline_commands(
+            data_section_config, "to_step", step_name="detect_fixations"
+        )
+
+        step_names = [name for name, _ in commands]
+        assert "extract_gaze" in step_names
+        assert "detect_fixations" in step_names
+
+    def test_first_step_returns_only_itself(self, data_section_config: Path) -> None:
+        """Test that targeting the first step (no upstream) returns only itself."""
+        commands = build_pipeline_commands(data_section_config, "to_step", step_name="extract_gaze")
+
+        step_names = [name for name, _ in commands]
+        assert step_names == ["extract_gaze"]
+
+    def test_downstream_steps_excluded(self, data_section_config: Path) -> None:
+        """Test that steps downstream of the target are not included."""
+        commands = build_pipeline_commands(
+            data_section_config, "to_step", step_name="detect_fixations"
+        )
+
+        step_names = [name for name, _ in commands]
+        assert "visualize" not in step_names
+
+    def test_pipeline_order_preserved(self, data_section_config: Path) -> None:
+        """Test that steps are returned in pipeline definition order."""
+        commands = build_pipeline_commands(data_section_config, "to_step", step_name="visualize")
+
+        step_names = [name for name, _ in commands]
+        # visualize depends on extract_gaze (via video) and detect_fixations (via fixations_csv)
+        assert step_names == ["extract_gaze", "detect_fixations", "visualize"]
+
+    def test_step_name_required(self, data_section_config: Path) -> None:
+        """Test that 'to_step' mode raises ValueError if step_name not provided."""
+        with pytest.raises(ValueError, match="step_name required"):
+            build_pipeline_commands(data_section_config, "to_step")
