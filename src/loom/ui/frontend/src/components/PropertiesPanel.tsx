@@ -244,7 +244,7 @@ export default function PropertiesPanel({
   }
 
   return (
-    <div className="flex-1 bg-slate-100 dark:bg-slate-900 flex flex-col">
+    <div className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-900 flex flex-col">
       <div className="p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center">
         <h2 className="text-slate-900 dark:text-white font-semibold text-sm">Properties</h2>
         <button
