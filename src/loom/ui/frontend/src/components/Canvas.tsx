@@ -253,7 +253,8 @@ export default function Canvas({
         return
       }
 
-      // Check mouse is within canvas bounds
+      // Check handlers are available and mouse is within canvas bounds
+      if (!onAddTask || !onAddData) return
       if (!reactFlowWrapper.current || !reactFlowInstance.current) return
       const rect = reactFlowWrapper.current.getBoundingClientRect()
       const { x, y } = mousePositionRef.current
@@ -265,7 +266,7 @@ export default function Canvas({
 
     document.addEventListener('keydown', handleTabKey)
     return () => document.removeEventListener('keydown', handleTabKey)
-  }, [hotbox])
+  }, [hotbox, onAddTask, onAddData])
 
   const onConnect: OnConnect = useCallback(
     (params) => {

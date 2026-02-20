@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useLayoutEffect, type ReactNode } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect, type ReactNode } from 'react'
 import { Cog, Image, Video, Table2, Braces, FolderOpen, Folder } from 'lucide-react'
 import type { TaskInfo, DataType } from '../types/pipeline'
 import { fuzzySearch } from '../utils/fuzzySearch'
@@ -88,9 +88,11 @@ export default function NodeHotbox({
       onClose()
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
+      if (results.length === 0) return
       setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
+      if (results.length === 0) return
       setSelectedIndex((i) => Math.max(i - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
@@ -102,10 +104,12 @@ export default function NodeHotbox({
 
   // Reset selection when results change
   const prevResultsLen = useRef(results.length)
-  if (results.length !== prevResultsLen.current) {
-    prevResultsLen.current = results.length
-    setSelectedIndex(0)
-  }
+  useEffect(() => {
+    if (results.length !== prevResultsLen.current) {
+      prevResultsLen.current = results.length
+      setSelectedIndex(0)
+    }
+  }, [results.length])
 
   // Scroll selected item into view
   useLayoutEffect(() => {
