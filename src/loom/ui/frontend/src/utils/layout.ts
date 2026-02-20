@@ -3,8 +3,8 @@ import type { Node, Edge } from '@xyflow/react'
 
 // Layout constants for parameter nodes positioned outside dagre
 const PARAM_NODE_HEIGHT = 60
-const PARAM_GAP = 45 // vertical gap between parameter nodes
-const PARAM_STEP_GAP = 120 // horizontal gap between parameter column and step
+const PARAM_GAP = 30 // vertical gap between parameter nodes
+const PARAM_STEP_GAP = 200 // horizontal gap between parameter column and step
 
 /**
  * Estimate the rendered width of a parameter node from its name length.
@@ -192,6 +192,14 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
   })
 
   // --- Position parameter nodes relative to their connected step ---
+  // Build a map from parameter ID to the target handle (arg name) it connects to
+  const paramToHandle = new Map<string, string>()
+  edges.forEach((edge) => {
+    if (!layoutNodeIds.has(edge.source) && layoutNodeIds.has(edge.target) && edge.targetHandle) {
+      paramToHandle.set(edge.source, edge.targetHandle)
+    }
+  })
+
   const stepToParams = new Map<string, Node[]>()
   parameterNodes.forEach((p) => {
     const stepId = paramToStep.get(p.id)
@@ -203,6 +211,21 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
 
   const positionedParams: Node[] = []
   stepToParams.forEach((params, stepId) => {
+    // Sort parameters to match the handle order on the step node
+    const stepNode = layoutNodes.find((n) => n.id === stepId)
+    if (stepNode) {
+      const data = stepNode.data as Record<string, unknown>
+      const inputKeys = Object.keys((data.inputs as Record<string, unknown>) || {})
+      const argKeys = Object.keys((data.args as Record<string, unknown>) || {})
+      const handleOrder = [...inputKeys, ...argKeys]
+      params.sort((a, b) => {
+        const aHandle = paramToHandle.get(a.id) ?? ''
+        const bHandle = paramToHandle.get(b.id) ?? ''
+        const aIdx = handleOrder.indexOf(aHandle)
+        const bIdx = handleOrder.indexOf(bHandle)
+        return (aIdx === -1 ? Infinity : aIdx) - (bIdx === -1 ? Infinity : bIdx)
+      })
+    }
     const stepLayout = g.node(stepId)
     if (!stepLayout) return
 
