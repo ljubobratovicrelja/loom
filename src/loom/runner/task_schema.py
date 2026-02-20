@@ -189,7 +189,9 @@ def parse_task_schema(file_path: Path) -> TaskSchema:
         TaskSchema with parsed interface, or minimal schema if no frontmatter.
     """
     name = file_path.stem
-    path = str(file_path)
+    # Normalize path to dir_name/file_name (e.g., "tasks/blur.py") to match
+    # YAML task references regardless of whether file_path is absolute or relative
+    path = str(Path(file_path.parent.name) / file_path.name)
 
     # Extract docstring
     docstring = extract_docstring(file_path)

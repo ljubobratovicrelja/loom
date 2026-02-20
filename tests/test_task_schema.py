@@ -151,7 +151,7 @@ class TestParseTaskSchema:
         result = parse_task_schema(task_file)
 
         assert result.name == "simple"
-        assert result.path == str(task_file)
+        assert result.path == str(Path(task_file.parent.name) / task_file.name)
         assert result.description == ""
         assert result.inputs == {}
         assert result.outputs == {}
