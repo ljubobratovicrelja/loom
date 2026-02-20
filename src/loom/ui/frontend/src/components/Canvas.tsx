@@ -66,6 +66,7 @@ interface CanvasProps {
   detectedGroupName?: string | null
   onAddTask?: (task: TaskInfo, position: { x: number; y: number }) => void
   onAddData?: (dataType: DataType, position: { x: number; y: number }) => void
+  parameters?: Record<string, unknown>
 }
 
 export default function Canvas({
@@ -85,6 +86,7 @@ export default function Canvas({
   detectedGroupName,
   onAddTask,
   onAddData,
+  parameters,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -879,6 +881,10 @@ export default function Canvas({
     onAddData?.(dataType, position)
   }, [onAddData])
 
+  const handleHotboxAddParameter = useCallback((name: string, value: unknown, position: { x: number; y: number }) => {
+    onParameterDrop?.(name, value, position)
+  }, [onParameterDrop])
+
   const handleHotboxClose = useCallback(() => {
     setHotbox(null)
   }, [])
@@ -957,8 +963,10 @@ export default function Canvas({
           position={hotbox.screenPosition}
           flowPosition={hotbox.flowPosition}
           tasks={tasks}
+          parameters={parameters ?? {}}
           onAddTask={handleHotboxAddTask}
           onAddData={handleHotboxAddData}
+          onAddParameter={handleHotboxAddParameter}
           onClose={handleHotboxClose}
         />
       )}

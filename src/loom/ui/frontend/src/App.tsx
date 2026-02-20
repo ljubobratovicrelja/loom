@@ -1741,6 +1741,7 @@ export default function App() {
             detectedGroupName={detectedGroupName}
             onAddTask={handleAddTask}
             onAddData={handleAddData}
+            parameters={parameters}
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}

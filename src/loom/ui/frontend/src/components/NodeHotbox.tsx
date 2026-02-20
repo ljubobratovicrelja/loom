@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect, type ReactNode } from 'react'
-import { Cog, Image, Video, Table2, Braces, FolderOpen, Folder } from 'lucide-react'
+import { Cog, Image, Video, Table2, Braces, FolderOpen, Folder, DollarSign } from 'lucide-react'
 import type { TaskInfo, DataType } from '../types/pipeline'
 import { fuzzySearch } from '../utils/fuzzySearch'
 
@@ -8,10 +8,12 @@ const MIN_QUERY_LENGTH = 3
 interface HotboxItem {
   id: string
   label: string
-  category: 'task' | 'data'
+  category: 'task' | 'data' | 'param'
   icon: ReactNode
   task?: TaskInfo
   dataType?: DataType
+  paramName?: string
+  paramValue?: unknown
 }
 
 const DATA_TYPE_ENTRIES: Array<{ type: DataType; icon: ReactNode; label: string }> = [
@@ -27,8 +29,10 @@ interface NodeHotboxProps {
   position: { x: number; y: number }
   flowPosition: { x: number; y: number }
   tasks: TaskInfo[]
+  parameters: Record<string, unknown>
   onAddTask: (task: TaskInfo, position: { x: number; y: number }) => void
   onAddData: (dataType: DataType, position: { x: number; y: number }) => void
+  onAddParameter: (name: string, value: unknown, position: { x: number; y: number }) => void
   onClose: () => void
 }
 
@@ -36,8 +40,10 @@ export default function NodeHotbox({
   position,
   flowPosition,
   tasks,
+  parameters,
   onAddTask,
   onAddData,
+  onAddParameter,
   onClose,
 }: NodeHotboxProps) {
   const [query, setQuery] = useState('')
@@ -56,6 +62,14 @@ export default function NodeHotbox({
       icon: <Cog className="w-4 h-4" />,
       task: t,
     })),
+    ...Object.entries(parameters).map(([name, value]): HotboxItem => ({
+      id: `param:${name}`,
+      label: name,
+      category: 'param',
+      icon: <DollarSign className="w-4 h-4" />,
+      paramName: name,
+      paramValue: value,
+    })),
     ...DATA_TYPE_ENTRIES.map((dt): HotboxItem => ({
       id: `data:${dt.type}`,
       label: dt.label,
@@ -63,7 +77,7 @@ export default function NodeHotbox({
       icon: dt.icon,
       dataType: dt.type,
     })),
-  ], [tasks])
+  ], [tasks, parameters])
 
   // Filter with fuzzy search only when query is long enough
   const results = useMemo(() =>
@@ -76,11 +90,13 @@ export default function NodeHotbox({
   const selectItem = useCallback((item: HotboxItem) => {
     if (item.category === 'task' && item.task) {
       onAddTask(item.task, flowPosition)
+    } else if (item.category === 'param' && item.paramName !== undefined) {
+      onAddParameter(item.paramName, item.paramValue, flowPosition)
     } else if (item.category === 'data' && item.dataType) {
       onAddData(item.dataType, flowPosition)
     }
     onClose()
-  }, [flowPosition, onAddTask, onAddData, onClose])
+  }, [flowPosition, onAddTask, onAddParameter, onAddData, onClose])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape' || e.key === 'Tab') {
@@ -179,9 +195,11 @@ export default function NodeHotbox({
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                   item.category === 'task'
                     ? 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                    : item.category === 'param'
+                    ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
                     : 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
                 }`}>
-                  {item.category === 'task' ? 'task' : item.dataType}
+                  {item.category === 'task' ? 'task' : item.category === 'param' ? 'param' : item.dataType}
                 </span>
               </button>
             ))}
