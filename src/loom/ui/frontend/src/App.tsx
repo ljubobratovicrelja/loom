@@ -357,6 +357,9 @@ export default function App() {
   const selectedStepNodes = selectedNodes.filter((n) => n.type === 'step')
   const selectedStepNames = selectedStepNodes.map((n) => (n.data as StepData).name)
   const selectedStepName = selectedStepNames.length === 1 ? selectedStepNames[0] : null
+  const selectedDataKey = selectedNodes.length === 1 && selectedNodes[0].type === 'data'
+    ? (selectedNodes[0].data as DataNodeData).key
+    : null
 
   // Detect if selected steps include exactly one complete group
   // (clicking a group node selects members + neighbors, so we check if any
@@ -1591,6 +1594,7 @@ export default function App() {
         hasChanges={hasChanges}
         selectedStepName={selectedStepName}
         selectedStepNames={selectedStepNames}
+        selectedDataKey={selectedDataKey}
         executionStatus={executionStatus}
         onRun={handleRun}
         onRunStep={handleRunStepIndependent}

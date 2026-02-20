@@ -118,6 +118,37 @@ def _get_steps_to_produce_data(
     return steps
 
 
+def _get_steps_to_step(config: PipelineConfig, step_name: str) -> list[StepConfig]:
+    """Get all upstream steps needed to reach a target step, in pipeline order.
+
+    Unlike _get_steps_to_produce_data, this always re-runs everything (no skip_completed).
+    Uses config.get_step_dependencies which handles both inputs and loop.over references.
+
+    Args:
+        config: Pipeline configuration.
+        step_name: Name of the target step.
+
+    Returns:
+        List of steps in pipeline definition order (target step included).
+    """
+    target_step = config.get_step_by_name(step_name)
+    step_by_name = {s.name: s for s in config.steps}
+
+    # BFS backwards from target step using PipelineConfig's dependency resolution
+    needed_steps: set[str] = {target_step.name}
+    queue = [target_step]
+
+    while queue:
+        step = queue.pop(0)
+        for dep_name in config.get_step_dependencies(step):
+            if dep_name not in needed_steps:
+                needed_steps.add(dep_name)
+                queue.append(step_by_name[dep_name])
+
+    # Return in pipeline definition order
+    return [s for s in config.steps if s.name in needed_steps]
+
+
 def build_pipeline_commands(
     config_path: Path,
     mode: str,
@@ -129,7 +160,7 @@ def build_pipeline_commands(
 
     Args:
         config_path: Path to pipeline YAML.
-        mode: Execution mode - "step", "from_step", "to_data", or "all".
+        mode: Execution mode - "step", "from_step", "to_step", "to_data", or "all".
         step_name: Step name (required for "step" and "from_step" modes).
         data_name: Data output name (required for "to_data" mode).
         include_optional: List of optional step names to include.
@@ -152,6 +183,21 @@ def build_pipeline_commands(
         if not step_name:
             raise ValueError("step_name required for 'from_step' mode")
         steps = executor._get_steps_to_run(from_step=step_name, include_optional=include_optional)
+    elif mode == "to_step":
+        if not step_name:
+            raise ValueError("step_name required for 'to_step' mode")
+        raw_steps = _get_steps_to_step(config, step_name)
+        # Filter like other modes: skip disabled, exclude optional unless included.
+        # Always keep the target step itself (user explicitly selected it).
+        steps = [
+            s
+            for s in raw_steps
+            if s.name == step_name
+            or (
+                not s.disabled
+                and (not s.optional or (include_optional and s.name in include_optional))
+            )
+        ]
     elif mode == "to_data":
         if not data_name:
             raise ValueError("data_name required for 'to_data' mode")

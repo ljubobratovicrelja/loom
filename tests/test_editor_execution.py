@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from loom.ui.execution import (
+    _get_steps_to_step,
     build_group_commands,
     build_parallel_commands,
     build_pipeline_commands,
@@ -426,3 +427,98 @@ class TestBuildGroupCommands:
         """Test that unknown group name raises ValueError."""
         with pytest.raises(ValueError, match="Unknown group"):
             build_group_commands(grouped_config, "nonexistent")
+
+
+class TestToStepMode:
+    """Tests for 'to_step' mode in build_pipeline_commands."""
+
+    def test_target_step_with_upstream_deps(self, data_section_config: Path) -> None:
+        """Test that to_step returns target step plus all upstream dependencies."""
+        commands = build_pipeline_commands(
+            data_section_config, "to_step", step_name="detect_fixations"
+        )
+
+        step_names = [name for name, _ in commands]
+        assert "extract_gaze" in step_names
+        assert "detect_fixations" in step_names
+
+    def test_first_step_returns_only_itself(self, data_section_config: Path) -> None:
+        """Test that targeting the first step (no upstream) returns only itself."""
+        commands = build_pipeline_commands(data_section_config, "to_step", step_name="extract_gaze")
+
+        step_names = [name for name, _ in commands]
+        assert step_names == ["extract_gaze"]
+
+    def test_downstream_steps_excluded(self, data_section_config: Path) -> None:
+        """Test that steps downstream of the target are not included."""
+        commands = build_pipeline_commands(
+            data_section_config, "to_step", step_name="detect_fixations"
+        )
+
+        step_names = [name for name, _ in commands]
+        assert "visualize" not in step_names
+
+    def test_pipeline_order_preserved(self, data_section_config: Path) -> None:
+        """Test that steps are returned in pipeline definition order."""
+        commands = build_pipeline_commands(data_section_config, "to_step", step_name="visualize")
+
+        step_names = [name for name, _ in commands]
+        # visualize depends on extract_gaze (via video) and detect_fixations (via fixations_csv)
+        assert step_names == ["extract_gaze", "detect_fixations", "visualize"]
+
+    def test_step_name_required(self, data_section_config: Path) -> None:
+        """Test that 'to_step' mode raises ValueError if step_name not provided."""
+        with pytest.raises(ValueError, match="step_name required"):
+            build_pipeline_commands(data_section_config, "to_step")
+
+    def test_loop_over_dependency_traced(self, tmp_path: Path) -> None:
+        """Test that loop.over references are traced as upstream dependencies."""
+        yaml_content = """\
+data:
+  raw_images:
+    type: image_directory
+    path: data/raw
+  processed_images:
+    type: image_directory
+    path: data/processed
+  report:
+    type: csv
+    path: data/report.csv
+
+pipeline:
+  - name: download_images
+    task: tasks/download.py
+    outputs:
+      -o: $raw_images
+
+  - name: resize_each
+    task: tasks/resize.py
+    loop:
+      over: $raw_images
+      into: $processed_images
+    inputs:
+      image: $loop_item
+    outputs:
+      -o: $loop_output
+
+  - name: summarize
+    task: tasks/summarize.py
+    inputs:
+      images: $processed_images
+    outputs:
+      -o: $report
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+
+        # Test _get_steps_to_step directly (build_pipeline_commands would fail
+        # trying to resolve $loop_item during command building)
+        from loom.runner import PipelineConfig
+
+        config = PipelineConfig.from_yaml(config_file)
+        steps = _get_steps_to_step(config, "summarize")
+
+        step_names = [s.name for s in steps]
+        # summarize depends on resize_each (via $processed_images = loop.into),
+        # and resize_each depends on download_images (via loop.over = $raw_images)
+        assert step_names == ["download_images", "resize_each", "summarize"]

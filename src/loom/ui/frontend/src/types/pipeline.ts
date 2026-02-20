@@ -147,7 +147,7 @@ export interface TaskInfo {
 }
 
 // Execution types
-export type RunMode = 'step' | 'from_step' | 'to_data' | 'all' | 'parallel' | 'group'
+export type RunMode = 'step' | 'from_step' | 'to_step' | 'to_data' | 'all' | 'parallel' | 'group'
 
 export type ExecutionStatus = 'idle' | 'running' | 'cancelled' | 'completed' | 'failed'
 
