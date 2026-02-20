@@ -121,8 +121,8 @@ def _get_steps_to_produce_data(
 def _get_steps_to_step(config: PipelineConfig, step_name: str) -> list[StepConfig]:
     """Get all upstream steps needed to reach a target step, in pipeline order.
 
-    Unlike _get_steps_to_produce_data, this always re-runs everything (no skip_completed)
-    and also traces loop.over references.
+    Unlike _get_steps_to_produce_data, this always re-runs everything (no skip_completed).
+    Uses config.get_step_dependencies which handles both inputs and loop.over references.
 
     Args:
         config: Pipeline configuration.
@@ -132,44 +132,21 @@ def _get_steps_to_step(config: PipelineConfig, step_name: str) -> list[StepConfi
         List of steps in pipeline definition order (target step included).
     """
     target_step = config.get_step_by_name(step_name)
-    all_steps = list(config.steps)
-    step_by_name = {s.name: s for s in all_steps}
+    step_by_name = {s.name: s for s in config.steps}
 
-    # Map variable -> step that produces it (including loop.into)
-    var_producers: dict[str, str] = {}
-    for step in all_steps:
-        for out_ref in step.outputs.values():
-            if out_ref.startswith("$"):
-                var_producers[out_ref[1:]] = step.name
-        if step.loop is not None:
-            var_producers[step.loop.into.lstrip("$")] = step.name
-
-    # BFS backwards from target step through inputs and loop.over
+    # BFS backwards from target step using PipelineConfig's dependency resolution
     needed_steps: set[str] = {target_step.name}
     queue = [target_step]
 
     while queue:
         step = queue.pop(0)
-        # Trace input references
-        for in_ref in step.inputs.values():
-            if in_ref.startswith("$"):
-                var_name = in_ref[1:]
-                if var_name in var_producers:
-                    dep_name = var_producers[var_name]
-                    if dep_name not in needed_steps:
-                        needed_steps.add(dep_name)
-                        queue.append(step_by_name[dep_name])
-        # Trace loop.over reference
-        if step.loop is not None:
-            var_name = step.loop.over.lstrip("$")
-            if var_name in var_producers:
-                dep_name = var_producers[var_name]
-                if dep_name not in needed_steps:
-                    needed_steps.add(dep_name)
-                    queue.append(step_by_name[dep_name])
+        for dep_name in config.get_step_dependencies(step):
+            if dep_name not in needed_steps:
+                needed_steps.add(dep_name)
+                queue.append(step_by_name[dep_name])
 
     # Return in pipeline definition order
-    return [s for s in all_steps if s.name in needed_steps]
+    return [s for s in config.steps if s.name in needed_steps]
 
 
 def build_pipeline_commands(
@@ -209,7 +186,17 @@ def build_pipeline_commands(
     elif mode == "to_step":
         if not step_name:
             raise ValueError("step_name required for 'to_step' mode")
-        steps = _get_steps_to_step(config, step_name)
+        raw_steps = _get_steps_to_step(config, step_name)
+        # Filter like other modes: skip disabled, exclude optional unless included.
+        # Always keep the target step itself (user explicitly selected it).
+        steps = [
+            s for s in raw_steps
+            if s.name == step_name
+            or (
+                not s.disabled
+                and (not s.optional or (include_optional and s.name in include_optional))
+            )
+        ]
     elif mode == "to_data":
         if not data_name:
             raise ValueError("data_name required for 'to_data' mode")

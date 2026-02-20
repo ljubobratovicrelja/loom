@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from loom.ui.execution import (
+    _get_steps_to_step,
     build_group_commands,
     build_parallel_commands,
     build_pipeline_commands,
@@ -469,3 +470,55 @@ class TestToStepMode:
         """Test that 'to_step' mode raises ValueError if step_name not provided."""
         with pytest.raises(ValueError, match="step_name required"):
             build_pipeline_commands(data_section_config, "to_step")
+
+    def test_loop_over_dependency_traced(self, tmp_path: Path) -> None:
+        """Test that loop.over references are traced as upstream dependencies."""
+        yaml_content = """\
+data:
+  raw_images:
+    type: image_directory
+    path: data/raw
+  processed_images:
+    type: image_directory
+    path: data/processed
+  report:
+    type: csv
+    path: data/report.csv
+
+pipeline:
+  - name: download_images
+    task: tasks/download.py
+    outputs:
+      -o: $raw_images
+
+  - name: resize_each
+    task: tasks/resize.py
+    loop:
+      over: $raw_images
+      into: $processed_images
+    inputs:
+      image: $loop_item
+    outputs:
+      -o: $loop_output
+
+  - name: summarize
+    task: tasks/summarize.py
+    inputs:
+      images: $processed_images
+    outputs:
+      -o: $report
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+
+        # Test _get_steps_to_step directly (build_pipeline_commands would fail
+        # trying to resolve $loop_item during command building)
+        from loom.runner import PipelineConfig
+
+        config = PipelineConfig.from_yaml(config_file)
+        steps = _get_steps_to_step(config, "summarize")
+
+        step_names = [s.name for s in steps]
+        # summarize depends on resize_each (via $processed_images = loop.into),
+        # and resize_each depends on download_images (via loop.over = $raw_images)
+        assert step_names == ["download_images", "resize_each", "summarize"]
