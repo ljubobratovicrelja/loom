@@ -6,11 +6,11 @@ Converts to lowercase, removes punctuation, normalizes whitespace.
 ---
 inputs:
   text:
-    type: text
+    type: txt
     description: Input text file
 outputs:
   --output:
-    type: text
+    type: txt
     description: Normalized text file
 ---
 """

@@ -74,6 +74,8 @@ interface CanvasProps {
   onAddData?: (dataType: DataType, position: { x: number; y: number }) => void
   parameters?: Record<string, unknown>
   multiPassGroups?: Record<string, unknown>
+  setMultiPassGroups?: Dispatch<SetStateAction<Record<string, unknown>>>
+  onEdgesDelete?: (edges: Edge[]) => void
 }
 
 export default function Canvas({
@@ -96,6 +98,8 @@ export default function Canvas({
   onAddData,
   parameters,
   multiPassGroups,
+  setMultiPassGroups,
+  onEdgesDelete,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -519,28 +523,80 @@ export default function Canvas({
         const graph = buildDependencyGraph(nodesRef.current, tempEdges)
 
         if (graph.hasCycles()) {
-          // Check if this is a valid feedback edge within a multi_pass group
-          const sourceGroup = sourceNode?.type === 'data'
-            ? (() => {
-                // Find the step that produces this data node and check its group
-                const producerEdge = edgesRef.current.find(e => e.target === params.source)
-                const producerNode = producerEdge ? nodesRef.current.find(n => n.id === producerEdge.source) : null
-                return producerNode?.type === 'step' ? (producerNode.data as StepData).group : undefined
-              })()
-            : sourceNode?.type === 'step' ? (sourceNode.data as StepData).group : undefined
+          // Check if this is a valid feedback edge within a multi_pass group.
+          // Also resolve the producing step + its output flag for the mapping key.
+          let producerStep: PipelineNode | null = null
+          let sourceOutputFlag: string | undefined
+          if (sourceNode?.type === 'data') {
+            const producerEdge = edgesRef.current.find(e => e.target === params.source)
+            producerStep = producerEdge ? (nodesRef.current.find(n => n.id === producerEdge.source) ?? null) : null
+            sourceOutputFlag = producerEdge?.sourceHandle ?? undefined
+          } else if (sourceNode?.type === 'step') {
+            producerStep = sourceNode
+            sourceOutputFlag = params.sourceHandle ?? undefined
+          }
+          const sourceGroup = producerStep?.type === 'step' ? (producerStep.data as StepData).group : undefined
           const targetGroup = targetNode?.type === 'step' ? (targetNode.data as StepData).group : undefined
 
           if (sourceGroup && targetGroup && sourceGroup === targetGroup && multiPassGroups?.[sourceGroup]) {
-            // Allow as feedback edge within multi_pass group
+            const sourceStepName = (producerStep!.data as StepData).name
+            const targetStepName = (targetNode!.data as StepData).name
+            const targetInputFlag = params.targetHandle ?? undefined
+
+            // Refuse if we can't construct a complete mapping
+            if (!sourceOutputFlag || !targetInputFlag) {
+              alert('Cannot create feedback connection: missing source or target handle.')
+              return
+            }
+
+            const sourceSpec = `${sourceStepName}.${sourceOutputFlag}`
+            const targetSpec = `${targetStepName}.${targetInputFlag}`
+
+            const mpInfo = multiPassGroups[sourceGroup] as Record<string, unknown>
+            const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
+            const existingFeedback = (mpConfig.feedback as Record<string, string> | undefined) || {}
+
+            // Reject collision with a different existing target
+            if (existingFeedback[sourceSpec] && existingFeedback[sourceSpec] !== targetSpec) {
+              alert(`feedback from ${sourceSpec} is already wired to ${existingFeedback[sourceSpec]}; delete that first.`)
+              return
+            }
+
+            onSnapshot?.()
+
+            const updatedMultiPass = {
+              ...mpConfig,
+              feedback: { ...existingFeedback, [sourceSpec]: targetSpec },
+            }
+
+            setMultiPassGroups?.((prev) => ({
+              ...prev,
+              [sourceGroup]: {
+                ...(prev[sourceGroup] as Record<string, unknown> | undefined),
+                multi_pass: updatedMultiPass,
+              },
+            }))
+
             const feedbackEdge: Edge = {
               ...tempEdge,
               type: 'feedback',
               data: {
                 feedback: true,
-                multiPass: (multiPassGroups[sourceGroup] as { multi_pass: FeedbackEdgeData['multiPass'] }).multi_pass,
+                groupName: sourceGroup,
+                multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'],
               } satisfies FeedbackEdgeData,
             }
-            setEdges((eds) => addEdge(feedbackEdge, eds))
+            // Refresh sibling feedback edges in the same group so their data stays in sync
+            setEdges((eds) =>
+              addEdge(
+                feedbackEdge,
+                eds.map((e) =>
+                  e.type === 'feedback' && (e.data as Record<string, unknown> | undefined)?.groupName === sourceGroup
+                    ? { ...e, data: { ...e.data, multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'] } }
+                    : e
+                )
+              )
+            )
             return
           }
 
@@ -552,7 +608,7 @@ export default function Canvas({
         setEdges((eds) => addEdge({ ...params, id: `e_${params.source}_${params.target}` }, eds))
       }
     },
-    [setEdges, setNodes, onSnapshot, tasks, onSelectionChangeProp, multiPassGroups]
+    [setEdges, setNodes, onSnapshot, tasks, onSelectionChangeProp, multiPassGroups, setMultiPassGroups]
   )
 
   // Track edge being reconnected
@@ -948,6 +1004,7 @@ export default function Canvas({
         edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgesDelete={onEdgesDelete}
         onConnect={onConnect}
         onReconnectStart={onReconnectStart}
         onReconnect={onReconnect}

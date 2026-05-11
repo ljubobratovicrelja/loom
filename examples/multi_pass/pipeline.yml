@@ -21,11 +21,20 @@ pipeline:
 - group: refine
   multi_pass:
     schedule:
-    - {window_size: 20, threshold: 5.0}
-    - {window_size: 10, threshold: 2.0}
-    - {window_size: 5, threshold: 1.0}
+    - window_size: 20
+      threshold: 5
+    - window_size: 10
+      threshold: 2
+    - window_size: 5
+      threshold: 1
+    condition:
+      script: conditions/has_converged.py
+      inputs:
+        cleaned_csv: $cleaned_signal
+      args:
+        tolerance: 0.05
     feedback:
-      filter_signal.--output: smooth_signal.--warm-start
+      filter_signal.--output: smooth_signal.input_csv
   steps:
   - name: smooth_signal
     task: tasks/smooth_signal.py

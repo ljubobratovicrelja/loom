@@ -6,6 +6,7 @@ import AutoLayoutConfirmDialog from './components/AutoLayoutConfirmDialog'
 import Canvas from './components/Canvas'
 import CleanDialog from './components/CleanDialog'
 import ConfirmDialog from './components/ConfirmDialog'
+import FeedbackDialog, { type FeedbackResult } from './components/FeedbackDialog'
 import UnsavedChangesDialog from './components/UnsavedChangesDialog'
 import Sidebar from './components/Sidebar'
 import PropertiesPanel from './components/PropertiesPanel'
@@ -29,6 +30,7 @@ import type {
   DataType,
   DataEntry,
   DataNodeData,
+  FeedbackEdgeData,
   ExecutionStatus,
   RunMode,
   RunRequest,
@@ -286,6 +288,10 @@ export default function App() {
   const [pendingPipeline, setPendingPipeline] = useState<PipelineInfo | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
 
+  // Feedback dialog state
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    steps: [StepData, StepData]; groupName: string
+  } | null>(null)
 
   // Independent step execution hook - each step can run concurrently
   const {
@@ -528,8 +534,8 @@ export default function App() {
           setNodes(layoutedNodes)
           setEdges(graph.edges)
           setParameters(graph.parameters)
-          if ((graph as Record<string, unknown>).multiPassGroups) {
-            setMultiPassGroups((graph as Record<string, unknown>).multiPassGroups as Record<string, unknown>)
+          if (graph.multiPassGroups) {
+            setMultiPassGroups(graph.multiPassGroups)
           }
 
           // Load editor options
@@ -708,6 +714,7 @@ export default function App() {
         parallel: parallelEnabled,
         maxWorkers: maxWorkers,
       },
+      multiPassGroups,
     }
 
     const success = await saveConfig(graph, configPath)
@@ -724,7 +731,7 @@ export default function App() {
       const errorMessage = apiError || 'Failed to save changes. Please try again.'
       alert(`Save failed: ${errorMessage}`)
     }
-  }, [configPath, nodes, edges, parameters, skipSaveConfirmation, parallelEnabled, maxWorkers, saveConfig, clearHistory, apiError])
+  }, [configPath, nodes, edges, parameters, skipSaveConfirmation, parallelEnabled, maxWorkers, multiPassGroups, saveConfig, clearHistory, apiError])
 
   // Request save - shows confirmation dialog unless skipped
   const handleSave = useCallback(() => {
@@ -762,6 +769,113 @@ export default function App() {
       setShowAutoLayoutConfirm(true)
     }
   }, [configPath, skipSaveConfirmation, performAutoLayoutAndSave])
+
+  // Create feedback connection from two selected step nodes
+  const handleCreateFeedback = useCallback(() => {
+    const currentNodes = nodesRef.current
+    const selected = currentNodes.filter(n => n.selected)
+
+    // Require exactly 2 step nodes
+    const stepNodes = selected.filter(n => n.type === 'step')
+    if (stepNodes.length !== 2) {
+      alert('Select exactly two step nodes to create a feedback connection.')
+      return
+    }
+
+    const step1 = stepNodes[0].data as StepData
+    const step2 = stepNodes[1].data as StepData
+
+    // Both must be in the same group
+    if (!step1.group || !step2.group || step1.group !== step2.group) {
+      alert('Both steps must be in the same group.')
+      return
+    }
+
+    const groupName = step1.group
+    setFeedbackDialog({ steps: [step1, step2], groupName })
+  }, [])
+
+  // Handle feedback dialog confirmation
+  const handleFeedbackConfirm = useCallback((result: FeedbackResult) => {
+    setFeedbackDialog(null)
+
+    // Snapshot for undo
+    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+
+    const groupName = feedbackDialog!.groupName
+    const sourceSpec = `${result.sourceStepName}.${result.sourceOutputFlag}`
+    const targetSpec = `${result.targetStepName}.${result.targetInputFlag}`
+
+    // Update multiPassGroups: add feedback mapping
+    const mpInfo = (multiPassGroups[groupName] || {}) as Record<string, unknown>
+    const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
+    const feedback = { ...(mpConfig.feedback as Record<string, string> || {}), [sourceSpec]: targetSpec }
+    const updatedMultiPass = { ...mpConfig, feedback }
+
+    // If no multi_pass config yet, initialize with default schedule
+    if (!mpConfig.schedule && !mpConfig.expressions) {
+      (updatedMultiPass as Record<string, unknown>).schedule = [{}]
+    }
+    if (result.conditionScript) {
+      (updatedMultiPass as Record<string, unknown>).condition = {
+        script: result.conditionScript,
+      }
+    }
+
+    // Collect template steps for new group creation
+    const mpSteps = (mpInfo.steps as Record<string, unknown>[]) ||
+      feedbackDialog!.steps.map((s) => {
+        const step: Record<string, unknown> = { name: s.name, task: s.task }
+        if (Object.keys(s.inputs || {}).length) step.inputs = s.inputs
+        if (Object.keys(s.outputs || {}).length) step.outputs = s.outputs
+        if (Object.keys(s.args || {}).length) step.args = s.args
+        if (s.optional) step.optional = true
+        if (s.disabled) step.disabled = true
+        return step
+      })
+
+    setMultiPassGroups((prev) => ({
+      ...prev,
+      [groupName]: {
+        ...(prev[groupName] as Record<string, unknown> || {}),
+        multi_pass: updatedMultiPass,
+        steps: mpSteps,
+      },
+    }))
+
+    // Find target step node id
+    const targetStepNode = nodesRef.current.find(
+      (n) => n.type === 'step' && (n.data as StepData).name === result.targetStepName
+    )
+
+    // Create feedback edge from data node to target step
+    if (targetStepNode) {
+      const feedbackEdge: Edge = {
+        id: `e_feedback_${result.dataNodeId}_${result.targetStepName}_${result.targetInputFlag}`,
+        source: result.dataNodeId,
+        target: targetStepNode.id,
+        sourceHandle: 'value',
+        targetHandle: result.targetInputFlag,
+        type: 'feedback',
+        data: {
+          feedback: true,
+          groupName,
+          multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'],
+        },
+      }
+      // Refresh sibling feedback edges in the same group so their labels/panels stay in sync
+      setEdges((eds) => [
+        ...eds.map((e) =>
+          e.type === 'feedback' && (e.data as Record<string, unknown> | undefined)?.groupName === groupName
+            ? { ...e, data: { ...e.data, multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'] } }
+            : e
+        ),
+        feedbackEdge,
+      ])
+    }
+
+    setHasChanges(true)
+  }, [feedbackDialog, multiPassGroups, snapshot, setEdges])
 
   // Keyboard shortcuts for undo/redo/save/layout/sidebar/parameter-toggle
   useEffect(() => {
@@ -815,12 +929,18 @@ export default function App() {
         const allCollapsed = leftCollapsed && rightCollapsed
         setLeftCollapsed(!allCollapsed)
         setRightCollapsed(!allCollapsed)
+      } else if ((e.key === 'm' || e.key === 'M') && !modifier) {
+        // M = Create feedback connection from selection (data node + step node)
+        const tag = (e.target as HTMLElement).tagName
+        if (!['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(tag)) {
+          handleCreateFeedback()
+        }
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, getCurrentState, handleSave, handleAutoLayout, leftCollapsed, rightCollapsed])
+  }, [undo, redo, getCurrentState, handleSave, handleAutoLayout, handleCreateFeedback, leftCollapsed, rightCollapsed])
 
   // Save dialog handlers
   const handleSaveConfirm = useCallback(() => {
@@ -1082,6 +1202,92 @@ export default function App() {
     )
   }, [snapshot, setEdges, setNodes])
 
+  // Handle updating multi-pass config for a group
+  const handleUpdateMultiPass = useCallback((groupName: string, multiPass: Record<string, unknown>) => {
+    // Snapshot before change for undo
+    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+
+    // Update multiPassGroups state
+    setMultiPassGroups((prev) => ({
+      ...prev,
+      [groupName]: {
+        ...(prev[groupName] as Record<string, unknown> || {}),
+        multi_pass: multiPass,
+      },
+    }))
+
+    // Update feedback edge data on matching edges so labels stay in sync
+    setEdges((eds) =>
+      eds.map((e) => {
+        if (e.type === 'feedback' && e.data && (e.data as Record<string, unknown>).groupName === groupName) {
+          return {
+            ...e,
+            data: {
+              ...e.data,
+              multiPass: multiPass,
+            },
+          }
+        }
+        return e
+      })
+    )
+
+    setHasChanges(true)
+  }, [snapshot, setEdges])
+
+  // Handle deletion of edges — sync multiPassGroups when feedback edges are removed
+  const handleEdgesDelete = useCallback((deleted: Edge[]) => {
+    const feedbackEdges = deleted.filter((e) => e.type === 'feedback')
+    if (feedbackEdges.length === 0) return
+
+    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+
+    setMultiPassGroups((prev) => {
+      let next = prev
+      for (const edge of feedbackEdges) {
+        const groupName = (edge.data as Record<string, unknown> | undefined)?.groupName as string | undefined
+        if (!groupName || !next[groupName]) continue
+
+        // Resolve target step name from the edge's target node id
+        const targetStepNode = nodesRef.current.find((n) => n.id === edge.target)
+        const targetStepName = targetStepNode && targetStepNode.type === 'step'
+          ? (targetStepNode.data as StepData).name
+          : undefined
+        const targetFlag = edge.targetHandle ?? undefined
+        if (!targetStepName || !targetFlag) continue
+
+        const mpInfo = next[groupName] as Record<string, unknown>
+        const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
+        const existingFeedback = (mpConfig.feedback as Record<string, string> | undefined) || {}
+
+        // Find the mapping key by matching BOTH target step name AND target flag
+        let matchedKey: string | undefined
+        for (const [src, tgt] of Object.entries(existingFeedback)) {
+          const [tgtStep, tgtFlag] = tgt.split('.', 2)
+          if (tgtStep === targetStepName && tgtFlag === targetFlag) {
+            matchedKey = src
+            break
+          }
+        }
+        if (!matchedKey) continue
+
+        const newFeedback = { ...existingFeedback }
+        delete newFeedback[matchedKey]
+
+        next = {
+          ...next,
+          [groupName]: {
+            ...mpInfo,
+            multi_pass: { ...mpConfig, feedback: newFeedback },
+          },
+        }
+      }
+      return next
+    })
+
+    setHasChanges(true)
+  }, [snapshot])
+
   // Handle trashing variable data
   const handleTrashData = useCallback(async (variableName: string) => {
     const result = await trashData(variableName)
@@ -1188,8 +1394,8 @@ export default function App() {
         setNodes(layoutedNodes)
         setEdges(graph.edges)
         setParameters(graph.parameters)
-        if ((graph as Record<string, unknown>).multiPassGroups) {
-          setMultiPassGroups((graph as Record<string, unknown>).multiPassGroups as Record<string, unknown>)
+        if (graph.multiPassGroups) {
+          setMultiPassGroups(graph.multiPassGroups)
         }
 
         // Load editor options
@@ -1332,20 +1538,6 @@ export default function App() {
         }
         return node
       })
-    )
-  }, [setNodes])
-
-  // Reset all step execution states (kept for future use)
-  const _resetStepStates = useCallback(() => {
-    // Runtime-only change - don't mark document as dirty
-    skipNextChangeTrackingRef.current = true
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.type === 'step') {
-          return { ...node, data: { ...node.data, executionState: 'idle' as StepExecutionState } }
-        }
-        return node
-      }) as PipelineNode[]
     )
   }, [setNodes])
 
@@ -1754,6 +1946,7 @@ export default function App() {
             tasks={tasks}
             onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
+            onEdgesDelete={handleEdgesDelete}
             setNodes={setNodes}
             setEdges={setEdges}
             onSelectionChange={handleSelectionChange}
@@ -1768,6 +1961,7 @@ export default function App() {
             onAddData={handleAddData}
             parameters={parameters}
             multiPassGroups={multiPassGroups}
+            setMultiPassGroups={setMultiPassGroups}
           />
 
           {/* Right toggle strip: drag-resize handle + collapse button */}
@@ -1811,6 +2005,7 @@ export default function App() {
               tasks={tasks}
               runEligibility={selectedStepEligibility}
               freshness={selectedStepName ? freshness.get(selectedStepName) : undefined}
+              onUpdateMultiPass={handleUpdateMultiPass}
             />
           </div>
         </div>
@@ -1872,6 +2067,21 @@ export default function App() {
           onSave={handleUnsavedSave}
           onDontSave={handleUnsavedDontSave}
           onCancel={handleUnsavedCancel}
+        />
+      )}
+
+      {/* Feedback connection dialog */}
+      {feedbackDialog && (
+        <FeedbackDialog
+          steps={feedbackDialog.steps}
+          nodes={nodes}
+          edges={edges}
+          existingMultiPass={
+            (multiPassGroups[feedbackDialog.groupName] as Record<string, unknown> | undefined)?.multi_pass as Record<string, unknown> | undefined
+          }
+          groupName={feedbackDialog.groupName}
+          onConfirm={handleFeedbackConfirm}
+          onCancel={() => setFeedbackDialog(null)}
         />
       )}
     </div>

@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { DataType } from '../types/pipeline'
 
 describe('useThumbnail hook', () => {
   let originalFetch: typeof global.fetch
@@ -13,7 +14,7 @@ describe('useThumbnail hook', () => {
   beforeEach(() => {
     originalFetch = global.fetch
     fetchMock = vi.fn()
-    global.fetch = fetchMock
+    global.fetch = fetchMock as unknown as typeof fetch
 
     originalCreateObjectURL = URL.createObjectURL
     originalRevokeObjectURL = URL.revokeObjectURL
@@ -31,8 +32,7 @@ describe('useThumbnail hook', () => {
     it('should not fetch when exists is false', () => {
       // When exists is false, no fetch should be made
       // This test validates the condition: exists !== true
-      const exists = false
-      const _dataType = 'image'
+      const exists = false as boolean
 
       // Simulate the hook logic
       if (exists !== true) {
@@ -44,7 +44,6 @@ describe('useThumbnail hook', () => {
     it('should not fetch when exists is undefined', () => {
       // When exists is undefined, no fetch should be made
       const exists = undefined
-      const _dataType = 'image'
 
       if (exists !== true) {
         expect(fetchMock).not.toHaveBeenCalled()
@@ -130,7 +129,7 @@ describe('useThumbnail hook', () => {
     })
 
     it('should not fetch for unsupported types', () => {
-      const dataType = 'data_folder'
+      const dataType = 'data_folder' as DataType
 
       // For unsupported types, the hook should not fetch
       const isImageOrVideo = dataType === 'image' || dataType === 'video'
@@ -220,37 +219,37 @@ describe('useThumbnail hook', () => {
 
   describe('data type detection', () => {
     it('should identify image type as supporting thumbnails', () => {
-      const dataType = 'image'
+      const dataType = 'image' as DataType
       const isImageOrVideo = dataType === 'image' || dataType === 'video'
       expect(isImageOrVideo).toBe(true)
     })
 
     it('should identify video type as supporting thumbnails', () => {
-      const dataType = 'video'
+      const dataType = 'video' as DataType
       const isImageOrVideo = dataType === 'image' || dataType === 'video'
       expect(isImageOrVideo).toBe(true)
     })
 
     it('should identify txt type as supporting text preview', () => {
-      const dataType = 'txt'
+      const dataType = 'txt' as DataType
       const isText = dataType === 'txt' || dataType === 'csv' || dataType === 'json'
       expect(isText).toBe(true)
     })
 
     it('should identify csv type as supporting text preview', () => {
-      const dataType = 'csv'
+      const dataType = 'csv' as DataType
       const isText = dataType === 'txt' || dataType === 'csv' || dataType === 'json'
       expect(isText).toBe(true)
     })
 
     it('should identify json type as supporting text preview', () => {
-      const dataType = 'json'
+      const dataType = 'json' as DataType
       const isText = dataType === 'txt' || dataType === 'csv' || dataType === 'json'
       expect(isText).toBe(true)
     })
 
     it('should identify image_directory as not supporting previews', () => {
-      const dataType = 'image_directory'
+      const dataType = 'image_directory' as DataType
       const isImageOrVideo = dataType === 'image' || dataType === 'video'
       const isText = dataType === 'txt' || dataType === 'csv' || dataType === 'json'
       expect(isImageOrVideo).toBe(false)
@@ -258,7 +257,7 @@ describe('useThumbnail hook', () => {
     })
 
     it('should identify data_folder as not supporting previews', () => {
-      const dataType = 'data_folder'
+      const dataType = 'data_folder' as DataType
       const isImageOrVideo = dataType === 'image' || dataType === 'video'
       const isText = dataType === 'txt' || dataType === 'csv' || dataType === 'json'
       expect(isImageOrVideo).toBe(false)

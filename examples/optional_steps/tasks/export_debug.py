@@ -11,7 +11,7 @@ inputs:
     description: JSON with word frequencies
 outputs:
   --output:
-    type: text
+    type: txt
     description: Debug dump text file
 ---
 """

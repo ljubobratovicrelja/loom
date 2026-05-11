@@ -10,7 +10,7 @@ inputs:
     description: JSON file with statistics
 outputs:
   --output:
-    type: text
+    type: txt
     description: Text report file
 ---
 """

@@ -43,9 +43,9 @@ export default function FeedbackEdge({
   if (mp) {
     const count = mp.schedule?.length ?? mp.count ?? '?'
     labelText = `${count} iterations`
-    if (mp.until) {
-      const truncated = mp.until.length > 30 ? mp.until.slice(0, 27) + '...' : mp.until
-      labelText += `\nuntil ${truncated}`
+    if (mp.condition?.script) {
+      const scriptName = mp.condition.script.split('/').pop() || mp.condition.script
+      labelText += `\n${scriptName}`
     }
   }
 

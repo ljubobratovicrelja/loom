@@ -32,7 +32,6 @@ export interface StepData {
   disabled?: boolean
   loop?: LoopConfig
   group?: string
-  feedbackTargets?: string[]
   executionState?: StepExecutionState
   freshnessStatus?: FreshnessStatus
   // Type information from task schema (populated on load)
@@ -100,13 +99,20 @@ export interface DataEntry {
   pattern?: string
 }
 
+export interface ConditionConfig {
+  script: string
+  inputs?: Record<string, string>
+  args?: Record<string, unknown>
+}
+
 export interface FeedbackEdgeData {
   feedback: true
+  groupName: string
   multiPass: {
     schedule?: Record<string, unknown>[]
     expressions?: Record<string, string>
     count?: number
-    until?: string
+    condition?: ConditionConfig
     feedback: Record<string, string>
   }
 }

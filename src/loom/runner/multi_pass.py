@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-# Safe builtins allowed in eval() for expressions and until conditions
+# Safe builtins allowed in eval() for expressions
 SAFE_BUILTINS: dict[str, Any] = {
     "min": min,
     "max": max,
@@ -25,6 +25,15 @@ SAFE_BUILTINS: dict[str, Any] = {
 
 
 @dataclass
+class ConditionConfig:
+    """Configuration for a condition script that controls early stopping."""
+
+    script: str
+    inputs: dict[str, str] = field(default_factory=dict)
+    args: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class MultiPassGroupConfig:
     """Stored on PipelineConfig for each multi_pass group."""
 
@@ -33,7 +42,7 @@ class MultiPassGroupConfig:
     schedule: list[dict[str, Any]] | None = None
     expressions: dict[str, str] | None = None
     count: int = 1
-    until: str | None = None
+    condition: ConditionConfig | None = None
     feedback: dict[str, str] = field(default_factory=dict)
     internal_outputs: set[str] = field(default_factory=set)
 
@@ -114,7 +123,7 @@ def parse_multi_pass_config(
     schedule = multi_pass_data.get("schedule")
     expressions = multi_pass_data.get("expressions")
     count = multi_pass_data.get("count")
-    until = multi_pass_data.get("until")
+    condition_data = multi_pass_data.get("condition")
     feedback = multi_pass_data.get("feedback", {})
 
     # --- Mutual exclusivity ---
@@ -152,9 +161,20 @@ def parse_multi_pass_config(
     if count is not None and count < 1:
         raise ValueError(f"multi_pass group '{group_name}': 'count' must be >= 1")
 
-    # --- Until validation ---
-    if until is not None:
-        _validate_expression(until, "until")
+    # --- Condition validation ---
+    condition: ConditionConfig | None = None
+    if condition_data is not None:
+        if not isinstance(condition_data, dict):
+            raise ValueError(f"multi_pass group '{group_name}': 'condition' must be a dict")
+        if "script" not in condition_data:
+            raise ValueError(
+                f"multi_pass group '{group_name}': 'condition' must have a 'script' key"
+            )
+        condition = ConditionConfig(
+            script=condition_data["script"],
+            inputs=condition_data.get("inputs", {}),
+            args=condition_data.get("args", {}),
+        )
 
     # --- Identify internal output variables ---
     internal_outputs: set[str] = set()
@@ -178,7 +198,7 @@ def parse_multi_pass_config(
             if "." not in source_spec:
                 raise ValueError(
                     f"multi_pass group '{group_name}': "
-                    f"feedback source '{source_spec}' must be 'step.--flag'"
+                    f"feedback source '{source_spec}' must be 'step.flag'"
                 )
             src_step, src_flag = source_spec.split(".", 1)
             if src_step not in step_names:
@@ -197,7 +217,7 @@ def parse_multi_pass_config(
             if "." not in target_spec:
                 raise ValueError(
                     f"multi_pass group '{group_name}': "
-                    f"feedback target '{target_spec}' must be 'step.--flag'"
+                    f"feedback target '{target_spec}' must be 'step.flag'"
                 )
             tgt_step, _tgt_flag = target_spec.split(".", 1)
             if tgt_step not in step_names:
@@ -214,7 +234,7 @@ def parse_multi_pass_config(
         schedule=schedule,
         expressions=expressions,
         count=final_count,
-        until=until,
+        condition=condition,
         feedback=feedback,
         internal_outputs=internal_outputs,
     )

@@ -1,15 +1,17 @@
 """Pipeline execution engine."""
 
+import importlib.util
 import shutil
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 from .config import PipelineConfig, StepConfig
-from .multi_pass import SAFE_BUILTINS, MultiPassGroupConfig, _suffix_path
+from .multi_pass import SAFE_BUILTINS, ConditionConfig, MultiPassGroupConfig, _suffix_path
 from .orchestrator import EventType, PipelineOrchestrator, StepResult
 
 # Lock for thread-safe printing in parallel execution
@@ -200,6 +202,16 @@ class PipelineExecutor:
 
         print(f"[RUNNING] {group_name} (multi_pass: {n_iters} iterations)")
 
+        # Load condition function once before the loop (if configured)
+        evaluate_fn: Callable[..., bool] | None = None
+        if mp.condition is not None:
+            script_path = self.config.resolve_script_path(mp.condition.script)
+            try:
+                evaluate_fn = self._load_condition_func(script_path)
+            except (FileNotFoundError, AttributeError) as e:
+                print(f"[FAILED] {group_name}: {e}")
+                return False
+
         # Track registered suffixed variables for cleanup
         registered_vars: list[str] = []
 
@@ -240,19 +252,23 @@ class PipelineExecutor:
                         self.config.variables.pop(v, None)
                     return False
 
-            # Check until condition
-            if mp.until is not None:
-                namespace = {**SAFE_BUILTINS, "iter": i, **iter_params}
+            # Check condition script for early stopping
+            if evaluate_fn is not None and mp.condition is not None:
+                resolved_inputs = self._resolve_condition_inputs(mp.condition, mp, i)
                 try:
-                    if eval(mp.until, namespace):  # noqa: S307
-                        print(f"  until condition met at iteration {i}")
-                        self._link_final_outputs(mp, i)
-                        for v in registered_vars:
-                            self.config.variables.pop(v, None)
-                        print(f"[SUCCESS] {group_name} ({i + 1} iterations)")
-                        return True
+                    should_stop = evaluate_fn(**resolved_inputs, **mp.condition.args)
                 except Exception as e:
-                    print(f"  [WARNING] until eval error: {e}")
+                    print(f"[FAILED] {group_name}: condition script error: {e}")
+                    for v in registered_vars:
+                        self.config.variables.pop(v, None)
+                    return False
+                if should_stop:
+                    print(f"  condition met at iteration {i}")
+                    self._link_final_outputs(mp, i)
+                    for v in registered_vars:
+                        self.config.variables.pop(v, None)
+                    print(f"[SUCCESS] {group_name} ({i + 1} iterations)")
+                    return True
 
         # Link final outputs (last iteration)
         self._link_final_outputs(mp, n_iters - 1)
@@ -278,6 +294,59 @@ class PipelineExecutor:
             return params
 
         return {}
+
+    def _load_condition_func(self, script_path: Path) -> Callable[..., bool]:
+        """Load the evaluate() function from a condition script.
+
+        Args:
+            script_path: Absolute path to the condition script.
+
+        Returns:
+            The evaluate() callable.
+
+        Raises:
+            FileNotFoundError: If the script doesn't exist.
+            AttributeError: If the script has no evaluate() function.
+        """
+        if not script_path.exists():
+            raise FileNotFoundError(f"Condition script not found: {script_path}")
+        spec = importlib.util.spec_from_file_location("condition_module", script_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if not hasattr(module, "evaluate"):
+            raise AttributeError(f"Condition script {script_path} has no evaluate() function")
+        return module.evaluate  # type: ignore[no-any-return]
+
+    def _resolve_condition_inputs(
+        self,
+        condition: ConditionConfig,
+        mp: MultiPassGroupConfig,
+        iter_idx: int,
+    ) -> dict[str, str]:
+        """Resolve $var references in condition inputs to current iteration paths.
+
+        Args:
+            condition: The condition config with input mappings.
+            mp: Multi-pass group config.
+            iter_idx: Current iteration index.
+
+        Returns:
+            Dict of kwarg name -> resolved absolute path string.
+        """
+        resolved: dict[str, str] = {}
+        suffix = f"iter{iter_idx}"
+        for kwarg_name, var_ref in condition.inputs.items():
+            if var_ref.startswith("$"):
+                var_name = var_ref[1:]
+                if var_name in mp.internal_outputs:
+                    suffixed_name = f"{var_name}_{suffix}"
+                    resolved[kwarg_name] = str(self.config.resolve_path(f"${suffixed_name}"))
+                else:
+                    resolved[kwarg_name] = str(self.config.resolve_path(var_ref))
+            else:
+                resolved[kwarg_name] = var_ref
+        return resolved
 
     def _build_iter_step(
         self,
@@ -327,13 +396,16 @@ class PipelineExecutor:
             else:
                 new_args[arg_key] = arg_value
 
-        # Inject feedback args (if iter > 0)
+        # Inject feedback (if iter > 0): into inputs or args based on target
         for source_spec, target_spec in mp.feedback.items():
             tgt_step, tgt_flag = target_spec.split(".", 1)
             if tgt_step == step_name:
                 fb_path = feedback_paths.get(source_spec)
                 if fb_path is not None:
-                    new_args[tgt_flag] = fb_path
+                    if tgt_flag in step_dict.get("inputs", {}):
+                        new_inputs[tgt_flag] = fb_path
+                    else:
+                        new_args[tgt_flag] = fb_path
 
         return StepConfig(
             name=step_name,
@@ -393,7 +465,10 @@ class PipelineExecutor:
     def _print_multi_pass_dry_run(self, mp: MultiPassGroupConfig) -> None:
         """Print dry-run output for a multi_pass group."""
         n_iters = mp.iteration_count
-        print(f"[DRY RUN] {mp.group_name} (multi_pass: {n_iters} iterations)")
+        condition_info = ""
+        if mp.condition is not None:
+            condition_info = f" [condition: {mp.condition.script}]"
+        print(f"[DRY RUN] {mp.group_name} (multi_pass: {n_iters} iterations{condition_info})")
 
         # Temporarily register vars for path resolution
         registered: list[str] = []

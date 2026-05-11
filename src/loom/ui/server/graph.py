@@ -38,8 +38,11 @@ def _flatten_pipeline(
                 for step in entry["steps"]:
                     flat.append({**step, "group": entry["group"]})
                 # Store original block for round-trip + metadata
+                # Strip deprecated 'until' key (replaced by 'condition')
+                mp_data = dict(entry["multi_pass"])
+                mp_data.pop("until", None)
                 multi_pass_groups[entry["group"]] = {
-                    "multi_pass": entry["multi_pass"],
+                    "multi_pass": mp_data,
                     "steps": entry["steps"],
                 }
             else:
@@ -176,16 +179,6 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                 data=step_data,
             )
         )
-
-    # Inject feedback target handles into step node data
-    feedback_targets: dict[str, list[str]] = {}
-    for mp_info in multi_pass_groups.values():
-        for _, target_spec in mp_info["multi_pass"].get("feedback", {}).items():
-            tgt_step, tgt_flag = target_spec.split(".", 1)
-            feedback_targets.setdefault(tgt_step, []).append(tgt_flag)
-    for node in nodes:
-        if node.type == "step" and node.id in feedback_targets:
-            node.data["feedbackTargets"] = feedback_targets[node.id]
 
     # Step 3: Create parameter nodes (positioned on left)
     for param_idx, (param_name, param_value) in enumerate(parameters.items()):
@@ -395,6 +388,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                             type="feedback",
                             data={
                                 "feedback": True,
+                                "groupName": group_name,
                                 "multiPass": mp_info["multi_pass"],
                             },
                         )
@@ -714,7 +708,11 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
     for entry in data["pipeline"]:
         if "group" in entry and "steps" in entry:
             if "multi_pass" in entry:
-                # Multi-pass block — preserve template steps as-is
+                # Multi-pass block — update from graph.multiPassGroups if available
+                group_name = entry["group"]
+                if group_name in graph.multiPassGroups:
+                    mp_info = graph.multiPassGroups[group_name]
+                    entry["multi_pass"] = mp_info["multi_pass"]
                 for step in entry["steps"]:
                     existing_names.add(step["name"])
             else:

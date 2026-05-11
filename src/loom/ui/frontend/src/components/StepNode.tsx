@@ -1,6 +1,6 @@
 import { memo, useContext, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder, RefreshCw } from 'lucide-react'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText, RefreshCw } from 'lucide-react'
 import type { StepNode as StepNodeType, DataType } from '../types/pipeline'
 import { HighlightContext } from '../contexts/HighlightContext'
 
@@ -12,6 +12,7 @@ const TYPE_COLORS: Record<DataType, { bg: string; border: string; text: string }
   json: { bg: '!bg-sky-400', border: '!border-sky-400', text: 'text-sky-500 dark:text-sky-400' },
   image_directory: { bg: '!bg-orange-400', border: '!border-orange-400', text: 'text-orange-500 dark:text-orange-400' },
   data_folder: { bg: '!bg-teal-400', border: '!border-teal-400', text: 'text-teal-500 dark:text-teal-400' },
+  txt: { bg: '!bg-slate-400', border: '!border-slate-400', text: 'text-slate-500 dark:text-slate-400' },
 }
 
 // Default color for untyped inputs/outputs
@@ -26,6 +27,7 @@ const TYPE_ICONS: Record<DataType, ReactNode> = {
   json: <Braces className="w-3 h-3" />,
   image_directory: <FolderOpen className="w-3 h-3" />,
   data_folder: <Folder className="w-3 h-3" />,
+  txt: <FileText className="w-3 h-3" />,
 }
 
 function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
@@ -36,16 +38,17 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
   const isDisabled = data.disabled === true
   const isLoop = !!data.loop
 
-  // Get color for input based on type
+  // Get color for input based on type. Unknown types fall through to the default
+  // color rather than crashing the render.
   const getInputColor = (name: string) => {
     const type = data.inputTypes?.[name]
-    return type ? TYPE_COLORS[type] : DEFAULT_INPUT_COLOR
+    return (type && TYPE_COLORS[type]) || DEFAULT_INPUT_COLOR
   }
 
-  // Get color for output based on type
+  // Get color for output based on type.
   const getOutputColor = (flag: string) => {
     const type = data.outputTypes?.[flag]
-    return type ? TYPE_COLORS[type] : DEFAULT_OUTPUT_COLOR
+    return (type && TYPE_COLORS[type]) || DEFAULT_OUTPUT_COLOR
   }
 
   // All args - each gets a handle
@@ -246,25 +249,6 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
             </div>
           )
         })}
-
-        {/* Feedback target handles (multi_pass) */}
-        {(data.feedbackTargets ?? [])
-          .filter((flag) => !(data.args && flag in data.args))
-          .map((flag) => (
-            <div key={`feedback-${flag}`} className="flex items-center py-1 relative">
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={flag}
-                className="!bg-purple-500 !border-2 !border-purple-300"
-                style={{ top: 'auto', position: 'relative', transform: 'none' }}
-              />
-              <span className="ml-2 text-purple-400 dark:text-purple-300 text-[10px] flex items-center gap-1">
-                ↩ {flag.replace(/^-+/, '')}
-                <span className="text-purple-400/60 text-[9px]">feedback</span>
-              </span>
-            </div>
-          ))}
 
         {/* Output handles */}
         {outputNames.map((flag) => {

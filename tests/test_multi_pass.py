@@ -121,13 +121,43 @@ class TestParseMultiPassConfig:
         with pytest.raises(ValueError, match="count.*>= 1"):
             parse_multi_pass_config("grp", mp_data, template_steps, data_section)
 
-    def test_until_syntax_check(self, template_steps: list, data_section: dict) -> None:
+    def test_condition_basic(self, template_steps: list, data_section: dict) -> None:
         mp_data = {
-            "schedule": [{"x": 1}],
-            "until": "this is not valid python +++",
+            "schedule": [{"quality_level": 1}],
+            "condition": {
+                "script": "conditions/has_converged.py",
+                "inputs": {"cleaned_csv": "$refined"},
+                "args": {"tolerance": 0.01},
+            },
         }
-        with pytest.raises(ValueError, match="Invalid syntax.*until"):
+        config = parse_multi_pass_config("grp", mp_data, template_steps, data_section)
+        assert config.condition is not None
+        assert config.condition.script == "conditions/has_converged.py"
+        assert config.condition.inputs == {"cleaned_csv": "$refined"}
+        assert config.condition.args == {"tolerance": 0.01}
+
+    def test_condition_missing_script_raises(
+        self, template_steps: list, data_section: dict
+    ) -> None:
+        mp_data = {
+            "schedule": [{"quality_level": 1}],
+            "condition": {"inputs": {"csv": "$refined"}},
+        }
+        with pytest.raises(ValueError, match="must have a 'script' key"):
             parse_multi_pass_config("grp", mp_data, template_steps, data_section)
+
+    def test_condition_must_be_dict(self, template_steps: list, data_section: dict) -> None:
+        mp_data = {
+            "schedule": [{"quality_level": 1}],
+            "condition": "conditions/check.py",
+        }
+        with pytest.raises(ValueError, match="must be a dict"):
+            parse_multi_pass_config("grp", mp_data, template_steps, data_section)
+
+    def test_no_condition_by_default(self, template_steps: list, data_section: dict) -> None:
+        mp_data = {"schedule": [{"quality_level": 1}]}
+        config = parse_multi_pass_config("grp", mp_data, template_steps, data_section)
+        assert config.condition is None
 
     def test_expression_syntax_check(self, template_steps: list, data_section: dict) -> None:
         mp_data = {
@@ -168,14 +198,6 @@ class TestParseMultiPassConfig:
         assert "refined" in config.internal_outputs
         assert "source_data" not in config.internal_outputs
 
-    def test_valid_until(self, template_steps: list, data_section: dict) -> None:
-        mp_data = {
-            "schedule": [{"x": 1}],
-            "until": "iter >= 3 and tolerance < 0.5",
-        }
-        config = parse_multi_pass_config("grp", mp_data, template_steps, data_section)
-        assert config.until == "iter >= 3 and tolerance < 0.5"
-
 
 class TestMultiPassPipelineConfig:
     """Tests for full YAML parsing with multi_pass via PipelineConfig."""
@@ -206,7 +228,7 @@ pipeline:
         - {level: 1}
         - {level: 3}
       feedback:
-        process.--out: process.--warm-start
+        process.--out: process.data
     steps:
       - name: process
         task: tasks/process.py
@@ -326,18 +348,17 @@ class TestMultiPassExecution:
         tasks_dir = tmp_path / "tasks"
         tasks_dir.mkdir()
 
-        # Simple echo-like task that creates an output file
+        # Task that writes its positional input path and level to output
         (tasks_dir / "process.py").write_text(
             "import sys, os, argparse\n"
             "parser = argparse.ArgumentParser()\n"
             "parser.add_argument('input')\n"
             "parser.add_argument('-o', '--output', required=True)\n"
             "parser.add_argument('--level', type=int, default=1)\n"
-            "parser.add_argument('--warm-start', default=None)\n"
             "args = parser.parse_args()\n"
             "os.makedirs(os.path.dirname(args.output), exist_ok=True)\n"
             "with open(args.output, 'w') as f:\n"
-            "    f.write(f'level={args.level} warm={args.warm_start}\\n')\n"
+            "    f.write(f'level={args.level} input={args.input}\\n')\n"
         )
 
         # Create input data
@@ -361,7 +382,7 @@ pipeline:
         - {level: 1}
         - {level: 3}
       feedback:
-        process.--output: process.--warm-start
+        process.--output: process.data
     steps:
       - name: process
         task: tasks/process.py
@@ -386,10 +407,12 @@ pipeline:
         assert "iteration 1" in output
         assert "--level 1" in output
         assert "--level 3" in output
-        # No warm-start in iteration 0
-        assert "--warm-start" not in output.split("iteration 0")[1].split("iteration 1")[0]
-        # Warm-start in iteration 1
-        assert "--warm-start" in output.split("iteration 1")[1]
+        # Iteration 0 uses original source input
+        iter0_section = output.split("iteration 0")[1].split("iteration 1")[0]
+        assert "source.csv" in iter0_section
+        # Iteration 1 uses feedback path (iter0 output) as positional input
+        iter1_section = output.split("iteration 1")[1]
+        assert "iter0" in iter1_section
 
     def test_execution_creates_outputs(self, pipeline_yaml: Path) -> None:
         config = PipelineConfig.from_yaml(pipeline_yaml)
@@ -410,11 +433,70 @@ pipeline:
         success = executor.run_multi_pass_group("refine")
         assert success
 
-        # Check that iteration 1 received warm-start from iteration 0
+        # Check iteration 1 received iter0's output as its input
         results_dir = pipeline_yaml.parent / "results"
         content = (results_dir / "output_iter1.csv").read_text()
-        assert "warm=" in content
-        assert "iter0" in content  # warm-start path should reference iter0
+        assert "input=" in content
+        assert "iter0" in content  # input path should reference iter0 output
+
+    def test_feedback_targets_input(self, tmp_path: Path) -> None:
+        """Feedback targeting an input injects into new_inputs, not new_args."""
+        from loom.runner.multi_pass import MultiPassGroupConfig
+
+        step_dict = {
+            "name": "step_a",
+            "task": "tasks/a.py",
+            "inputs": {"data": "$source"},
+            "outputs": {"--output": "$result"},
+            "args": {"--level": "$level"},
+        }
+
+        mp = MultiPassGroupConfig(
+            group_name="grp",
+            template_step_dicts=[step_dict],
+            schedule=[{"level": 1}, {"level": 2}],
+            feedback={"step_a.--output": "step_a.data"},
+            internal_outputs={"result"},
+        )
+
+        # Create minimal config for executor
+        (tmp_path / "data").mkdir()
+        (tmp_path / "data" / "source.csv").write_text("x\n")
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  result:
+    type: csv
+    path: results/result.csv
+parameters:
+  level: 1
+pipeline:
+  - name: placeholder
+    task: tasks/a.py
+    inputs:
+      data: $source
+    outputs:
+      --output: $result
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=True)
+
+        # Iteration 0: no feedback, original input preserved
+        iter_step_0 = executor._build_iter_step(step_dict, mp, 0, {"level": 1}, {})
+        assert iter_step_0.inputs["data"] == "$source"
+        assert "--data" not in iter_step_0.args
+        assert "data" not in iter_step_0.args
+
+        # Iteration 1: feedback injects into inputs, not args
+        iter_step_1 = executor._build_iter_step(
+            step_dict, mp, 1, {"level": 2}, {"step_a.--output": "/tmp/result_iter0.csv"}
+        )
+        assert iter_step_1.inputs["data"] == "/tmp/result_iter0.csv"
+        assert "data" not in iter_step_1.args
 
     def test_expressions_mode(self, tmp_path: Path) -> None:
         tasks_dir = tmp_path / "tasks"
@@ -467,7 +549,8 @@ pipeline:
         executor.run_multi_pass_group("refine")
         # Just verify it doesn't crash — dry_run prints commands
 
-    def test_until_condition(self, tmp_path: Path) -> None:
+    def test_condition_stops_early(self, tmp_path: Path) -> None:
+        """Condition returning True stops iteration; only iter0 output exists."""
         tasks_dir = tmp_path / "tasks"
         tasks_dir.mkdir()
         (tasks_dir / "process.py").write_text(
@@ -480,6 +563,75 @@ pipeline:
             "os.makedirs(os.path.dirname(args.output), exist_ok=True)\n"
             "with open(args.output, 'w') as f:\n"
             "    f.write(f'level={args.level}\\n')\n"
+        )
+
+        # Condition that always returns True (stop immediately after first iter)
+        cond_dir = tmp_path / "conditions"
+        cond_dir.mkdir()
+        (cond_dir / "always_stop.py").write_text("def evaluate(**kwargs):\n    return True\n")
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "source.csv").write_text("x\n")
+
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  output:
+    type: csv
+    path: results/output.csv
+
+pipeline:
+  - group: refine
+    multi_pass:
+      count: 5
+      expressions:
+        level: "iter + 1"
+      condition:
+        script: conditions/always_stop.py
+    steps:
+      - name: process
+        task: tasks/process.py
+        inputs:
+          data: $source
+        outputs:
+          --output: $output
+        args:
+          --level: $level
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=False)
+        success = executor.run_multi_pass_group("refine")
+        assert success
+
+        # Should stop after iteration 0
+        results_dir = tmp_path / "results"
+        assert (results_dir / "output_iter0.csv").exists()
+        assert not (results_dir / "output_iter1.csv").exists()
+
+    def test_condition_exception_is_failure(self, tmp_path: Path) -> None:
+        """Exception in condition script causes run_multi_pass_group to return False."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "process.py").write_text(
+            "import sys, os, argparse\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('input')\n"
+            "parser.add_argument('-o', '--output', required=True)\n"
+            "args = parser.parse_args()\n"
+            "os.makedirs(os.path.dirname(args.output), exist_ok=True)\n"
+            "with open(args.output, 'w') as f:\n"
+            "    f.write('ok\\n')\n"
+        )
+
+        cond_dir = tmp_path / "conditions"
+        cond_dir.mkdir()
+        (cond_dir / "bad.py").write_text(
+            "def evaluate(**kwargs):\n    raise RuntimeError('boom')\n"
         )
 
         data_dir = tmp_path / "data"
@@ -498,10 +650,271 @@ data:
 pipeline:
   - group: refine
     multi_pass:
-      count: 10
-      expressions:
-        level: "iter + 1"
-      until: "iter >= 2"
+      count: 3
+      condition:
+        script: conditions/bad.py
+    steps:
+      - name: process
+        task: tasks/process.py
+        inputs:
+          data: $source
+        outputs:
+          --output: $output
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=False)
+        success = executor.run_multi_pass_group("refine")
+        assert not success
+
+    def test_condition_not_found(self, tmp_path: Path) -> None:
+        """Missing script file causes failure."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "process.py").write_text(
+            "import argparse\nparser = argparse.ArgumentParser()\nargs = parser.parse_args()\n"
+        )
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "source.csv").write_text("x\n")
+
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  output:
+    type: csv
+    path: results/output.csv
+
+pipeline:
+  - group: refine
+    multi_pass:
+      count: 2
+      condition:
+        script: conditions/nonexistent.py
+    steps:
+      - name: process
+        task: tasks/process.py
+        inputs:
+          data: $source
+        outputs:
+          --output: $output
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=False)
+        success = executor.run_multi_pass_group("refine")
+        assert not success
+
+    def test_condition_missing_evaluate(self, tmp_path: Path) -> None:
+        """Script without evaluate() function causes failure."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "process.py").write_text(
+            "import argparse\nparser = argparse.ArgumentParser()\nargs = parser.parse_args()\n"
+        )
+
+        cond_dir = tmp_path / "conditions"
+        cond_dir.mkdir()
+        (cond_dir / "no_eval.py").write_text("x = 1\n")
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "source.csv").write_text("x\n")
+
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  output:
+    type: csv
+    path: results/output.csv
+
+pipeline:
+  - group: refine
+    multi_pass:
+      count: 2
+      condition:
+        script: conditions/no_eval.py
+    steps:
+      - name: process
+        task: tasks/process.py
+        inputs:
+          data: $source
+        outputs:
+          --output: $output
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=False)
+        success = executor.run_multi_pass_group("refine")
+        assert not success
+
+    def test_condition_dry_run(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """Dry run prints condition info but doesn't call it."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "process.py").write_text(
+            "import argparse\nparser = argparse.ArgumentParser()\nargs = parser.parse_args()\n"
+        )
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "source.csv").write_text("x\n")
+
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  output:
+    type: csv
+    path: results/output.csv
+
+pipeline:
+  - group: refine
+    multi_pass:
+      count: 2
+      condition:
+        script: conditions/check.py
+    steps:
+      - name: process
+        task: tasks/process.py
+        inputs:
+          data: $source
+        outputs:
+          --output: $output
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=True)
+        executor.run_multi_pass_group("refine")
+        output = capsys.readouterr().out
+        assert "[condition: conditions/check.py]" in output
+
+    def test_condition_with_args(self, tmp_path: Path) -> None:
+        """Condition args are passed as kwargs to evaluate()."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "process.py").write_text(
+            "import sys, os, argparse\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('input')\n"
+            "parser.add_argument('-o', '--output', required=True)\n"
+            "args = parser.parse_args()\n"
+            "os.makedirs(os.path.dirname(args.output), exist_ok=True)\n"
+            "with open(args.output, 'w') as f:\n"
+            "    f.write('ok\\n')\n"
+        )
+
+        cond_dir = tmp_path / "conditions"
+        cond_dir.mkdir()
+        # Condition that stops when threshold is met (threshold passed as arg)
+        (cond_dir / "check_threshold.py").write_text(
+            "call_count = 0\n"
+            "def evaluate(threshold=10):\n"
+            "    global call_count\n"
+            "    call_count += 1\n"
+            "    return threshold < 5\n"
+        )
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "source.csv").write_text("x\n")
+
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  output:
+    type: csv
+    path: results/output.csv
+
+pipeline:
+  - group: refine
+    multi_pass:
+      count: 5
+      condition:
+        script: conditions/check_threshold.py
+        args:
+          threshold: 1
+    steps:
+      - name: process
+        task: tasks/process.py
+        inputs:
+          data: $source
+        outputs:
+          --output: $output
+"""
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text(yaml_content)
+        config = PipelineConfig.from_yaml(config_file)
+        executor = PipelineExecutor(config, dry_run=False)
+        success = executor.run_multi_pass_group("refine")
+        assert success
+
+        # threshold=1 < 5, so condition returns True, stops after iter 0
+        results_dir = tmp_path / "results"
+        assert (results_dir / "output_iter0.csv").exists()
+        assert not (results_dir / "output_iter1.csv").exists()
+
+    def test_schedule_plus_condition(self, tmp_path: Path) -> None:
+        """Schedule + condition: runs up to schedule length, stops early."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "process.py").write_text(
+            "import sys, os, argparse\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('input')\n"
+            "parser.add_argument('-o', '--output', required=True)\n"
+            "parser.add_argument('--level', type=int, default=1)\n"
+            "args = parser.parse_args()\n"
+            "os.makedirs(os.path.dirname(args.output), exist_ok=True)\n"
+            "with open(args.output, 'w') as f:\n"
+            "    f.write(f'level={args.level}\\n')\n"
+        )
+
+        cond_dir = tmp_path / "conditions"
+        cond_dir.mkdir()
+        # Stops after being called twice (iter 0 -> False, iter 1 -> True)
+        (cond_dir / "stop_at_iter1.py").write_text(
+            "calls = 0\n"
+            "def evaluate(**kwargs):\n"
+            "    global calls\n"
+            "    calls += 1\n"
+            "    return calls >= 2\n"
+        )
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "source.csv").write_text("x\n")
+
+        yaml_content = """
+data:
+  source:
+    type: csv
+    path: data/source.csv
+  output:
+    type: csv
+    path: results/output.csv
+
+pipeline:
+  - group: refine
+    multi_pass:
+      schedule:
+        - {level: 1}
+        - {level: 2}
+        - {level: 3}
+      condition:
+        script: conditions/stop_at_iter1.py
     steps:
       - name: process
         task: tasks/process.py
@@ -519,13 +932,11 @@ pipeline:
         success = executor.run_multi_pass_group("refine")
         assert success
 
-        # Should stop after iteration 2 (index 2, since until: "iter >= 2")
+        # Schedule has 3 entries but condition stops at iter 1
         results_dir = tmp_path / "results"
         assert (results_dir / "output_iter0.csv").exists()
         assert (results_dir / "output_iter1.csv").exists()
-        assert (results_dir / "output_iter2.csv").exists()
-        # Should NOT have iteration 3+
-        assert not (results_dir / "output_iter3.csv").exists()
+        assert not (results_dir / "output_iter2.csv").exists()
 
 
 class TestMultiPassGraph:
@@ -647,7 +1058,47 @@ class TestMultiPassGraph:
         assert pipeline[0]["multi_pass"]["schedule"] == [{"x": 1}, {"x": 2}]
         assert pipeline[0]["multi_pass"]["feedback"] == {"step.--out": "step.--warm"}
 
-    def test_feedback_targets_injected_into_step_data(self) -> None:
+    def test_feedback_edge_targets_existing_input(self) -> None:
+        from loom.ui.server.graph import yaml_to_graph
+
+        yaml_data = {
+            "data": {
+                "src": {"type": "csv", "path": "src.csv"},
+                "out": {"type": "csv", "path": "out.csv"},
+            },
+            "parameters": {},
+            "pipeline": [
+                {
+                    "group": "grp",
+                    "multi_pass": {
+                        "schedule": [{"x": 1}],
+                        "feedback": {"step.--out": "step.data"},
+                    },
+                    "steps": [
+                        {
+                            "name": "step",
+                            "task": "t.py",
+                            "inputs": {"data": "$src"},
+                            "outputs": {"--out": "$out"},
+                        }
+                    ],
+                }
+            ],
+        }
+        graph = yaml_to_graph(yaml_data)
+
+        # feedbackTargets should NOT be injected into step data
+        step_node = next(n for n in graph.nodes if n.id == "step")
+        assert "feedbackTargets" not in step_node.data
+
+        # Feedback edge targetHandle should match an existing input key
+        feedback_edges = [e for e in graph.edges if e.type == "feedback"]
+        assert len(feedback_edges) == 1
+        target_handle = feedback_edges[0].targetHandle
+        assert target_handle == "data"
+        assert target_handle in step_node.data.get("inputs", {})
+
+    def test_group_name_in_feedback_edge_data(self) -> None:
         from loom.ui.server.graph import yaml_to_graph
 
         yaml_data = {
@@ -676,5 +1127,188 @@ class TestMultiPassGraph:
         }
         graph = yaml_to_graph(yaml_data)
 
-        step_node = next(n for n in graph.nodes if n.id == "step")
-        assert step_node.data["feedbackTargets"] == ["--warm"]
+        feedback_edges = [e for e in graph.edges if e.type == "feedback"]
+        assert len(feedback_edges) == 1
+        assert feedback_edges[0].data is not None
+        assert feedback_edges[0].data["groupName"] == "grp"
+
+    def test_update_yaml_writes_multi_pass_changes(self) -> None:
+        from typing import Any
+
+        from loom.ui.server.graph import update_yaml_from_graph, yaml_to_graph
+
+        yaml_data: dict[str, Any] = {
+            "data": {
+                "src": {"type": "csv", "path": "src.csv"},
+                "out": {"type": "csv", "path": "out.csv"},
+            },
+            "parameters": {},
+            "pipeline": [
+                {
+                    "group": "grp",
+                    "multi_pass": {
+                        "schedule": [{"x": 1}],
+                        "feedback": {"step.--out": "step.--warm"},
+                    },
+                    "steps": [
+                        {
+                            "name": "step",
+                            "task": "t.py",
+                            "inputs": {"data": "$src"},
+                            "outputs": {"--out": "$out"},
+                        }
+                    ],
+                }
+            ],
+        }
+        graph = yaml_to_graph(yaml_data)
+
+        # Modify the multi_pass schedule in the graph
+        graph.multiPassGroups["grp"]["multi_pass"]["schedule"] = [
+            {"x": 10},
+            {"x": 20},
+            {"x": 30},
+        ]
+
+        # Apply changes in-place
+        update_yaml_from_graph(yaml_data, graph)
+
+        # Verify the YAML was updated
+        pipeline = yaml_data["pipeline"]
+        assert len(pipeline) == 1
+        mp = pipeline[0]["multi_pass"]
+        assert mp["schedule"] == [{"x": 10}, {"x": 20}, {"x": 30}]
+        assert mp["feedback"] == {"step.--out": "step.--warm"}
+
+    def test_new_feedback_mapping_round_trip(self) -> None:
+        from typing import Any
+
+        from loom.ui.server.graph import update_yaml_from_graph, yaml_to_graph
+
+        yaml_data: dict[str, Any] = {
+            "data": {
+                "src": {"type": "csv", "path": "src.csv"},
+                "mid": {"type": "csv", "path": "mid.csv"},
+                "out": {"type": "csv", "path": "out.csv"},
+            },
+            "parameters": {},
+            "pipeline": [
+                {
+                    "group": "grp",
+                    "multi_pass": {
+                        "schedule": [{"x": 1}],
+                        "feedback": {"step_a.--out": "step_a.--warm"},
+                    },
+                    "steps": [
+                        {
+                            "name": "step_a",
+                            "task": "t.py",
+                            "inputs": {"data": "$src"},
+                            "outputs": {"--out": "$mid"},
+                        },
+                        {
+                            "name": "step_b",
+                            "task": "t2.py",
+                            "inputs": {"data": "$mid"},
+                            "outputs": {"--out": "$out"},
+                        },
+                    ],
+                }
+            ],
+        }
+        graph = yaml_to_graph(yaml_data)
+
+        # Add a new feedback mapping via the graph
+        graph.multiPassGroups["grp"]["multi_pass"]["feedback"]["step_b.--out"] = "step_a.--init"
+
+        # Save back
+        update_yaml_from_graph(yaml_data, graph)
+
+        # Verify the new feedback mapping appears in YAML
+        mp = yaml_data["pipeline"][0]["multi_pass"]
+        assert "step_b.--out" in mp["feedback"]
+        assert mp["feedback"]["step_b.--out"] == "step_a.--init"
+        # Original mapping still present
+        assert mp["feedback"]["step_a.--out"] == "step_a.--warm"
+
+    def test_condition_round_trip(self) -> None:
+        """Condition config survives yaml→graph→yaml."""
+        from loom.ui.server.graph import graph_to_yaml, yaml_to_graph
+
+        yaml_data = {
+            "data": {
+                "src": {"type": "csv", "path": "src.csv"},
+                "out": {"type": "csv", "path": "out.csv"},
+            },
+            "parameters": {},
+            "pipeline": [
+                {
+                    "group": "grp",
+                    "multi_pass": {
+                        "schedule": [{"x": 1}],
+                        "condition": {
+                            "script": "conditions/check.py",
+                            "inputs": {"csv": "$out"},
+                            "args": {"tol": 0.01},
+                        },
+                        "feedback": {"step.--out": "step.--warm"},
+                    },
+                    "steps": [
+                        {
+                            "name": "step",
+                            "task": "t.py",
+                            "inputs": {"data": "$src"},
+                            "outputs": {"--out": "$out"},
+                        }
+                    ],
+                }
+            ],
+        }
+        graph = yaml_to_graph(yaml_data)
+        result = graph_to_yaml(graph)
+
+        mp = result["pipeline"][0]["multi_pass"]
+        assert "condition" in mp
+        assert mp["condition"]["script"] == "conditions/check.py"
+        assert mp["condition"]["inputs"] == {"csv": "$out"}
+        assert mp["condition"]["args"] == {"tol": 0.01}
+
+    def test_until_stripped_on_load(self) -> None:
+        """Old YAML with 'until' gets it removed during graph conversion."""
+        from loom.ui.server.graph import graph_to_yaml, yaml_to_graph
+
+        yaml_data = {
+            "data": {
+                "src": {"type": "csv", "path": "src.csv"},
+                "out": {"type": "csv", "path": "out.csv"},
+            },
+            "parameters": {},
+            "pipeline": [
+                {
+                    "group": "grp",
+                    "multi_pass": {
+                        "schedule": [{"x": 1}],
+                        "until": "iter >= 3",
+                        "feedback": {"step.--out": "step.--warm"},
+                    },
+                    "steps": [
+                        {
+                            "name": "step",
+                            "task": "t.py",
+                            "inputs": {"data": "$src"},
+                            "outputs": {"--out": "$out"},
+                        }
+                    ],
+                }
+            ],
+        }
+        graph = yaml_to_graph(yaml_data)
+
+        # until should be stripped from the multiPassGroups
+        mp = graph.multiPassGroups["grp"]["multi_pass"]
+        assert "until" not in mp
+
+        # Round-trip should also not have until
+        result = graph_to_yaml(graph)
+        mp_result = result["pipeline"][0]["multi_pass"]
+        assert "until" not in mp_result

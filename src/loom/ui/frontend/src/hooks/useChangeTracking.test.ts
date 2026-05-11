@@ -270,7 +270,7 @@ describe('useChangeTracking', () => {
     it('should detect changes in any dependency', () => {
       const { result, rerender } = renderHook(
         ({ nodes, edges }) => useChangeTracking([nodes, edges]),
-        { initialProps: { nodes: [], edges: [] } }
+        { initialProps: { nodes: [] as string[], edges: [] as string[] } }
       )
 
       expect(result.current.hasChanges).toBe(false)

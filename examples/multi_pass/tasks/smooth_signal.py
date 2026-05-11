@@ -2,8 +2,7 @@
 """Smooth a signal using a moving average filter.
 
 Reads a CSV with index/value columns and applies a moving average
-window to smooth the signal. Optionally uses a warm-start input
-from a previous pass instead of the primary input.
+window to smooth the signal.
 
 ---
 inputs:
@@ -19,9 +18,6 @@ args:
     type: int
     default: 10
     description: Size of the moving average window
-  --warm-start:
-    type: csv
-    description: Optional warm-start input from previous pass (overrides positional input)
 ---
 """
 
@@ -35,14 +31,10 @@ def main():
     parser.add_argument("input_csv", help="Input CSV path")
     parser.add_argument("-o", "--output", required=True, help="Output CSV path")
     parser.add_argument("--window-size", type=int, default=10, help="Moving average window")
-    parser.add_argument("--warm-start", default=None, help="Warm-start from previous pass")
     args = parser.parse_args()
 
-    # Use warm-start input if provided, otherwise use the primary input
-    source = args.warm_start if args.warm_start else args.input_csv
-
     # Read input
-    with open(source, newline="") as f:
+    with open(args.input_csv, newline="") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -64,10 +56,7 @@ def main():
         for i, val in enumerate(smoothed):
             writer.writerow({"index": i, "value": val})
 
-    src_label = "warm-start" if args.warm_start else "input"
-    print(
-        f"Smoothed {len(values)} samples ({src_label}, window={args.window_size}) -> {args.output}"
-    )
+    print(f"Smoothed {len(values)} samples (window={args.window_size}) -> {args.output}")
 
 
 if __name__ == "__main__":
