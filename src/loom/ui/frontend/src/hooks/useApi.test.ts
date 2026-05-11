@@ -16,7 +16,7 @@ describe('High Priority Issue #5: AbortController for Request Cancellation', () 
   beforeEach(() => {
     originalFetch = global.fetch
     fetchMock = vi.fn()
-    global.fetch = fetchMock
+    global.fetch = fetchMock as unknown as typeof fetch
   })
 
   afterEach(() => {
@@ -129,7 +129,7 @@ describe('High Priority Issue #5: AbortController for Request Cancellation', () 
     let abortSignal: AbortSignal | null = null
 
     fetchMock.mockImplementation((_url: string, options: RequestInit) => {
-      return new Promise((resolve, reject) => {
+      return new Promise((_resolve, reject) => {
         abortSignal = options?.signal || null
         if (abortSignal) {
           abortSignal.addEventListener('abort', () => {
@@ -145,7 +145,7 @@ describe('High Priority Issue #5: AbortController for Request Cancellation', () 
     // Manually abort
     api.abort()
 
-    expect(abortSignal?.aborted).toBe(true)
+    expect((abortSignal as AbortSignal | null)?.aborted).toBe(true)
     await expect(promise).resolves.toBeNull()
   })
 
@@ -298,7 +298,7 @@ describe('Pipeline Browser API Functions', () => {
   beforeEach(() => {
     originalFetch = global.fetch
     fetchMock = vi.fn()
-    global.fetch = fetchMock
+    global.fetch = fetchMock as unknown as typeof fetch
   })
 
   afterEach(() => {

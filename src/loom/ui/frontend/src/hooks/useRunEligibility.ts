@@ -43,7 +43,6 @@ export function useRunEligibility(
     for (const node of stepNodes) {
       const stepId = node.id
       const stepData = node.data as StepData
-      const _stepName = stepData.name  // Kept for debugging
 
       // Check if step is disabled
       if (stepData.disabled) {

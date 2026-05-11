@@ -12,21 +12,46 @@ from .models import (
 )
 
 
-def _flatten_pipeline(pipeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _flatten_pipeline(
+    pipeline: list[dict[str, Any]],
+    data_section: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Flatten grouped pipeline entries into a flat list with group tag injected.
 
     Group blocks of the form ``{"group": name, "steps": [...]}`` are expanded
     into flat step dicts with a ``"group"`` key added to each step.
+    Multi-pass groups emit template steps as individual nodes (NOT unrolled).
     Ungrouped steps are passed through unchanged.
+
+    Returns:
+        Tuple of (flat_steps, multi_pass_groups_dict).
+        ``multi_pass_groups_dict`` maps group names to their original YAML blocks
+        for round-trip preservation and feedback edge creation.
     """
-    flat = []
+    flat: list[dict[str, Any]] = []
+    multi_pass_groups: dict[str, Any] = {}
+
     for entry in pipeline:
         if "group" in entry and "steps" in entry:
-            for step in entry["steps"]:
-                flat.append({**step, "group": entry["group"]})
+            if "multi_pass" in entry:
+                # Multi-pass group: template steps appear as normal nodes
+                for step in entry["steps"]:
+                    flat.append({**step, "group": entry["group"]})
+                # Store original block for round-trip + metadata
+                # Strip deprecated 'until' key (replaced by 'condition')
+                mp_data = dict(entry["multi_pass"])
+                mp_data.pop("until", None)
+                multi_pass_groups[entry["group"]] = {
+                    "multi_pass": mp_data,
+                    "steps": entry["steps"],
+                }
+            else:
+                for step in entry["steps"]:
+                    flat.append({**step, "group": entry["group"]})
         else:
             flat.append(entry)
-    return flat
+
+    return flat, multi_pass_groups
 
 
 def _resolve_param_name(edge_source: str, nodes: list[GraphNode]) -> str | None:
@@ -107,7 +132,8 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     edges: list[GraphEdge] = []
 
     # Flatten group blocks so all step entries are plain step dicts with optional "group" key
-    all_steps = _flatten_pipeline(pipeline)
+    data_section = data.get("data", {})
+    all_steps, multi_pass_groups = _flatten_pipeline(pipeline, data_section)
 
     # Step 1: Identify output data nodes (produced by steps)
     output_data: dict[str, dict[str, str]] = {}  # data_name -> {step, flag}
@@ -201,7 +227,6 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
         )
 
     # Step 3c: Create data nodes (typed file/directory nodes)
-    data_section = data.get("data", {})
     for data_idx, (data_name, data_info) in enumerate(data_section.items()):
         node_id = f"data_{data_name}"
         # Check if we have a saved position for this node
@@ -293,6 +318,23 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                         )
                     )
 
+    # 4c2: Edges from data nodes to steps that reference them in args
+    for step in all_steps:
+        step_id = step["name"]
+        for arg_key, arg_value in step.get("args", {}).items():
+            if isinstance(arg_value, str) and arg_value.startswith("$"):
+                ref_name = arg_value[1:]
+                if ref_name in data_names and ref_name not in parameters:
+                    edges.append(
+                        GraphEdge(
+                            id=f"e_data_{ref_name}_{step_id}_{arg_key}",
+                            source=f"data_{ref_name}",
+                            target=step_id,
+                            sourceHandle="value",
+                            targetHandle=arg_key,
+                        )
+                    )
+
     # 4d: Loop edges — data node → step (loop-over) and step → data node (loop-into)
     for step in all_steps:
         step_id = step["name"]
@@ -327,6 +369,32 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                         )
                     )
 
+    # 4e: Feedback edges from multi_pass groups
+    for group_name, mp_info in multi_pass_groups.items():
+        feedback = mp_info["multi_pass"].get("feedback", {})
+        for source_spec, target_spec in feedback.items():
+            src_step, src_flag = source_spec.split(".", 1)
+            tgt_step, tgt_flag = target_spec.split(".", 1)
+            # Find the data node produced by src_step via src_flag
+            for data_name, producer in output_data.items():
+                if producer["step"] == src_step and producer["flag"] == src_flag:
+                    edges.append(
+                        GraphEdge(
+                            id=f"e_feedback_{data_name}_{tgt_step}_{tgt_flag}",
+                            source=f"data_{data_name}",
+                            target=tgt_step,
+                            sourceHandle="value",
+                            targetHandle=tgt_flag,
+                            type="feedback",
+                            data={
+                                "feedback": True,
+                                "groupName": group_name,
+                                "multiPass": mp_info["multi_pass"],
+                            },
+                        )
+                    )
+                    break
+
     # Read editor options
     editor_data = data.get("editor", {})
     editor = EditorOptions(
@@ -360,6 +428,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
         editor=editor,
         execution=execution,
         hasLayout=bool(layout),  # True if layout section existed in YAML
+        multiPassGroups=multi_pass_groups,
     )
 
 
@@ -394,8 +463,24 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
     group_block_index: dict[str, int] = {}  # group_name -> index in pipeline list
 
     for node in step_nodes:
-        step_dict = _build_step_dict(node, param_edges)
         group = node.data.get("group")
+
+        # Multi_pass groups: emit original block (with template steps from multiPassGroups)
+        if group and group in graph.multiPassGroups:
+            if group not in seen_groups:
+                seen_groups.add(group)
+                mp_info = graph.multiPassGroups[group]
+                group_block_index[group] = len(pipeline)
+                pipeline.append(
+                    {
+                        "group": group,
+                        "multi_pass": mp_info["multi_pass"],
+                        "steps": mp_info["steps"],
+                    }
+                )
+            continue
+
+        step_dict = _build_step_dict(node, param_edges)
 
         if not group:
             pipeline.append(step_dict)
@@ -612,16 +697,31 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
         elif "disabled" in step:
             del step["disabled"]
 
+    # Collect step names belonging to multi_pass groups (skip during updates)
+    mp_step_names: set[str] = set()
+    for group_name, mp_info in graph.multiPassGroups.items():
+        for step in mp_info.get("steps", []):
+            mp_step_names.add(step["name"])
+
     # Walk pipeline entries (flat steps and group blocks) updating in-place
     existing_names: set[str] = set()
     for entry in data["pipeline"]:
         if "group" in entry and "steps" in entry:
-            # Group block — update each member step individually
-            for step in entry["steps"]:
-                name = step["name"]
-                existing_names.add(name)
-                if name in graph_steps:
-                    _apply_step_update(step, graph_steps[name])
+            if "multi_pass" in entry:
+                # Multi-pass block — update from graph.multiPassGroups if available
+                group_name = entry["group"]
+                if group_name in graph.multiPassGroups:
+                    mp_info = graph.multiPassGroups[group_name]
+                    entry["multi_pass"] = mp_info["multi_pass"]
+                for step in entry["steps"]:
+                    existing_names.add(step["name"])
+            else:
+                # Regular group block — update each member step individually
+                for step in entry["steps"]:
+                    name = step["name"]
+                    existing_names.add(name)
+                    if name in graph_steps:
+                        _apply_step_update(step, graph_steps[name])
         else:
             # Flat (ungrouped) step
             name = entry["name"]
@@ -631,6 +731,9 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
 
     # Add any new steps from the graph (not already in existing YAML)
     for name, graph_step in graph_steps.items():
+        # Skip multi_pass template steps — they are stored in the group block
+        if name in mp_step_names:
+            continue
         if name not in existing_names:
             group = graph_step.get("group")
             # Build the plain step dict (no "group" key inside the step)

@@ -8,7 +8,7 @@ inputs:
     description: JSON with top words
 outputs:
   --output:
-    type: text
+    type: txt
     description: ASCII bar chart
 ---
 """

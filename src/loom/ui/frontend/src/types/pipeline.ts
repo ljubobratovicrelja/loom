@@ -99,6 +99,24 @@ export interface DataEntry {
   pattern?: string
 }
 
+export interface ConditionConfig {
+  script: string
+  inputs?: Record<string, string>
+  args?: Record<string, unknown>
+}
+
+export interface FeedbackEdgeData {
+  feedback: true
+  groupName: string
+  multiPass: {
+    schedule?: Record<string, unknown>[]
+    expressions?: Record<string, string>
+    count?: number
+    condition?: ConditionConfig
+    feedback: Record<string, string>
+  }
+}
+
 export interface PipelineGraph {
   variables: Record<string, string>
   parameters: Record<string, unknown>
@@ -108,6 +126,7 @@ export interface PipelineGraph {
   editor?: EditorOptions
   execution?: ExecutionOptions
   hasLayout?: boolean  // True if positions were loaded from YAML
+  multiPassGroups?: Record<string, unknown>
 }
 
 export interface EditorState {

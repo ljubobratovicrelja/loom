@@ -8,89 +8,82 @@ data:
   peaks_json:
     type: json
     path: data/peaks.json
-
 parameters:
   # Signal generation
   num_points: 200
   noise_level: 0.2
-  frequency: 2.0
+  frequency: 2
 
   # Processing
   window_size: 5
   threshold: 0.3
 
 pipeline:
-  - name: generate_signal
-    task: tasks/generate_signal.py
-    outputs:
-      --output: $signal_csv
-    args:
-      --points: $num_points
-      --noise: $noise_level
-      --frequency: $frequency
-
-  - name: smooth_signal
-    task: tasks/smooth_signal.py
-    inputs:
-      signal: $signal_csv
-    outputs:
-      --output: $smoothed_csv
-    args:
-      --window: $window_size
-      --threshold: $threshold
-
-  - name: detect_peaks
-    task: tasks/detect_peaks.py
-    inputs:
-      signal: $smoothed_csv
-    outputs:
-      --output: $peaks_json
-    args:
-      --threshold: $threshold
-
-# Node positions for the visual editor
-layout:
-  generate_signal:
-    x: 400
-    y: 0
-  smooth_signal:
-    x: 400
-    y: 200
-  detect_peaks:
-    x: 400
-    y: 400
-  param_num_points:
-    x: 50
-    y: -60
-  param_noise_level:
-    x: 50
-    y: 0
-  param_frequency:
-    x: 50
-    y: 60
-  param_window_size:
-    x: 50
-    y: 150
-  param_threshold:
-    x: 50
-    y: 250
-  param_threshold_ref_1:
-    x: 50
-    y: 450
-  data_signal_csv:
-    x: 50
-    y: -200
-  data_smoothed_csv:
-    x: 50
-    y: -280
-  data_peaks_json:
-    x: 50
-    y: -360
-
-# Parameter reference nodes (clones) for cleaner edge routing
+- name: generate_signal
+  task: tasks/generate_signal.py
+  outputs:
+    --output: $signal_csv
+  args:
+    --points: $num_points
+    --noise: $noise_level
+    --frequency: $frequency
+- name: smooth_signal
+  task: tasks/smooth_signal.py
+  inputs:
+    signal: $signal_csv
+  outputs:
+    --output: $smoothed_csv
+  args:
+    --window: $window_size
+    --threshold: $threshold
+- name: detect_peaks
+  task: tasks/detect_peaks.py
+  inputs:
+    signal: $smoothed_csv
+  outputs:
+    --output: $peaks_json
+  args:
+    --threshold: $threshold
 editor:
   parameterRefs:
     param_threshold_ref_1:
       parameter: threshold
       edges:
-        - "detect_peaks:--threshold"
+      - detect_peaks:--threshold
+layout:
+  generate_signal:
+    x: 428
+    y: 50
+  smooth_signal:
+    x: 1716
+    y: 50
+  detect_peaks:
+    x: 2988
+    y: 63
+  data_signal_csv:
+    x: 918
+    y: 92
+  data_smoothed_csv:
+    x: 2206
+    y: 92
+  data_peaks_json:
+    x: 3478
+    y: 92
+  param_num_points:
+    x: 54
+    y: 7
+  param_noise_level:
+    x: 50
+    y: 97
+  param_frequency:
+    x: 58
+    y: 187
+  param_window_size:
+    x: 1338
+    y: 52
+  param_threshold:
+    x: 1346
+    y: 142
+  param_threshold_ref_1:
+    x: 2626
+    y: 97

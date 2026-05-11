@@ -1,13 +1,17 @@
 """Pipeline execution engine."""
 
+import importlib.util
+import shutil
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 from .config import PipelineConfig, StepConfig
+from .multi_pass import SAFE_BUILTINS, ConditionConfig, MultiPassGroupConfig, _suffix_path
 from .orchestrator import EventType, PipelineOrchestrator, StepResult
 
 # Lock for thread-safe printing in parallel execution
@@ -101,8 +105,19 @@ class PipelineExecutor:
                 if resolved:
                     cmd.append(flag)
             else:
+                # If the arg references a data variable (file path), resolve
+                # to an absolute path so scripts work regardless of CWD.
+                arg_str: str
+                if (
+                    isinstance(value, str)
+                    and value.startswith("$")
+                    and value[1:] in self.config.variables
+                ):
+                    arg_str = str(self.config.resolve_path(value))
+                else:
+                    arg_str = str(resolved)
                 cmd.append(flag)
-                cmd.append(str(resolved))
+                cmd.append(arg_str)
 
         # Add extra args if provided
         if extra_args:
@@ -121,6 +136,7 @@ class PipelineExecutor:
     ) -> subprocess.CompletedProcess | None:
         """Run a single pipeline step.
 
+        For multi_pass group steps, runs the iteration loop.
         For loop steps (step.loop is set), iterates over the collection.
 
         Args:
@@ -130,6 +146,13 @@ class PipelineExecutor:
         Returns:
             CompletedProcess if executed, None if dry run.
         """
+        # Multi-pass group detection
+        if step.name in self.config.multi_pass_groups:
+            success = self.run_multi_pass_group(step.name)
+            if self.dry_run:
+                return None
+            return subprocess.CompletedProcess(args=[], returncode=0 if success else 1)
+
         if step.loop is not None:
             if self.dry_run:
                 self._print_loop_dry_run(step)
@@ -158,6 +181,318 @@ class PipelineExecutor:
             print(f"[FAILED] {step.name} (exit code {result.returncode})")
 
         return result
+
+    # --- Multi-pass iteration loop ---
+
+    def run_multi_pass_group(self, group_name: str) -> bool:
+        """Run a multi_pass group's iteration loop.
+
+        Args:
+            group_name: Name of the multi_pass group.
+
+        Returns:
+            True if all iterations succeeded, False otherwise.
+        """
+        mp = self.config.multi_pass_groups[group_name]
+        n_iters = mp.iteration_count
+
+        if self.dry_run:
+            self._print_multi_pass_dry_run(mp)
+            return True
+
+        print(f"[RUNNING] {group_name} (multi_pass: {n_iters} iterations)")
+
+        # Load condition function once before the loop (if configured)
+        evaluate_fn: Callable[..., bool] | None = None
+        if mp.condition is not None:
+            script_path = self.config.resolve_script_path(mp.condition.script)
+            try:
+                evaluate_fn = self._load_condition_func(script_path)
+            except (FileNotFoundError, AttributeError) as e:
+                print(f"[FAILED] {group_name}: {e}")
+                return False
+
+        # Track registered suffixed variables for cleanup
+        registered_vars: list[str] = []
+
+        for i in range(n_iters):
+            iter_params = self._compute_iter_params(mp, i)
+            feedback_paths = self._collect_feedback_paths(mp, i)
+
+            print(f"  iteration {i}:")
+
+            for step_dict in mp.template_step_dicts:
+                iter_step = self._build_iter_step(step_dict, mp, i, iter_params, feedback_paths)
+
+                # Register suffixed variables temporarily
+                for flag, var_ref in iter_step.outputs.items():
+                    if var_ref.startswith("$"):
+                        suffixed_name = var_ref[1:]
+                        if suffixed_name not in self.config.variables:
+                            # Compute suffixed path from original variable
+                            base_name = suffixed_name.replace(f"_iter{i}", "")
+                            if base_name in self.config.variables:
+                                base_path = self.config.variables[base_name]
+                                suffixed_path = _suffix_path(base_path, f"iter{i}")
+                                self.config.variables[suffixed_name] = suffixed_path
+                                registered_vars.append(suffixed_name)
+
+                # Run the step
+                cmd = self.build_command(iter_step)
+                cmd_str = " ".join(cmd)
+                print(f"    {iter_step.name}: {cmd_str}")
+
+                self._ensure_output_dirs(iter_step)
+                result = subprocess.run(cmd, capture_output=False)
+
+                if result.returncode != 0:
+                    print(f"[FAILED] {group_name} (iteration {i}, step {iter_step.name})")
+                    # Clean up registered vars
+                    for v in registered_vars:
+                        self.config.variables.pop(v, None)
+                    return False
+
+            # Check condition script for early stopping
+            if evaluate_fn is not None and mp.condition is not None:
+                resolved_inputs = self._resolve_condition_inputs(mp.condition, mp, i)
+                try:
+                    should_stop = evaluate_fn(**resolved_inputs, **mp.condition.args)
+                except Exception as e:
+                    print(f"[FAILED] {group_name}: condition script error: {e}")
+                    for v in registered_vars:
+                        self.config.variables.pop(v, None)
+                    return False
+                if should_stop:
+                    print(f"  condition met at iteration {i}")
+                    self._link_final_outputs(mp, i)
+                    for v in registered_vars:
+                        self.config.variables.pop(v, None)
+                    print(f"[SUCCESS] {group_name} ({i + 1} iterations)")
+                    return True
+
+        # Link final outputs (last iteration)
+        self._link_final_outputs(mp, n_iters - 1)
+
+        # Clean up registered vars
+        for v in registered_vars:
+            self.config.variables.pop(v, None)
+
+        print(f"[SUCCESS] {group_name} ({n_iters} iterations)")
+        return True
+
+    def _compute_iter_params(self, mp: MultiPassGroupConfig, iter_idx: int) -> dict[str, Any]:
+        """Compute parameter values for an iteration."""
+        if mp.schedule is not None:
+            return dict(mp.schedule[iter_idx])
+
+        if mp.expressions is not None:
+            params: dict[str, Any] = {}
+            namespace = {**SAFE_BUILTINS, "iter": iter_idx}
+            for param_name, expr in mp.expressions.items():
+                params[param_name] = eval(expr, namespace)  # noqa: S307
+                namespace[param_name] = params[param_name]
+            return params
+
+        return {}
+
+    def _load_condition_func(self, script_path: Path) -> Callable[..., bool]:
+        """Load the evaluate() function from a condition script.
+
+        Args:
+            script_path: Absolute path to the condition script.
+
+        Returns:
+            The evaluate() callable.
+
+        Raises:
+            FileNotFoundError: If the script doesn't exist.
+            AttributeError: If the script has no evaluate() function.
+        """
+        if not script_path.exists():
+            raise FileNotFoundError(f"Condition script not found: {script_path}")
+        spec = importlib.util.spec_from_file_location("condition_module", script_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if not hasattr(module, "evaluate"):
+            raise AttributeError(f"Condition script {script_path} has no evaluate() function")
+        return module.evaluate  # type: ignore[no-any-return]
+
+    def _resolve_condition_inputs(
+        self,
+        condition: ConditionConfig,
+        mp: MultiPassGroupConfig,
+        iter_idx: int,
+    ) -> dict[str, str]:
+        """Resolve $var references in condition inputs to current iteration paths.
+
+        Args:
+            condition: The condition config with input mappings.
+            mp: Multi-pass group config.
+            iter_idx: Current iteration index.
+
+        Returns:
+            Dict of kwarg name -> resolved absolute path string.
+        """
+        resolved: dict[str, str] = {}
+        suffix = f"iter{iter_idx}"
+        for kwarg_name, var_ref in condition.inputs.items():
+            if var_ref.startswith("$"):
+                var_name = var_ref[1:]
+                if var_name in mp.internal_outputs:
+                    suffixed_name = f"{var_name}_{suffix}"
+                    resolved[kwarg_name] = str(self.config.resolve_path(f"${suffixed_name}"))
+                else:
+                    resolved[kwarg_name] = str(self.config.resolve_path(var_ref))
+            else:
+                resolved[kwarg_name] = var_ref
+        return resolved
+
+    def _build_iter_step(
+        self,
+        step_dict: dict[str, Any],
+        mp: MultiPassGroupConfig,
+        iter_idx: int,
+        iter_params: dict[str, Any],
+        feedback_paths: dict[str, str],
+    ) -> StepConfig:
+        """Build a modified StepConfig for a specific iteration.
+
+        - Output paths suffixed with _iter{i}
+        - Internal input paths suffixed with _iter{i}
+        - Args: $param refs replaced with iter_params values
+        - Feedback args injected (if iter > 0)
+        """
+        suffix = f"iter{iter_idx}"
+        step_name = step_dict["name"]
+
+        # Process outputs: suffix internal output variables
+        new_outputs: dict[str, str] = {}
+        for flag, ref in step_dict.get("outputs", {}).items():
+            if isinstance(ref, str) and ref.startswith("$") and ref[1:] in mp.internal_outputs:
+                new_outputs[flag] = f"${ref[1:]}_{suffix}"
+            else:
+                new_outputs[flag] = ref
+
+        # Process inputs: rewrite internal refs to suffixed versions
+        new_inputs: dict[str, str] = {}
+        for input_name, ref in step_dict.get("inputs", {}).items():
+            if isinstance(ref, str) and ref.startswith("$") and ref[1:] in mp.internal_outputs:
+                new_inputs[input_name] = f"${ref[1:]}_{suffix}"
+            else:
+                new_inputs[input_name] = ref
+
+        # Process args: inline pass params, rewrite internal refs
+        new_args: dict[str, Any] = {}
+        for arg_key, arg_value in step_dict.get("args", {}).items():
+            if isinstance(arg_value, str) and arg_value.startswith("$"):
+                param_name = arg_value[1:]
+                if param_name in iter_params:
+                    new_args[arg_key] = iter_params[param_name]
+                elif param_name in mp.internal_outputs:
+                    new_args[arg_key] = f"${param_name}_{suffix}"
+                else:
+                    new_args[arg_key] = arg_value
+            else:
+                new_args[arg_key] = arg_value
+
+        # Inject feedback (if iter > 0): into inputs or args based on target
+        for source_spec, target_spec in mp.feedback.items():
+            tgt_step, tgt_flag = target_spec.split(".", 1)
+            if tgt_step == step_name:
+                fb_path = feedback_paths.get(source_spec)
+                if fb_path is not None:
+                    if tgt_flag in step_dict.get("inputs", {}):
+                        new_inputs[tgt_flag] = fb_path
+                    else:
+                        new_args[tgt_flag] = fb_path
+
+        return StepConfig(
+            name=step_name,
+            script=step_dict.get("task") or step_dict.get("script", ""),
+            inputs=new_inputs,
+            outputs=new_outputs,
+            args=new_args,
+            group=mp.group_name,
+        )
+
+    def _collect_feedback_paths(self, mp: MultiPassGroupConfig, iter_idx: int) -> dict[str, str]:
+        """Map feedback source specs to resolved paths from the previous iteration.
+
+        Returns empty dict for iteration 0 (no feedback).
+        """
+        if iter_idx == 0:
+            return {}
+
+        prev_suffix = f"iter{iter_idx - 1}"
+        paths: dict[str, str] = {}
+
+        for source_spec in mp.feedback:
+            src_step, src_flag = source_spec.split(".", 1)
+            # Find the variable produced by src_step's src_flag
+            for step_dict in mp.template_step_dicts:
+                if step_dict["name"] == src_step:
+                    for flag, ref in step_dict.get("outputs", {}).items():
+                        if flag == src_flag and isinstance(ref, str) and ref.startswith("$"):
+                            var_name = ref[1:]
+                            suffixed_name = f"{var_name}_{prev_suffix}"
+                            # Resolve to absolute path
+                            if suffixed_name in self.config.variables:
+                                resolved = str(self.config.resolve_path(f"${suffixed_name}"))
+                                paths[source_spec] = resolved
+                            break
+                    break
+
+        return paths
+
+    def _link_final_outputs(self, mp: MultiPassGroupConfig, last_iter: int) -> None:
+        """Copy final iteration outputs to unsuffixed paths."""
+        suffix = f"iter{last_iter}"
+        for var_name in mp.internal_outputs:
+            suffixed_name = f"{var_name}_{suffix}"
+            if suffixed_name in self.config.variables:
+                src = self.config.resolve_path(f"${suffixed_name}")
+                dst = self.config.resolve_path(f"${var_name}")
+                if src.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    if dst.exists() or dst.is_symlink():
+                        if dst.is_dir():
+                            shutil.rmtree(dst)
+                        else:
+                            dst.unlink()
+                    shutil.copy2(src, dst)
+
+    def _print_multi_pass_dry_run(self, mp: MultiPassGroupConfig) -> None:
+        """Print dry-run output for a multi_pass group."""
+        n_iters = mp.iteration_count
+        condition_info = ""
+        if mp.condition is not None:
+            condition_info = f" [condition: {mp.condition.script}]"
+        print(f"[DRY RUN] {mp.group_name} (multi_pass: {n_iters} iterations{condition_info})")
+
+        # Temporarily register vars for path resolution
+        registered: list[str] = []
+        for i in range(n_iters):
+            for var_name in mp.internal_outputs:
+                suffixed = f"{var_name}_iter{i}"
+                if suffixed not in self.config.variables and var_name in self.config.variables:
+                    base_path = self.config.variables[var_name]
+                    self.config.variables[suffixed] = _suffix_path(base_path, f"iter{i}")
+                    registered.append(suffixed)
+
+        for i in range(n_iters):
+            iter_params = self._compute_iter_params(mp, i)
+            feedback_paths = self._collect_feedback_paths(mp, i)
+
+            print(f"  iteration {i}:")
+            for step_dict in mp.template_step_dicts:
+                iter_step = self._build_iter_step(step_dict, mp, i, iter_params, feedback_paths)
+                cmd = self.build_command(iter_step)
+                print(f"    {iter_step.name}: {' '.join(cmd)}")
+
+        # Clean up
+        for v in registered:
+            self.config.variables.pop(v, None)
 
     def _print_loop_dry_run(self, step: StepConfig) -> None:
         """Print dry-run output for a loop step."""

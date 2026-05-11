@@ -21,8 +21,9 @@ import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
 import GroupNode from './GroupNode'
+import FeedbackEdge from './FeedbackEdge'
 import NodeHotbox from './NodeHotbox'
-import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig, GroupNode as GroupNodeType } from '../types/pipeline'
+import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig, GroupNode as GroupNodeType, FeedbackEdgeData } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 import { HighlightContext } from '../contexts/HighlightContext'
 
@@ -31,6 +32,10 @@ const nodeTypes = {
   parameter: ParameterNode,
   data: DataNode,
   group: GroupNode,
+}
+
+const edgeTypes = {
+  feedback: FeedbackEdge,
 }
 
 // Color palette for group rectangles (in order of appearance)
@@ -58,6 +63,7 @@ interface CanvasProps {
   setNodes: Dispatch<SetStateAction<PipelineNode[]>>
   setEdges: Dispatch<SetStateAction<Edge[]>>
   onSelectionChange: (selectedNodes: PipelineNode[]) => void
+  onEdgeSelect?: (edge: Edge | null) => void
   onSnapshot?: () => void
   onNodeDoubleClick?: (node: PipelineNode) => void
   onParameterDrop?: (name: string, value: unknown, position: { x: number; y: number }) => void
@@ -67,6 +73,9 @@ interface CanvasProps {
   onAddTask?: (task: TaskInfo, position: { x: number; y: number }) => void
   onAddData?: (dataType: DataType, position: { x: number; y: number }) => void
   parameters?: Record<string, unknown>
+  multiPassGroups?: Record<string, unknown>
+  setMultiPassGroups?: Dispatch<SetStateAction<Record<string, unknown>>>
+  onEdgesDelete?: (edges: Edge[]) => void
 }
 
 export default function Canvas({
@@ -78,6 +87,7 @@ export default function Canvas({
   setNodes,
   setEdges,
   onSelectionChange: onSelectionChangeProp,
+  onEdgeSelect,
   onSnapshot,
   onNodeDoubleClick,
   onParameterDrop,
@@ -87,6 +97,9 @@ export default function Canvas({
   onAddTask,
   onAddData,
   parameters,
+  multiPassGroups,
+  setMultiPassGroups,
+  onEdgesDelete,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -510,6 +523,83 @@ export default function Canvas({
         const graph = buildDependencyGraph(nodesRef.current, tempEdges)
 
         if (graph.hasCycles()) {
+          // Check if this is a valid feedback edge within a multi_pass group.
+          // Also resolve the producing step + its output flag for the mapping key.
+          let producerStep: PipelineNode | null = null
+          let sourceOutputFlag: string | undefined
+          if (sourceNode?.type === 'data') {
+            const producerEdge = edgesRef.current.find(e => e.target === params.source)
+            producerStep = producerEdge ? (nodesRef.current.find(n => n.id === producerEdge.source) ?? null) : null
+            sourceOutputFlag = producerEdge?.sourceHandle ?? undefined
+          } else if (sourceNode?.type === 'step') {
+            producerStep = sourceNode
+            sourceOutputFlag = params.sourceHandle ?? undefined
+          }
+          const sourceGroup = producerStep?.type === 'step' ? (producerStep.data as StepData).group : undefined
+          const targetGroup = targetNode?.type === 'step' ? (targetNode.data as StepData).group : undefined
+
+          if (sourceGroup && targetGroup && sourceGroup === targetGroup && multiPassGroups?.[sourceGroup]) {
+            const sourceStepName = (producerStep!.data as StepData).name
+            const targetStepName = (targetNode!.data as StepData).name
+            const targetInputFlag = params.targetHandle ?? undefined
+
+            // Refuse if we can't construct a complete mapping
+            if (!sourceOutputFlag || !targetInputFlag) {
+              alert('Cannot create feedback connection: missing source or target handle.')
+              return
+            }
+
+            const sourceSpec = `${sourceStepName}.${sourceOutputFlag}`
+            const targetSpec = `${targetStepName}.${targetInputFlag}`
+
+            const mpInfo = multiPassGroups[sourceGroup] as Record<string, unknown>
+            const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
+            const existingFeedback = (mpConfig.feedback as Record<string, string> | undefined) || {}
+
+            // Reject collision with a different existing target
+            if (existingFeedback[sourceSpec] && existingFeedback[sourceSpec] !== targetSpec) {
+              alert(`feedback from ${sourceSpec} is already wired to ${existingFeedback[sourceSpec]}; delete that first.`)
+              return
+            }
+
+            onSnapshot?.()
+
+            const updatedMultiPass = {
+              ...mpConfig,
+              feedback: { ...existingFeedback, [sourceSpec]: targetSpec },
+            }
+
+            setMultiPassGroups?.((prev) => ({
+              ...prev,
+              [sourceGroup]: {
+                ...(prev[sourceGroup] as Record<string, unknown> | undefined),
+                multi_pass: updatedMultiPass,
+              },
+            }))
+
+            const feedbackEdge: Edge = {
+              ...tempEdge,
+              type: 'feedback',
+              data: {
+                feedback: true,
+                groupName: sourceGroup,
+                multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'],
+              } satisfies FeedbackEdgeData,
+            }
+            // Refresh sibling feedback edges in the same group so their data stays in sync
+            setEdges((eds) =>
+              addEdge(
+                feedbackEdge,
+                eds.map((e) =>
+                  e.type === 'feedback' && (e.data as Record<string, unknown> | undefined)?.groupName === sourceGroup
+                    ? { ...e, data: { ...e.data, multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'] } }
+                    : e
+                )
+              )
+            )
+            return
+          }
+
           // Warn user about circular dependency
           alert('Cannot create connection: this would create a circular dependency in the pipeline.')
           return
@@ -518,7 +608,7 @@ export default function Canvas({
         setEdges((eds) => addEdge({ ...params, id: `e_${params.source}_${params.target}` }, eds))
       }
     },
-    [setEdges, setNodes, onSnapshot, tasks, onSelectionChangeProp]
+    [setEdges, setNodes, onSnapshot, tasks, onSelectionChangeProp, multiPassGroups, setMultiPassGroups]
   )
 
   // Track edge being reconnected
@@ -639,6 +729,13 @@ export default function Canvas({
       onSelectionChangeProp(selectedNodes)
     },
     [onSelectionChangeProp]
+  )
+
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      onEdgeSelect?.(edge)
+    },
+    [onEdgeSelect]
   )
 
   // Drag and drop handlers for parameters from sidebar
@@ -907,15 +1004,18 @@ export default function Canvas({
         edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgesDelete={onEdgesDelete}
         onConnect={onConnect}
         onReconnectStart={onReconnectStart}
         onReconnect={onReconnect}
         onReconnectEnd={onReconnectEnd}
         onSelectionChange={onSelectionChange}
         onNodeDoubleClick={(_event, node) => onNodeDoubleClick?.(node)}
+        onEdgeClick={onEdgeClick}
         onInit={(instance) => { reactFlowInstance.current = instance }}
         onViewportChange={onViewportChange}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         minZoom={0.05}
         panOnDrag={[1, 2]}

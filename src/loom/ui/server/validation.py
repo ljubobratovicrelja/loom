@@ -24,7 +24,11 @@ def validate_pipeline(
     pipeline = []
     for entry in raw_pipeline:
         if "group" in entry and "steps" in entry:
-            pipeline.extend(entry["steps"])
+            if "multi_pass" in entry:
+                # Multi-pass group: validate template steps (not unrolled)
+                pipeline.extend(entry["steps"])
+            else:
+                pipeline.extend(entry["steps"])
         else:
             pipeline.append(entry)
 

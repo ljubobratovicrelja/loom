@@ -103,7 +103,7 @@ describe('useFreshness hook', () => {
   beforeEach(() => {
     originalFetch = global.fetch
     fetchMock = vi.fn()
-    global.fetch = fetchMock
+    global.fetch = fetchMock as unknown as typeof fetch
     vi.useFakeTimers()
   })
 

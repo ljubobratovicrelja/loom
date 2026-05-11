@@ -41,6 +41,8 @@ class GraphEdge(BaseModel):
     target: str
     sourceHandle: str | None = None  # noqa: N815 - React Flow requires camelCase
     targetHandle: str | None = None  # noqa: N815 - React Flow requires camelCase
+    type: str | None = None  # Edge type (e.g. "feedback" for multi_pass)
+    data: dict[str, Any] | None = None  # Edge metadata (feedback info, etc.)
 
 
 class EditorOptions(BaseModel):
@@ -77,6 +79,7 @@ class PipelineGraph(BaseModel):
     editor: EditorOptions = EditorOptions()
     execution: ExecutionOptions = ExecutionOptions()
     hasLayout: bool = False  # noqa: N815 - True if positions were loaded from YAML
+    multiPassGroups: dict[str, Any] = {}  # noqa: N815 - group_name -> original YAML block
 
 
 class ValidationWarning(BaseModel):

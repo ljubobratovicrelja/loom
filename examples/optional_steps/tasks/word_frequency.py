@@ -6,7 +6,7 @@ Produces a JSON object with word counts.
 ---
 inputs:
   text:
-    type: text
+    type: txt
     description: Normalized text file
 outputs:
   --output:

@@ -46,6 +46,12 @@ export const TYPE_COLORS: Record<DataType, { bg: string; border: string; text: s
     text: 'text-teal-500 dark:text-teal-400',
     handle: '!bg-teal-400',
   },
+  txt: {
+    bg: '!bg-slate-400',
+    border: '!border-slate-400',
+    text: 'text-slate-500 dark:text-slate-400',
+    handle: '!bg-slate-400',
+  },
 }
 
 /**
@@ -97,6 +103,7 @@ export const FRESHNESS_COLORS: Record<FreshnessStatus, string> = {
   stale: 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30',
   missing: 'bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-500/30',
   no_outputs: 'bg-slate-600/20 text-slate-500 border-slate-600/30',
+  unknown: 'bg-slate-400/20 text-slate-500 dark:text-slate-500 border-slate-400/30',
 }
 
 /**
@@ -107,6 +114,7 @@ export const FRESHNESS_INDICATOR_COLORS: Record<FreshnessStatus, string> = {
   stale: 'bg-amber-500',
   missing: 'bg-slate-400',
   no_outputs: 'bg-slate-600',
+  unknown: 'bg-slate-500',
 }
 
 /**
@@ -119,4 +127,5 @@ export const TYPE_BADGE_COLORS: Record<DataType, string> = {
   json: 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-600',
   image_directory: 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-600',
   data_folder: 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-600',
+  txt: 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
 }

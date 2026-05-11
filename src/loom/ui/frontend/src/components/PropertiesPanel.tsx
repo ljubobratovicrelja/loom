@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import type { Node, Edge } from '@xyflow/react'
-import { Video, Image, Table2, Braces, FolderOpen, Folder, FileQuestion, Link, RefreshCw } from 'lucide-react'
-import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState, LoopConfig } from '../types/pipeline'
+import { Video, Image, Table2, Braces, FolderOpen, Folder, FileText, FileQuestion, Link, RefreshCw } from 'lucide-react'
+import type { StepData, ParameterData, DataNodeData, DataType, TaskInfo, StepExecutionState, LoopConfig, FeedbackEdgeData } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 import type { FreshnessInfo } from '../hooks/useFreshness'
@@ -20,6 +20,7 @@ const TYPE_ICON_COMPONENTS: Record<DataType, ReactNode> = {
   json: <Braces className="w-3 h-3" />,
   image_directory: <FolderOpen className="w-3 h-3" />,
   data_folder: <Folder className="w-3 h-3" />,
+  txt: <FileText className="w-3 h-3" />,
 }
 
 // Data type options for selector
@@ -30,6 +31,7 @@ const DATA_TYPE_OPTIONS: Array<{ type: DataType; label: string }> = [
   { type: 'json', label: 'JSON' },
   { type: 'image_directory', label: 'Image Directory' },
   { type: 'data_folder', label: 'Data Folder' },
+  { type: 'txt', label: 'Text' },
 ]
 
 // Type colors for badges (matching StepNode colors)
@@ -40,6 +42,7 @@ const TYPE_COLORS: Record<DataType, string> = {
   json: 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-600',
   image_directory: 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-600',
   data_folder: 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-600',
+  txt: 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
 }
 
 // Get type info (icon, label, color) for a data type
@@ -57,8 +60,380 @@ const isDirectoryType = (type: DataType): boolean => {
   return type === 'image_directory' || type === 'data_folder'
 }
 
+// Editable feedback edge sub-panel
+function FeedbackEdgePanel({
+  edgeData,
+  onUpdateMultiPass,
+}: {
+  edgeData: FeedbackEdgeData
+  onUpdateMultiPass?: (groupName: string, multiPass: FeedbackEdgeData['multiPass']) => void
+}) {
+  const mp = edgeData.multiPass
+  const groupName = edgeData.groupName
+  const isScheduleMode = !!mp?.schedule
+  const iterCount = mp?.schedule?.length ?? mp?.count ?? 0
+
+  // Local edit state for schedule rows
+  const [scheduleRows, setScheduleRows] = useState<string[]>(
+    () => mp?.schedule?.map(row => JSON.stringify(row)) ?? []
+  )
+  const [count, setCount] = useState<number>(mp?.count ?? 1)
+  const [expressions, setExpressions] = useState<[string, string][]>(
+    () => mp?.expressions ? Object.entries(mp.expressions) : []
+  )
+  const [conditionScript, setConditionScript] = useState<string>(mp?.condition?.script ?? '')
+  const [conditionInputs, setConditionInputs] = useState<string>(
+    mp?.condition?.inputs ? JSON.stringify(mp.condition.inputs) : ''
+  )
+  const [conditionArgs, setConditionArgs] = useState<string>(
+    mp?.condition?.args ? JSON.stringify(mp.condition.args) : ''
+  )
+
+  // Per-field JSON-validity state (red border when invalid). Empty strings count as valid.
+  const [invalid, setInvalid] = useState<{
+    schedule: Set<number>
+    conditionInputs: boolean
+    conditionArgs: boolean
+  }>({ schedule: new Set(), conditionInputs: false, conditionArgs: false })
+
+  // Reset local state when edge changes
+  useEffect(() => {
+    setScheduleRows(mp?.schedule?.map(row => JSON.stringify(row)) ?? [])
+    setCount(mp?.count ?? 1)
+    setExpressions(mp?.expressions ? Object.entries(mp.expressions) : [])
+    setConditionScript(mp?.condition?.script ?? '')
+    setConditionInputs(mp?.condition?.inputs ? JSON.stringify(mp.condition.inputs) : '')
+    setConditionArgs(mp?.condition?.args ? JSON.stringify(mp.condition.args) : '')
+    setInvalid({ schedule: new Set(), conditionInputs: false, conditionArgs: false })
+  }, [mp])
+
+  const tryParse = (s: string): { ok: true; value: unknown } | { ok: false } => {
+    try { return { ok: true, value: JSON.parse(s) } } catch { return { ok: false } }
+  }
+
+  const commitChanges = (overrides?: {
+    schedule?: Record<string, unknown>[]
+    count?: number
+    expressions?: Record<string, string>
+    conditionScript?: string
+    feedback?: Record<string, string>
+  }) => {
+    if (!onUpdateMultiPass) return
+
+    // Pre-validate all JSON; if anything fails, mark invalid fields and skip commit.
+    const badScheduleRows = new Set<number>()
+    let parsedSchedule: Record<string, unknown>[] | undefined
+    if (isScheduleMode && !overrides?.schedule) {
+      parsedSchedule = []
+      scheduleRows.forEach((row, i) => {
+        if (row === '') {
+          parsedSchedule!.push({})
+          return
+        }
+        const r = tryParse(row)
+        if (!r.ok) {
+          badScheduleRows.add(i)
+        } else {
+          parsedSchedule!.push(r.value as Record<string, unknown>)
+        }
+      })
+    }
+
+    const newScript = overrides?.conditionScript !== undefined ? overrides.conditionScript : conditionScript
+    let parsedInputs: unknown
+    let parsedArgs: unknown
+    let badInputs = false
+    let badArgs = false
+    if (newScript) {
+      if (conditionInputs) {
+        const r = tryParse(conditionInputs)
+        if (!r.ok) badInputs = true
+        else parsedInputs = r.value
+      }
+      if (conditionArgs) {
+        const r = tryParse(conditionArgs)
+        if (!r.ok) badArgs = true
+        else parsedArgs = r.value
+      }
+    }
+
+    if (badScheduleRows.size > 0 || badInputs || badArgs) {
+      setInvalid({ schedule: badScheduleRows, conditionInputs: badInputs, conditionArgs: badArgs })
+      return
+    }
+    setInvalid({ schedule: new Set(), conditionInputs: false, conditionArgs: false })
+
+    const updated: FeedbackEdgeData['multiPass'] = {
+      ...mp,
+      feedback: overrides?.feedback ?? mp.feedback,
+    }
+
+    if (isScheduleMode) {
+      updated.schedule = overrides?.schedule ?? parsedSchedule!
+      delete updated.expressions
+      delete updated.count
+    } else {
+      const exprs = overrides?.expressions ?? Object.fromEntries(expressions)
+      updated.expressions = exprs
+      updated.count = overrides?.count ?? count
+      delete updated.schedule
+    }
+
+    if (newScript) {
+      updated.condition = {
+        script: newScript,
+        inputs: parsedInputs as Record<string, string> | undefined,
+        args: parsedArgs as Record<string, unknown> | undefined,
+      }
+    } else {
+      delete updated.condition
+    }
+
+    onUpdateMultiPass(groupName, updated)
+  }
+
+  return (
+    <div className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-900 flex flex-col">
+      <div className="p-4 border-b border-slate-300 dark:border-slate-700">
+        <h2 className="text-slate-900 dark:text-white font-semibold text-sm">Multi-Pass Feedback</h2>
+        <span className="text-slate-400 dark:text-slate-500 text-xs">{groupName}</span>
+      </div>
+      <div className="p-4 space-y-4 overflow-y-auto flex-1">
+        {/* Iteration count display */}
+        <div>
+          <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Iterations</label>
+          <div className="px-3 py-2 bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700 rounded text-purple-700 dark:text-purple-300 text-sm font-mono">
+            {String(iterCount)}
+          </div>
+        </div>
+
+        {/* Schedule mode */}
+        {isScheduleMode && (
+          <div>
+            <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Schedule</label>
+            <div className="space-y-1">
+              {scheduleRows.map((row, i) => (
+                <div key={i} className="flex gap-1">
+                  <span className="text-slate-400 dark:text-slate-500 text-xs font-mono w-5 pt-1 flex-shrink-0">{i}:</span>
+                  <input
+                    type="text"
+                    value={row}
+                    onChange={(e) => {
+                      const next = [...scheduleRows]
+                      next[i] = e.target.value
+                      setScheduleRows(next)
+                    }}
+                    onBlur={() => commitChanges()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                    className={`flex-1 px-2 py-1 bg-white dark:bg-slate-800 border rounded text-xs font-mono text-slate-700 dark:text-slate-300 ${
+                      invalid.schedule.has(i)
+                        ? 'border-red-500 dark:border-red-500'
+                        : 'border-slate-300 dark:border-slate-700 focus:border-purple-500'
+                    }`}
+                  />
+                  <button
+                    onClick={() => {
+                      const next = scheduleRows.filter((_, j) => j !== i)
+                      setScheduleRows(next)
+                      // Row removal triggers a fresh validate+commit via overrides:
+                      // parse each remaining row; if any are invalid, commitChanges will mark them.
+                      const parsed: Record<string, unknown>[] = []
+                      let allOk = true
+                      for (const r of next) {
+                        if (r === '') { parsed.push({}); continue }
+                        try { parsed.push(JSON.parse(r)) } catch { allOk = false; break }
+                      }
+                      if (allOk) commitChanges({ schedule: parsed })
+                      else commitChanges()
+                    }}
+                    className="px-1.5 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 text-xs"
+                    title="Remove iteration"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                const template = scheduleRows.length > 0 ? scheduleRows[scheduleRows.length - 1] : '{}'
+                const next = [...scheduleRows, template]
+                setScheduleRows(next)
+                const parsed = next.map(r => { try { return JSON.parse(r) } catch { return {} } })
+                commitChanges({ schedule: parsed })
+              }}
+              className="mt-1 text-xs text-purple-500 hover:text-purple-400 dark:text-purple-400 dark:hover:text-purple-300"
+            >
+              + Add iteration
+            </button>
+          </div>
+        )}
+
+        {/* Expressions mode */}
+        {!isScheduleMode && (
+          <>
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Count</label>
+              <input
+                type="number"
+                min={1}
+                value={count}
+                onChange={(e) => setCount(parseInt(e.target.value) || 1)}
+                onBlur={() => commitChanges({ count })}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-sm font-mono text-slate-700 dark:text-slate-300 focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Expressions</label>
+              <div className="space-y-1">
+                {expressions.map(([name, expr], i) => (
+                  <div key={i} className="flex gap-1 items-center">
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => {
+                        const next = [...expressions] as [string, string][]
+                        next[i] = [e.target.value, expr]
+                        setExpressions(next)
+                      }}
+                      onBlur={() => commitChanges()}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                      placeholder="name"
+                      className="w-1/3 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-mono text-slate-700 dark:text-slate-300 focus:border-purple-500"
+                    />
+                    <span className="text-slate-400 dark:text-slate-500 text-xs">=</span>
+                    <input
+                      type="text"
+                      value={expr}
+                      onChange={(e) => {
+                        const next = [...expressions] as [string, string][]
+                        next[i] = [name, e.target.value]
+                        setExpressions(next)
+                      }}
+                      onBlur={() => commitChanges()}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                      placeholder="iter * 2 + 1"
+                      className="flex-1 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs font-mono text-slate-700 dark:text-slate-300 focus:border-purple-500"
+                    />
+                    <button
+                      onClick={() => {
+                        const next = expressions.filter((_, j) => j !== i)
+                        setExpressions(next)
+                        commitChanges({ expressions: Object.fromEntries(next) })
+                      }}
+                      className="px-1.5 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 text-xs"
+                      title="Remove expression"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const next = [...expressions, ['', 'iter'] as [string, string]]
+                  setExpressions(next)
+                }}
+                className="mt-1 text-xs text-purple-500 hover:text-purple-400 dark:text-purple-400 dark:hover:text-purple-300"
+              >
+                + Add expression
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Condition script */}
+        <div>
+          <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Condition Script (optional)</label>
+          <input
+            type="text"
+            value={conditionScript}
+            onChange={(e) => setConditionScript(e.target.value)}
+            onBlur={() => commitChanges({ conditionScript })}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            placeholder="conditions/has_converged.py"
+            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-700 rounded text-xs font-mono text-teal-700 dark:text-teal-300 focus:border-teal-500"
+          />
+          {conditionScript && (
+            <>
+              <p className="text-teal-500 dark:text-teal-400 text-[10px] mt-1">
+                Python script with evaluate() function, called after each iteration
+              </p>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <label className="block text-slate-500 dark:text-slate-400 text-[10px] mb-0.5">Inputs (JSON, optional)</label>
+                  <input
+                    type="text"
+                    value={conditionInputs}
+                    onChange={(e) => setConditionInputs(e.target.value)}
+                    onBlur={() => commitChanges({ conditionScript })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                    placeholder='{"cleaned_csv": "$cleaned_signal"}'
+                    className={`w-full px-2 py-1 bg-white dark:bg-slate-800 border rounded text-[10px] font-mono text-teal-700 dark:text-teal-300 ${
+                      invalid.conditionInputs
+                        ? 'border-red-500 dark:border-red-500'
+                        : 'border-teal-300 dark:border-teal-700 focus:border-teal-500'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 dark:text-slate-400 text-[10px] mb-0.5">Args (JSON, optional)</label>
+                  <input
+                    type="text"
+                    value={conditionArgs}
+                    onChange={(e) => setConditionArgs(e.target.value)}
+                    onBlur={() => commitChanges({ conditionScript })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                    placeholder='{"tolerance": 0.01}'
+                    className={`w-full px-2 py-1 bg-white dark:bg-slate-800 border rounded text-[10px] font-mono text-teal-700 dark:text-teal-300 ${
+                      invalid.conditionArgs
+                        ? 'border-red-500 dark:border-red-500'
+                        : 'border-teal-300 dark:border-teal-700 focus:border-teal-500'
+                    }`}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Feedback connections */}
+        {mp?.feedback && Object.keys(mp.feedback).length > 0 && (
+          <div>
+            <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Feedback Connections</label>
+            <div className="space-y-1">
+              {Object.entries(mp.feedback).map(([src, tgt]) => (
+                <div key={src} className="flex items-center gap-1">
+                  <div className="flex-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded text-xs font-mono text-purple-600 dark:text-purple-400">
+                    {src} &rarr; {tgt}
+                  </div>
+                  {onUpdateMultiPass && (
+                    <button
+                      onClick={() => {
+                        const newFeedback = { ...mp.feedback }
+                        delete newFeedback[src]
+                        commitChanges({ feedback: newFeedback })
+                      }}
+                      className="px-1.5 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 text-xs"
+                      title="Remove feedback connection"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface PropertiesPanelProps {
   selectedNode: Node | null
+  selectedEdge?: Edge | null
   edges: Edge[]
   onUpdateNode: (id: string, data: Partial<StepData | ParameterData | DataNodeData>) => void
   onDeleteNode: (id: string) => void
@@ -72,10 +447,12 @@ interface PropertiesPanelProps {
   tasks: TaskInfo[]
   runEligibility?: RunEligibility
   freshness?: FreshnessInfo
+  onUpdateMultiPass?: (groupName: string, multiPass: FeedbackEdgeData['multiPass']) => void
 }
 
 export default function PropertiesPanel({
   selectedNode,
+  selectedEdge,
   edges,
   onUpdateNode,
   onDeleteNode,
@@ -89,6 +466,7 @@ export default function PropertiesPanel({
   tasks,
   runEligibility,
   freshness,
+  onUpdateMultiPass,
 }: PropertiesPanelProps) {
   const [editData, setEditData] = useState<Record<string, unknown>>({})
   const [showRefs, setShowRefs] = useState(true)
@@ -157,7 +535,54 @@ export default function PropertiesPanel({
     return connections
   }, [selectedNode, paramEdgesToStep])
 
+  // Find which args are targets of feedback edges (multi-pass)
+  // Returns a map of argKey -> { sourceSpec, groupName }
+  const feedbackArgs = useMemo(() => {
+    if (!selectedNode || selectedNode.type !== 'step') {
+      return new Map<string, { sourceSpec: string; groupName: string }>()
+    }
+
+    const result = new Map<string, { sourceSpec: string; groupName: string }>()
+    for (const edge of edges) {
+      if (
+        edge.type === 'feedback' &&
+        edge.target === selectedNode.id &&
+        edge.targetHandle &&
+        edge.data
+      ) {
+        const edgeData = edge.data as unknown as FeedbackEdgeData
+        // Find the source spec from the feedback mapping
+        const mp = edgeData.multiPass
+        let sourceSpec = ''
+        if (mp?.feedback) {
+          for (const [src, tgt] of Object.entries(mp.feedback)) {
+            const [, tgtFlag] = tgt.split('.', 2)
+            if (tgtFlag === edge.targetHandle) {
+              sourceSpec = src
+              break
+            }
+          }
+        }
+        result.set(edge.targetHandle, {
+          sourceSpec,
+          groupName: edgeData.groupName,
+        })
+      }
+    }
+    return result
+  }, [selectedNode, edges])
+
   if (!selectedNode) {
+    // Show feedback edge properties if selected
+    if (selectedEdge?.type === 'feedback' && selectedEdge.data) {
+      return (
+        <FeedbackEdgePanel
+          edgeData={selectedEdge.data as unknown as FeedbackEdgeData}
+          onUpdateMultiPass={onUpdateMultiPass}
+        />
+      )
+    }
+
     return (
       <div className="flex-1 bg-slate-100 dark:bg-slate-900 border-l border-slate-300 dark:border-slate-700 p-4">
         <p className="text-slate-400 dark:text-slate-500 text-sm">Select a node to edit its properties</p>
@@ -602,6 +1027,22 @@ export default function PropertiesPanel({
                         <span>{typeInfo.label}</span>
                       </div>
                     )}
+                    {feedbackArgs.has(key) && (() => {
+                      const fb = feedbackArgs.get(key)!
+                      return (
+                        <div className="mt-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded text-[10px]">
+                          <span className="text-purple-500 dark:text-purple-400">&#8617; feedback</span>
+                          {fb.sourceSpec && (
+                            <span className="text-purple-400 dark:text-purple-500 ml-1 font-mono">
+                              from {fb.sourceSpec.replace(/^-+/, '')}
+                            </span>
+                          )}
+                          <span className="text-purple-400/60 dark:text-purple-500/60 ml-1">
+                            ({fb.groupName})
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -757,6 +1198,23 @@ export default function PropertiesPanel({
                     {argSchema && isBoolFlag && argSchema.description && !isConnected && (
                       <div className="text-xs ml-1 text-slate-400 dark:text-slate-500">{argSchema.description}</div>
                     )}
+                    {/* Feedback indicator */}
+                    {feedbackArgs.has(key) && (() => {
+                      const fb = feedbackArgs.get(key)!
+                      return (
+                        <div className="mt-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded text-[10px]">
+                          <span className="text-purple-500 dark:text-purple-400">&#8617; feedback</span>
+                          {fb.sourceSpec && (
+                            <span className="text-purple-400 dark:text-purple-500 ml-1 font-mono">
+                              from {fb.sourceSpec.replace(/^-+/, '')}
+                            </span>
+                          )}
+                          <span className="text-purple-400/60 dark:text-purple-500/60 ml-1">
+                            ({fb.groupName})
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
