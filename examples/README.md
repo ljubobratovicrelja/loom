@@ -49,6 +49,21 @@ loom examples/linear/pipeline.yml --clean-list
 | [groups](groups/) | Visual grouping: organize steps under named `group:` blocks. |
 | [image-processing](image-processing/) | Image pipeline with URL data sources and automatic downloads. |
 | [curve-fitting](curve-fitting/) | Scientific workflow: generate data, fit a model, visualize results. |
+| [env-vars](env-vars/) | Portable pipelines using `${ENV_VAR}` substitution in paths and args. |
+
+## Environment Variables
+
+Any user string in a pipeline (data-node paths, parameters, step args, task
+script paths) may reference environment variables with the brace form
+`${ENV_VAR}`. References may be embedded anywhere and used multiple times, e.g.
+`${SCRATCH}/loom-out/${RUN_ID}/stats.json`. Names follow POSIX rules
+(`[A-Za-z_][A-Za-z0-9_]*`).
+
+This is distinct from a bare `$name`, which remains an exact-match reference to
+a `data` node or `parameter`. A data-node path may itself contain `${ENV_VAR}`
+(composition). An unset variable fails fast with an error naming the variable
+and where it was referenced — no subprocess is started. See
+[env-vars](env-vars/) for a worked example.
 
 ## Structure
 

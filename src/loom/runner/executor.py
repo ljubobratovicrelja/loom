@@ -107,6 +107,8 @@ class PipelineExecutor:
             else:
                 # If the arg references a data variable (file path), resolve
                 # to an absolute path so scripts work regardless of CWD.
+                # Embedded ${ENV} args fall through to str(resolved) since
+                # value[1:] is not a bare data-variable name (already expanded).
                 arg_str: str
                 if (
                     isinstance(value, str)

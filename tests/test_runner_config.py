@@ -183,6 +183,85 @@ class TestPipelineConfigResolveValue:
         assert config.resolve_value("$name") == "from_variable"
 
 
+class TestPipelineConfigEnvVars:
+    """Tests for ${ENV_VAR} substitution through resolve_* methods."""
+
+    @pytest.fixture
+    def config(self) -> PipelineConfig:
+        """Config whose data/params reference environment variables."""
+        return PipelineConfig(
+            variables={"signal": "${DATA_ROOT}/raw/signal.csv"},
+            parameters={"out_dir": "${SCRATCH}/run", "samples": 100},
+            steps=[],
+            base_dir=Path("/pipeline"),
+        )
+
+    def test_data_node_path_composition(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A bare $ref to a path containing ${ENV} is expanded."""
+        monkeypatch.setenv("DATA_ROOT", "/srv/data")
+        assert config.resolve_value("$signal") == "/srv/data/raw/signal.csv"
+
+    def test_string_parameter_composition(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A bare $ref to a string param containing ${ENV} is expanded."""
+        monkeypatch.setenv("SCRATCH", "/tmp")
+        assert config.resolve_value("$out_dir") == "/tmp/run"
+
+    def test_numeric_parameter_untouched(self, config: PipelineConfig) -> None:
+        """Non-string parameters are returned untouched."""
+        assert config.resolve_value("$samples") == 100
+
+    def test_embedded_env_literal(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An embedded ${ENV} literal (not a $ref) is expanded."""
+        monkeypatch.setenv("RUN_ID", "r1")
+        assert config.resolve_value("prefix-${RUN_ID}") == "prefix-r1"
+
+    def test_resolve_path_embedded_env_absolute(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """resolve_path expands ${ENV} then keeps an absolute path absolute."""
+        monkeypatch.setenv("DATA_ROOT", "/srv/data")
+        assert config.resolve_path("$signal") == Path("/srv/data/raw/signal.csv")
+
+    def test_resolve_path_embedded_env_relative(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A relative expanded path is made absolute against base_dir."""
+        monkeypatch.setenv("SUB", "nested")
+        assert config.resolve_path("data/${SUB}/x.csv") == Path("/pipeline/data/nested/x.csv")
+
+    def test_resolve_value_with_loop_embedded_env(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """resolve_value_with_loop expands embedded ${ENV} args."""
+        monkeypatch.setenv("RUN_ID", "r1")
+        assert config.resolve_value_with_loop("id-${RUN_ID}", {}) == "id-r1"
+
+    def test_resolve_script_path_env(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """resolve_script_path expands ${ENV} in the script path."""
+        monkeypatch.setenv("TOOLS", "/opt/tools")
+        assert config.resolve_script_path("${TOOLS}/x.py") == Path("/opt/tools/x.py")
+
+    def test_unset_env_raises(
+        self, config: PipelineConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unset variable raises with the data-node context."""
+        monkeypatch.delenv("DATA_ROOT", raising=False)
+        with pytest.raises(
+            ValueError,
+            match=r"environment variable 'DATA_ROOT' is not set "
+            r"\(referenced in data node 'signal'\)",
+        ):
+            config.resolve_value("$signal")
+
+
 class TestPipelineConfigStepLookup:
     """Tests for step lookup methods."""
 

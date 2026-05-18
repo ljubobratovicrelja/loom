@@ -188,6 +188,44 @@ class TestPipelineExecutorBuildCommand:
         assert "--verbose" in cmd
 
 
+class TestPipelineExecutorEnvVars:
+    """Integration: ${ENV_VAR} expansion through build_command."""
+
+    def test_build_command_expands_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A ${DATA_ROOT} data path and ${RUN_ID} arg are expanded."""
+        monkeypatch.setenv("DATA_ROOT", "/srv/data")
+        monkeypatch.setenv("RUN_ID", "r1")
+        config = PipelineConfig(
+            variables={"signal": "${DATA_ROOT}/raw/signal.csv"},
+            parameters={},
+            steps=[],
+        )
+        step = StepConfig(
+            name="gen",
+            script="t.py",
+            inputs={"data": "$signal"},
+            args={"--run-id": "${RUN_ID}"},
+        )
+        cmd = PipelineExecutor(config).build_command(step)
+
+        assert "/srv/data/raw/signal.csv" in cmd
+        assert Path("/srv/data/raw/signal.csv").is_absolute()
+        assert "--run-id" in cmd
+        assert cmd[cmd.index("--run-id") + 1] == "r1"
+
+    def test_build_command_unset_env_aborts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An unset variable raises before any subprocess is launched."""
+        monkeypatch.delenv("DATA_ROOT", raising=False)
+        config = PipelineConfig(
+            variables={"signal": "${DATA_ROOT}/raw/signal.csv"},
+            parameters={},
+            steps=[],
+        )
+        step = StepConfig(name="gen", script="t.py", inputs={"data": "$signal"})
+        with pytest.raises(ValueError, match="environment variable 'DATA_ROOT'"):
+            PipelineExecutor(config).build_command(step)
+
+
 class TestPipelineExecutorPathResolution:
     """Tests for path resolution in build_command from a YAML file."""
 

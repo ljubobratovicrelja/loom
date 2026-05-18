@@ -3,6 +3,7 @@
 from .clean import CleanResult, clean_pipeline_data, get_cleanable_paths
 from .cli import main
 from .config import PipelineConfig, StepConfig
+from .env import EnvVarError, expand_env
 from .executor import PipelineExecutor
 from .orchestrator import EventType, OrchestratorEvent, PipelineOrchestrator, StepResult
 from .url import (
@@ -18,6 +19,8 @@ from .url import (
 __all__ = [
     "PipelineConfig",
     "StepConfig",
+    "EnvVarError",
+    "expand_env",
     "PipelineExecutor",
     "PipelineOrchestrator",
     "OrchestratorEvent",

@@ -39,6 +39,15 @@ for pipeline in "$EXAMPLES_DIR"/*/pipeline.yml; do
 
     cd "$example_dir"
 
+    # The env-vars example references ${DATA_ROOT}/${SCRATCH}/${RUN_ID};
+    # export sane defaults so the suite stays green.
+    if [ "$example_name" = "env-vars" ]; then
+        ENV_VARS_TMP="$(mktemp -d)"
+        export DATA_ROOT="$ENV_VARS_TMP"
+        export SCRATCH="$ENV_VARS_TMP"
+        export RUN_ID="example"
+    fi
+
     # Clean data before running to ensure fresh execution
     echo "Cleaning existing data..."
     loom pipeline.yml --clean -y 2>/dev/null || true

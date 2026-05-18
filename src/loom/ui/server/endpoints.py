@@ -337,7 +337,7 @@ async def check_path(path: str = Query(..., description="Path to check")) -> dic
 
     Used for real-time validation when editing data node paths in the UI.
     """
-    from loom.runner import PipelineConfig
+    from loom.runner import EnvVarError, PipelineConfig
 
     if not state.config_path or not state.config_path.exists():
         return {"exists": False, "resolved_path": None}
@@ -347,6 +347,8 @@ async def check_path(path: str = Query(..., description="Path to check")) -> dic
         # Resolve $variable references and parameter references in path
         resolved = config.resolve_path(path)
         return {"exists": resolved.exists(), "resolved_path": str(resolved)}
+    except EnvVarError as e:
+        return {"exists": False, "resolved_path": None, "error": str(e)}
     except Exception:
         return {"exists": False, "resolved_path": None}
 

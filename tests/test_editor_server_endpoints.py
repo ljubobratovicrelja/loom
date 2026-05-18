@@ -689,6 +689,48 @@ pipeline: []
         assert data["missing"] is False
 
 
+class TestEnvVarEndpoints:
+    """Endpoints degrade gracefully when a referenced env var is unset."""
+
+    def test_check_path_unset_env_returns_200(self, tmp_path: Path) -> None:
+        """An unset ${ENV} → 200 {"exists": false} with an error message."""
+        import os
+
+        os.environ.pop("MISSING_ROOT", None)
+        config = tmp_path / "pipeline.yml"
+        config.write_text("data: {}\npipeline: []\n")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.post("/api/check-path", params={"path": "${MISSING_ROOT}/x.csv"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["exists"] is False
+        assert "MISSING_ROOT" in body["error"]
+
+    def test_data_status_unset_env_marks_false(self, tmp_path: Path) -> None:
+        """An unset ${ENV} in a data path → node False, no 500."""
+        import os
+
+        os.environ.pop("MISSING_ROOT", None)
+        config = tmp_path / "pipeline.yml"
+        config.write_text("""
+data:
+  signal:
+    type: csv
+    path: ${MISSING_ROOT}/signal.csv
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/data/status")
+
+        assert response.status_code == 200
+        assert response.json()["signal"] is False
+
+
 class TestGetConfig:
     """Tests for GET /api/config endpoint."""
 

@@ -480,3 +480,23 @@ class TestUpdateYamlFromGraphParamRefs:
         # parameterRefs should be removed, and editor section cleaned up
         if "editor" in yaml_data:
             assert "parameterRefs" not in yaml_data["editor"]
+
+
+class TestEnvVarRoundtrip:
+    """${ENV_VAR} references round-trip verbatim through the graph."""
+
+    def test_data_path_env_preserved(self) -> None:
+        """A data-node path with embedded ${ENV} is preserved verbatim."""
+        yaml_data = {
+            "data": {
+                "signal": {
+                    "type": "csv",
+                    "path": "${DATA_ROOT}/raw/${RUN_ID}/signal.csv",
+                }
+            },
+            "pipeline": [{"name": "s", "task": "t.py", "inputs": {"data": "$signal"}}],
+        }
+
+        result = graph_to_yaml(yaml_to_graph(yaml_data))
+
+        assert result["data"]["signal"]["path"] == "${DATA_ROOT}/raw/${RUN_ID}/signal.csv"

@@ -1,0 +1,26 @@
+data:
+  signal_csv:
+    type: csv
+    path: ${DATA_ROOT}/raw/signal.csv
+  stats_json:
+    type: json
+    path: ${SCRATCH}/loom-out/${RUN_ID}/stats.json
+
+parameters:
+  num_samples: 100
+
+pipeline:
+  - name: generate_signal
+    task: tasks/generate_data.py
+    outputs:
+      --output: $signal_csv
+    args:
+      --samples: $num_samples
+      --run-id: ${RUN_ID}
+
+  - name: compute_stats
+    task: tasks/compute_stats.py
+    inputs:
+      data: $signal_csv
+    outputs:
+      --output: $stats_json

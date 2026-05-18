@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from .env import expand_env
 from .multi_pass import MultiPassGroupConfig, parse_multi_pass_config
 from .url import URL_CACHE_DIR_NAME, ensure_url_downloaded, is_url
 
@@ -265,35 +266,52 @@ class PipelineConfig:
         Returns:
             Resolved value.
         """
-        if not isinstance(value, str) or not value.startswith("$"):
+        if not isinstance(value, str):
             return value
-        ref_name = value[1:]
-        if ref_name in loop_bindings:
-            return loop_bindings[ref_name]
+        # Bare $name loop binding takes precedence over data/parameters.
+        if value.startswith("$") and not value.startswith("${"):
+            ref_name = value[1:]
+            if ref_name in loop_bindings:
+                return loop_bindings[ref_name]
+        # Otherwise defer to resolve_value (also expands embedded ${ENV}).
         return self.resolve_value(value)
 
     def resolve_value(self, value: Any) -> Any:
-        """Resolve $variable and $parameter references.
+        """Resolve $variable, $parameter, and ${ENV_VAR} references.
+
+        Bare ``$name`` is an exact-match data/parameter reference. The brace
+        form ``${ENV_VAR}`` is substituted from the process environment and may
+        be embedded anywhere in a string (multiple per string). A stored
+        data-node path or string parameter may itself contain ``${ENV_VAR}``,
+        which is expanded after the reference is resolved (composition).
 
         Args:
-            value: Value to resolve. If string starting with $, looks up
-                   in variables first, then parameters. Otherwise returns as-is.
+            value: Value to resolve. Non-strings are returned untouched.
 
         Returns:
             Resolved value.
+
+        Raises:
+            ValueError: If a bare $name reference is unknown.
+            EnvVarError: If a referenced environment variable is not set.
         """
-        if not isinstance(value, str) or not value.startswith("$"):
+        if not isinstance(value, str):
             return value
 
-        ref_name = value[1:]  # Strip leading $
+        # Bare $name (not ${...}): exact-match data/parameter reference.
+        if value.startswith("$") and not value.startswith("${"):
+            ref_name = value[1:]
+            if ref_name in self.variables:
+                return expand_env(self.variables[ref_name], where=f"data node '{ref_name}'")
+            if ref_name in self.parameters:
+                param = self.parameters[ref_name]
+                if isinstance(param, str):
+                    return expand_env(param, where=f"parameter '{ref_name}'")
+                return param
+            raise ValueError(f"Unknown reference: {value}")
 
-        # Try variables first, then parameters
-        if ref_name in self.variables:
-            return self.variables[ref_name]
-        if ref_name in self.parameters:
-            return self.parameters[ref_name]
-
-        raise ValueError(f"Unknown reference: {value}")
+        # Plain literal or embedded/pure ${ENV_VAR}: expand env, else pass through.
+        return expand_env(value)
 
     def resolve_path(self, value: Any) -> Path:
         """Resolve a value to an absolute path.
@@ -325,6 +343,7 @@ class PipelineConfig:
         Returns:
             Absolute Path object.
         """
+        script = expand_env(script, where="task script")
         path = Path(script)
         if not path.is_absolute():
             path = self.base_dir / path
