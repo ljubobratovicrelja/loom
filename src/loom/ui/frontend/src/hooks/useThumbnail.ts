@@ -28,7 +28,7 @@ export function useThumbnail(
   dataKey: string,
   dataType: string,
   exists: boolean | undefined,
-  path: string
+  path: string,
 ): ThumbnailState {
   const [state, setState] = useState<ThumbnailState>({
     loading: false,
@@ -111,7 +111,7 @@ export function useThumbnail(
           // Fetch thumbnail using path-based endpoint (works without saving config)
           const response = await fetch(
             `${API_BASE}/thumbnail/by-path?path=${encodeURIComponent(path)}&type=${encodeURIComponent(dataType)}`,
-            { signal: abortControllerRef.current!.signal }
+            { signal: abortControllerRef.current!.signal },
           )
 
           if (response.status === 204) {
@@ -145,7 +145,7 @@ export function useThumbnail(
           // Fetch text preview using path-based endpoint (works without saving config)
           const response = await fetch(
             `${API_BASE}/preview/by-path?path=${encodeURIComponent(path)}&type=${encodeURIComponent(dataType)}`,
-            { signal: abortControllerRef.current!.signal }
+            { signal: abortControllerRef.current!.signal },
           )
 
           if (!response.ok) {

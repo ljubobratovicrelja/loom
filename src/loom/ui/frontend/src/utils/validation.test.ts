@@ -31,9 +31,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
    */
   function generateUniqueStepName(existingNodes: Node[], baseName: string): string {
     const existingNames = new Set(
-      existingNodes
-        .filter((n) => n.type === 'step')
-        .map((n) => (n.data as StepData).name)
+      existingNodes.filter((n) => n.type === 'step').map((n) => (n.data as StepData).name),
     )
     if (!existingNames.has(baseName)) {
       return baseName
@@ -50,9 +48,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
    */
   function generateUniqueDataName(existingNodes: Node[], baseName: string): string {
     const existingNames = new Set(
-      existingNodes
-        .filter((n) => n.type === 'data')
-        .map((n) => (n.data as DataNodeData).name)
+      existingNodes.filter((n) => n.type === 'data').map((n) => (n.data as DataNodeData).name),
     )
     if (!existingNames.has(baseName)) {
       return baseName
@@ -73,7 +69,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   function addTaskNode(
     state: GraphState,
     taskName: string,
-    options: { validateUniqueness?: boolean } = {}
+    options: { validateUniqueness?: boolean } = {},
   ): GraphState {
     const { validateUniqueness = true } = options // Now defaults to true (fixed)
 
@@ -108,7 +104,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
   function addDataNode(
     state: GraphState,
     dataName: string,
-    options: { validateUniqueness?: boolean } = {}
+    options: { validateUniqueness?: boolean } = {},
   ): GraphState {
     const { validateUniqueness = true } = options // Now defaults to true (fixed)
 
@@ -143,7 +139,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
     const newState = addTaskNode(state, 'extract')
 
     const extractSteps = newState.nodes.filter(
-      (n) => n.type === 'step' && (n.data as StepData).name.startsWith('extract')
+      (n) => n.type === 'step' && (n.data as StepData).name.startsWith('extract'),
     )
     expect(extractSteps.length).toBe(2)
 
@@ -161,7 +157,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
     const newState = addDataNode(state, 'output')
 
     const outputData = newState.nodes.filter(
-      (n) => n.type === 'data' && (n.data as DataNodeData).name.startsWith('output')
+      (n) => n.type === 'data' && (n.data as DataNodeData).name.startsWith('output'),
     )
     expect(outputData.length).toBe(2)
 
@@ -196,7 +192,7 @@ describe('Critical Issue #1: Name Uniqueness Validation', () => {
     const newState = addTaskNode(state, 'extract', { validateUniqueness: false })
 
     const extractSteps = newState.nodes.filter(
-      (n) => n.type === 'step' && (n.data as StepData).name === 'extract'
+      (n) => n.type === 'step' && (n.data as StepData).name === 'extract',
     )
     expect(extractSteps.length).toBe(2)
   })
@@ -240,7 +236,7 @@ describe('Critical Issue #4: Circular Dependency Detection', () => {
     nodes: Node[],
     edges: Edge[],
     newSource: string,
-    newTarget: string
+    newTarget: string,
   ): { valid: boolean; error?: string; cycleNodes?: string[] } {
     // Create temporary graph with the new edge
     const tempEdges = [...edges, { id: 'temp', source: newSource, target: newTarget }]
@@ -292,7 +288,7 @@ describe('Critical Issue #4: Circular Dependency Detection', () => {
       stateWithData2.nodes,
       stateWithData2.edges,
       'data2',
-      'step1'
+      'step1',
     )
 
     expect(validation.valid).toBe(false)

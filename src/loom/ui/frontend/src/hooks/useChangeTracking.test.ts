@@ -79,10 +79,9 @@ describe('useChangeTracking', () => {
 
   describe('change detection', () => {
     it('should not mark dirty on initial mount', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['initial'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['initial'] },
+      })
 
       // Initial render - should not be dirty
       expect(result.current.hasChanges).toBe(false)
@@ -93,10 +92,9 @@ describe('useChangeTracking', () => {
     })
 
     it('should mark dirty when dependencies change', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['initial'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['initial'] },
+      })
 
       expect(result.current.hasChanges).toBe(false)
 
@@ -107,10 +105,9 @@ describe('useChangeTracking', () => {
     })
 
     it('should mark dirty on subsequent changes', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['v1'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['v1'] },
+      })
 
       // First change
       rerender({ deps: ['v2'] })
@@ -144,10 +141,9 @@ describe('useChangeTracking', () => {
 
   describe('markClean', () => {
     it('should set hasChanges to false', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['v1'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['v1'] },
+      })
 
       // Make dirty
       rerender({ deps: ['v2'] })
@@ -164,10 +160,9 @@ describe('useChangeTracking', () => {
 
   describe('skipNextChange', () => {
     it('should skip the next change detection', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['v1'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['v1'] },
+      })
 
       // First change - marks dirty
       rerender({ deps: ['v2'] })
@@ -190,10 +185,9 @@ describe('useChangeTracking', () => {
     })
 
     it('should only skip one change', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['v1'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['v1'] },
+      })
 
       // Skip next change
       act(() => {
@@ -216,10 +210,9 @@ describe('useChangeTracking', () => {
 
   describe('save/restore workflow', () => {
     it('should handle save workflow correctly', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['initial'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['initial'] },
+      })
 
       // Make changes
       rerender({ deps: ['modified'] })
@@ -242,10 +235,9 @@ describe('useChangeTracking', () => {
     })
 
     it('should handle undo/redo restore workflow correctly', () => {
-      const { result, rerender } = renderHook(
-        ({ deps }) => useChangeTracking(deps),
-        { initialProps: { deps: ['initial'] } }
-      )
+      const { result, rerender } = renderHook(({ deps }) => useChangeTracking(deps), {
+        initialProps: { deps: ['initial'] },
+      })
 
       // Make changes
       rerender({ deps: ['modified'] })
@@ -270,7 +262,7 @@ describe('useChangeTracking', () => {
     it('should detect changes in any dependency', () => {
       const { result, rerender } = renderHook(
         ({ nodes, edges }) => useChangeTracking([nodes, edges]),
-        { initialProps: { nodes: [] as string[], edges: [] as string[] } }
+        { initialProps: { nodes: [] as string[], edges: [] as string[] } },
       )
 
       expect(result.current.hasChanges).toBe(false)
@@ -295,10 +287,9 @@ describe('useChangeTracking', () => {
 
 describe('Change Tracking Scenarios', () => {
   it('should handle: load -> edit -> save -> edit', () => {
-    const { result, rerender } = renderHook(
-      ({ state }) => useChangeTracking([state]),
-      { initialProps: { state: 'loaded' } }
-    )
+    const { result, rerender } = renderHook(({ state }) => useChangeTracking([state]), {
+      initialProps: { state: 'loaded' },
+    })
 
     // After load - clean
     expect(result.current.hasChanges).toBe(false)
@@ -321,10 +312,9 @@ describe('Change Tracking Scenarios', () => {
   })
 
   it('should handle: load -> edit -> undo -> redo', () => {
-    const { result, rerender } = renderHook(
-      ({ state }) => useChangeTracking([state]),
-      { initialProps: { state: 'original' } }
-    )
+    const { result, rerender } = renderHook(({ state }) => useChangeTracking([state]), {
+      initialProps: { state: 'original' },
+    })
 
     // After load - clean
     expect(result.current.hasChanges).toBe(false)
@@ -351,10 +341,9 @@ describe('Change Tracking Scenarios', () => {
   })
 
   it('should handle rapid changes (typing)', () => {
-    const { result, rerender } = renderHook(
-      ({ text }) => useChangeTracking([text]),
-      { initialProps: { text: '' } }
-    )
+    const { result, rerender } = renderHook(({ text }) => useChangeTracking([text]), {
+      initialProps: { text: '' },
+    })
 
     // Simulate typing
     const changes = ['H', 'He', 'Hel', 'Hell', 'Hello']

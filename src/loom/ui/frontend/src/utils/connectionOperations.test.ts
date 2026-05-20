@@ -47,7 +47,7 @@ const createEdge = (
   source: string,
   target: string,
   sourceHandle?: string,
-  targetHandle?: string
+  targetHandle?: string,
 ): Edge => ({
   id: `e_${source}_${target}${targetHandle ? `_${targetHandle}` : ''}`,
   source,
@@ -137,12 +137,14 @@ describe('createEdgeId', () => {
 describe('handleConnect', () => {
   describe('non-parameter connections', () => {
     it('should add edge for step → variable connection', () => {
-      const nodes = [
-        createStepNode('step1', 'extract'),
-        createDataNode('var1', 'output'),
-      ]
+      const nodes = [createStepNode('step1', 'extract'), createDataNode('var1', 'output')]
       const edges: Edge[] = []
-      const connection: Connection = { source: 'step1', target: 'var1', sourceHandle: null, targetHandle: null }
+      const connection: Connection = {
+        source: 'step1',
+        target: 'var1',
+        sourceHandle: null,
+        targetHandle: null,
+      }
 
       const result = handleConnect(nodes, edges, connection)
 
@@ -153,12 +155,14 @@ describe('handleConnect', () => {
     })
 
     it('should add edge for variable → step connection', () => {
-      const nodes = [
-        createDataNode('var1', 'input'),
-        createStepNode('step1', 'process'),
-      ]
+      const nodes = [createDataNode('var1', 'input'), createStepNode('step1', 'process')]
       const edges: Edge[] = []
-      const connection: Connection = { source: 'var1', target: 'step1', sourceHandle: null, targetHandle: 'input' }
+      const connection: Connection = {
+        source: 'var1',
+        target: 'step1',
+        sourceHandle: null,
+        targetHandle: 'input',
+      }
 
       const result = handleConnect(nodes, edges, connection)
 
@@ -167,12 +171,22 @@ describe('handleConnect', () => {
     })
 
     it('should fail for connection with missing source', () => {
-      const result = handleConnect([], [], { source: null as unknown as string, target: 'step1', sourceHandle: null, targetHandle: null })
+      const result = handleConnect([], [], {
+        source: null as unknown as string,
+        target: 'step1',
+        sourceHandle: null,
+        targetHandle: null,
+      })
       expect(result.success).toBe(false)
     })
 
     it('should fail for connection with missing target', () => {
-      const result = handleConnect([], [], { source: 'step1', target: null as unknown as string, sourceHandle: null, targetHandle: null })
+      const result = handleConnect([], [], {
+        source: 'step1',
+        target: null as unknown as string,
+        sourceHandle: null,
+        targetHandle: null,
+      })
       expect(result.success).toBe(false)
     })
   })
@@ -374,10 +388,7 @@ describe('handleReconnect', () => {
 
 describe('handleEdgeDrop', () => {
   it('should remove edge when dropped', () => {
-    const nodes = [
-      createStepNode('step1', 'extract'),
-      createDataNode('var1', 'output'),
-    ]
+    const nodes = [createStepNode('step1', 'extract'), createDataNode('var1', 'output')]
     const edge = createEdge('step1', 'var1')
     const edges = [edge]
 
@@ -403,10 +414,7 @@ describe('handleEdgeDrop', () => {
   })
 
   it('should not modify nodes when dropping non-parameter edge', () => {
-    const nodes = [
-      createStepNode('step1', 'extract'),
-      createDataNode('var1', 'output'),
-    ]
+    const nodes = [createStepNode('step1', 'extract'), createDataNode('var1', 'output')]
     const edge = createEdge('step1', 'var1')
 
     const result = handleEdgeDrop(nodes, [edge], edge)
@@ -476,10 +484,7 @@ describe('handleDeleteNode', () => {
       createStepNode('step2', 'process'),
       createDataNode('var1', 'data'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('var1', 'step2'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
     const result = handleDeleteNode(nodes, edges, 'var1')
 

@@ -206,17 +206,19 @@ describe('useHistory', () => {
       const { result } = renderHook(() => useHistory({ onRestore }))
 
       const state: HistoryState = {
-        nodes: [{
-          id: 'node_1',
-          type: 'step',
-          position: { x: 100, y: 200 },
-          data: {
-            name: 'test',
-            nested: { deep: { value: 42 } }
-          }
-        }],
+        nodes: [
+          {
+            id: 'node_1',
+            type: 'step',
+            position: { x: 100, y: 200 },
+            data: {
+              name: 'test',
+              nested: { deep: { value: 42 } },
+            },
+          },
+        ],
         edges: [],
-        parameters: { config: { setting: { enabled: true } } }
+        parameters: { config: { setting: { enabled: true } } },
       }
 
       act(() => result.current.snapshot(state))
@@ -228,8 +230,12 @@ describe('useHistory', () => {
       act(() => result.current.undo(createState(2)))
 
       const restored = onRestore.mock.calls[0][0]
-      expect((restored.nodes[0].data as Record<string, unknown>).nested).toEqual({ deep: { value: 42 } })
-      expect((restored.parameters.config as Record<string, unknown>).setting).toEqual({ enabled: true })
+      expect((restored.nodes[0].data as Record<string, unknown>).nested).toEqual({
+        deep: { value: 42 },
+      })
+      expect((restored.parameters.config as Record<string, unknown>).setting).toEqual({
+        enabled: true,
+      })
     })
 
     it('should handle arrays within state', () => {
@@ -241,10 +247,8 @@ describe('useHistory', () => {
           { id: 'node_1', type: 'step', position: { x: 0, y: 0 }, data: { items: [1, 2, 3] } },
           { id: 'node_2', type: 'variable', position: { x: 0, y: 0 }, data: { name: 'test' } },
         ],
-        edges: [
-          { id: 'edge_1', source: 'node_1', target: 'node_2' },
-        ],
-        parameters: { list: ['a', 'b', 'c'] }
+        edges: [{ id: 'edge_1', source: 'node_1', target: 'node_2' }],
+        parameters: { list: ['a', 'b', 'c'] },
       }
 
       act(() => result.current.snapshot(state))
@@ -278,7 +282,7 @@ describe('useHistory', () => {
           array: [1, 2, 3],
           object: { nested: true },
           date: new Date('2024-01-01'),
-        }
+        },
       }
 
       // Should not throw
@@ -293,7 +297,7 @@ describe('useHistory', () => {
       const states = [1, 2, 3, 4, 5].map(createState)
 
       // Build history
-      states.forEach(state => {
+      states.forEach((state) => {
         act(() => result.current.snapshot(state))
       })
 

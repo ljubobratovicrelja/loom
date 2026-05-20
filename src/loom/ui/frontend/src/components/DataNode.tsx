@@ -82,23 +82,15 @@ function DataNode({ data, id, selected }: NodeProps<DataNodeType>) {
       `}
     >
       {/* Input handle for receiving data from step outputs */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="input"
-        className={colors.handle}
-      />
+      <Handle type="target" position={Position.Left} id="input" className={colors.handle} />
       <div className="px-3 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm flex-shrink-0">{config.icon}</span>
-          <span className="text-slate-900 dark:text-white font-medium text-sm truncate">{data.name}</span>
+          <span className="text-slate-900 dark:text-white font-medium text-sm truncate">
+            {data.name}
+          </span>
         </div>
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="value"
-          className={colors.handle}
-        />
+        <Handle type="source" position={Position.Right} id="value" className={colors.handle} />
       </div>
       {/* Thumbnail/Preview section */}
       {data.exists && (thumbnail.thumbnailUrl || thumbnail.textPreview || thumbnail.loading) && (
@@ -116,7 +108,9 @@ function DataNode({ data, id, selected }: NodeProps<DataNodeType>) {
           {thumbnail.textPreview && (
             <div className="bg-slate-200/80 dark:bg-slate-800/80 rounded p-1.5 font-mono text-[9px] leading-tight text-slate-600 dark:text-slate-300 overflow-hidden">
               {thumbnail.textPreview.lines.map((line, i) => (
-                <div key={i} className="truncate">{line || '\u00A0'}</div>
+                <div key={i} className="truncate">
+                  {line || '\u00A0'}
+                </div>
               ))}
               {thumbnail.textPreview.truncated && (
                 <div className="text-slate-400 dark:text-slate-500">...</div>
@@ -127,9 +121,7 @@ function DataNode({ data, id, selected }: NodeProps<DataNodeType>) {
       )}
       <div className="px-3 pb-1 flex items-center gap-2">
         <span className={`${colors.dollar} text-xs font-mono`}>${data.key}</span>
-        <span className={`${colors.badge} text-[10px] px-1.5 py-0.5 rounded`}>
-          {config.label}
-        </span>
+        <span className={`${colors.badge} text-[10px] px-1.5 py-0.5 rounded`}>{config.label}</span>
         {data.exists === true && (
           <span className="text-teal-500 dark:text-teal-400 text-xs">&#10003;</span>
         )}
@@ -137,10 +129,11 @@ function DataNode({ data, id, selected }: NodeProps<DataNodeType>) {
           <span className="text-slate-400 dark:text-slate-500 text-xs">&#9675;</span>
         )}
       </div>
-      <div className={`px-3 pb-2 text-xs ${colors.value} truncate max-w-[180px] flex items-center gap-1`} title={data.path}>
-        {data.path && isUrl(data.path) && (
-          <Link className="w-3 h-3 flex-shrink-0" />
-        )}
+      <div
+        className={`px-3 pb-2 text-xs ${colors.value} truncate max-w-[180px] flex items-center gap-1`}
+        title={data.path}
+      >
+        {data.path && isUrl(data.path) && <Link className="w-3 h-3 flex-shrink-0" />}
         <span className="truncate">{data.path || '(no path)'}</span>
       </div>
     </div>

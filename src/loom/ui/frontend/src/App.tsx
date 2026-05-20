@@ -1,5 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react'
-import { useNodesState, useEdgesState, type Node, type Edge as FlowEdge, type NodeChange } from '@xyflow/react'
+import {
+  useNodesState,
+  useEdgesState,
+  type Node,
+  type Edge as FlowEdge,
+  type NodeChange,
+} from '@xyflow/react'
 import { AlertTriangle, Info, XCircle, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import AutoLayoutConfirmDialog from './components/AutoLayoutConfirmDialog'
@@ -15,7 +21,11 @@ import TerminalPanel from './components/TerminalPanel'
 import { useApi } from './hooks/useApi'
 import { useStepExecutions } from './hooks/useStepExecutions'
 import { useHistory, type HistoryState } from './hooks/useHistory'
-import { useRunEligibility, getParallelRunEligibility, getGroupRunEligibility } from './hooks/useRunEligibility'
+import {
+  useRunEligibility,
+  getParallelRunEligibility,
+  getGroupRunEligibility,
+} from './hooks/useRunEligibility'
 import { useFreshness } from './hooks/useFreshness'
 import { applyDagreLayout } from './utils/layout'
 import type {
@@ -44,9 +54,9 @@ type Edge = FlowEdge
 
 // Helper to enrich step nodes with input/output type information from task schemas
 function enrichStepNodesWithTypes(nodes: PipelineNode[], tasks: TaskInfo[]): PipelineNode[] {
-  const taskMap = new Map(tasks.map(t => [t.path, t]))
+  const taskMap = new Map(tasks.map((t) => [t.path, t]))
 
-  return nodes.map(node => {
+  return nodes.map((node) => {
     if (node.type !== 'step') return node
 
     const stepData = node.data as StepData
@@ -111,10 +121,10 @@ export default function App() {
 
   // Collapsible sidebar state
   const [leftCollapsed, setLeftCollapsed] = useState(
-    () => localStorage.getItem('loom-ui:leftCollapsed') === 'true'
+    () => localStorage.getItem('loom-ui:leftCollapsed') === 'true',
   )
   const [rightCollapsed, setRightCollapsed] = useState(
-    () => localStorage.getItem('loom-ui:rightCollapsed') === 'true'
+    () => localStorage.getItem('loom-ui:rightCollapsed') === 'true',
   )
 
   useEffect(() => {
@@ -127,7 +137,7 @@ export default function App() {
 
   // Parameter nodes visibility
   const [showParameterNodes, setShowParameterNodes] = useState(
-    () => localStorage.getItem('loom-ui:showParameterNodes') !== 'false'
+    () => localStorage.getItem('loom-ui:showParameterNodes') !== 'false',
   )
 
   useEffect(() => {
@@ -186,10 +196,17 @@ export default function App() {
       setParameters(state.parameters)
       setHasChanges(true)
     },
-    [setNodes, setEdges]
+    [setNodes, setEdges],
   )
 
-  const { snapshot, undo, redo, clear: clearHistory, canUndo, canRedo } = useHistory({
+  const {
+    snapshot,
+    undo,
+    redo,
+    clear: clearHistory,
+    canUndo,
+    canRedo,
+  } = useHistory({
     maxHistory: 50,
     onRestore: handleHistoryRestore,
   })
@@ -203,7 +220,7 @@ export default function App() {
       edges: edgesRef.current,
       parameters: parametersRef.current,
     }),
-    []
+    [],
   )
 
   // Trailing debounce: captures state 300ms after the last change
@@ -218,7 +235,7 @@ export default function App() {
         debounceTimerRef.current = null
       }, SNAPSHOT_DEBOUNCE_MS)
     },
-    [snapshot]
+    [snapshot],
   )
 
   // Clean up debounce timers on unmount
@@ -245,7 +262,23 @@ export default function App() {
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
 
-  const { loadConfig, saveConfig, loadState, loadTasks, loadDataStatus, trashData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error: apiError } = useApi()
+  const {
+    loadConfig,
+    saveConfig,
+    loadState,
+    loadTasks,
+    loadDataStatus,
+    trashData,
+    openPath,
+    validateConfig,
+    previewClean,
+    cleanAllData,
+    listPipelines,
+    openPipeline,
+    checkPath,
+    loading,
+    error: apiError,
+  } = useApi()
 
   // Debounced path check: validates path existence after typing stops
   // Used when editing data node paths to provide instant feedback
@@ -262,13 +295,13 @@ export default function App() {
           nds.map((n) =>
             n.id === nodeId && n.type === 'data'
               ? { ...n, data: { ...n.data, exists: result.exists } }
-              : n
-          )
+              : n,
+          ),
         )
         pathCheckTimerRef.current = null
       }, PATH_CHECK_DEBOUNCE_MS)
     },
-    [checkPath, setNodes]
+    [checkPath, setNodes],
   )
 
   // Validation warnings
@@ -290,7 +323,8 @@ export default function App() {
 
   // Feedback dialog state
   const [feedbackDialog, setFeedbackDialog] = useState<{
-    steps: [StepData, StepData]; groupName: string
+    steps: [StepData, StepData]
+    groupName: string
   } | null>(null)
 
   // Independent step execution hook - each step can run concurrently
@@ -368,16 +402,17 @@ export default function App() {
   const selectedStepNodes = selectedNodes.filter((n) => n.type === 'step')
   const selectedStepNames = selectedStepNodes.map((n) => (n.data as StepData).name)
   const selectedStepName = selectedStepNames.length === 1 ? selectedStepNames[0] : null
-  const selectedDataKey = selectedNodes.length === 1 && selectedNodes[0].type === 'data'
-    ? (selectedNodes[0].data as DataNodeData).key
-    : null
+  const selectedDataKey =
+    selectedNodes.length === 1 && selectedNodes[0].type === 'data'
+      ? (selectedNodes[0].data as DataNodeData).key
+      : null
 
   // Detect if selected steps include exactly one complete group
   // (clicking a group node selects members + neighbors, so we check if any
   // single group has ALL its members within the selection)
   const detectedGroupName = useMemo(() => {
     if (selectedStepNodes.length < 2) return null
-    const selectedIds = new Set(selectedStepNodes.map(n => n.id))
+    const selectedIds = new Set(selectedStepNodes.map((n) => n.id))
 
     // Build map of group name → member node IDs
     const groupMembers = new Map<string, string[]>()
@@ -395,7 +430,7 @@ export default function App() {
     const matchingGroups: string[] = []
     let hasPartialOtherGroup = false
     for (const [groupName, members] of groupMembers) {
-      const selectedCount = members.filter(id => selectedIds.has(id)).length
+      const selectedCount = members.filter((id) => selectedIds.has(id)).length
       if (members.length >= 2 && selectedCount === members.length) {
         matchingGroups.push(groupName)
       } else if (selectedCount > 0 && selectedCount < members.length) {
@@ -423,10 +458,7 @@ export default function App() {
   // Helper to check if all inputs/outputs of a step exist
   const checkStepCompleted = (stepData: StepData, status: Record<string, boolean>): boolean => {
     // Extract variable names from inputs and outputs
-    const varRefs = [
-      ...Object.values(stepData.inputs),
-      ...Object.values(stepData.outputs),
-    ]
+    const varRefs = [...Object.values(stepData.inputs), ...Object.values(stepData.outputs)]
 
     for (const ref of varRefs) {
       if (ref.startsWith('$')) {
@@ -477,7 +509,7 @@ export default function App() {
           }
         }
         return node
-      })
+      }),
     )
   }, [loadDataStatus, setNodes])
 
@@ -505,7 +537,7 @@ export default function App() {
         const pipelineMatch = hash.match(/^pipeline\/(.+)$/)
         if (pipelineMatch) {
           const relativePath = pipelineMatch[1]
-          const matched = pipelineList.find(p => p.relative_path === relativePath)
+          const matched = pipelineList.find((p) => p.relative_path === relativePath)
           if (matched) {
             hashPipelinePath = matched.path
           }
@@ -529,7 +561,7 @@ export default function App() {
           // Apply Dagre layout if no saved layout, otherwise use saved positions
           let layoutedNodes = graph.hasLayout
             ? graph.nodes
-            : applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[]
+            : (applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[])
           // Enrich step nodes with type information from task schemas
           layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
           setNodes(layoutedNodes)
@@ -571,11 +603,14 @@ export default function App() {
                   const data = node.data as StepData
                   const allExist = checkStepCompleted(data, status)
                   if (allExist) {
-                    return { ...node, data: { ...data, executionState: 'completed' as StepExecutionState } }
+                    return {
+                      ...node,
+                      data: { ...data, executionState: 'completed' as StepExecutionState },
+                    }
                   }
                 }
                 return node
-              })
+              }),
             )
           }
 
@@ -606,7 +641,7 @@ export default function App() {
       // Sync URL hash with loaded pipeline (for workspace mode)
       if (state?.isWorkspaceMode && state?.configPath) {
         const pipelineList = pipelines.length > 0 ? pipelines : await listPipelines()
-        const matched = pipelineList.find(p => p.path === state.configPath)
+        const matched = pipelineList.find((p) => p.path === state.configPath)
         if (matched && matched.relative_path) {
           programmaticHashChangeRef.current = true
           window.location.hash = `/pipeline/${matched.relative_path}`
@@ -617,8 +652,20 @@ export default function App() {
       isLoadingRef.current = false
     }
     init()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pipelines is intentionally omitted: used as a cache check, not a reactive dependency
-  }, [loadConfig, loadState, loadTasks, loadDataStatus, validateConfig, listPipelines, openPipeline, setNodes, setEdges, clearHistory, refreshFreshness])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pipelines is intentionally omitted: used as a cache check, not a reactive dependency
+  }, [
+    loadConfig,
+    loadState,
+    loadTasks,
+    loadDataStatus,
+    validateConfig,
+    listPipelines,
+    openPipeline,
+    setNodes,
+    setEdges,
+    clearHistory,
+    refreshFreshness,
+  ])
 
   // Flag to skip hashchange events triggered by our own programmatic hash updates
   const programmaticHashChangeRef = useRef(false)
@@ -702,7 +749,7 @@ export default function App() {
     })
 
     const graph: PipelineGraph = {
-      variables: {},  // Deprecated - kept for compatibility
+      variables: {}, // Deprecated - kept for compatibility
       parameters,
       data,
       nodes: nodes as PipelineGraph['nodes'],
@@ -732,7 +779,19 @@ export default function App() {
       const errorMessage = apiError || 'Failed to save changes. Please try again.'
       alert(`Save failed: ${errorMessage}`)
     }
-  }, [configPath, nodes, edges, parameters, skipSaveConfirmation, parallelEnabled, maxWorkers, multiPassGroups, saveConfig, clearHistory, apiError])
+  }, [
+    configPath,
+    nodes,
+    edges,
+    parameters,
+    skipSaveConfirmation,
+    parallelEnabled,
+    maxWorkers,
+    multiPassGroups,
+    saveConfig,
+    clearHistory,
+    apiError,
+  ])
 
   // Request save - shows confirmation dialog unless skipped
   const handleSave = useCallback(() => {
@@ -754,8 +813,8 @@ export default function App() {
       eds.map((e) =>
         e.type === 'feedback' && e.data && ('labelOffsetX' in e.data || 'labelOffsetY' in e.data)
           ? { ...e, data: { ...e.data, labelOffsetX: undefined, labelOffsetY: undefined } }
-          : e
-      )
+          : e,
+      ),
     )
     clearLayoutOnSave.current = true
     await performSave()
@@ -774,10 +833,10 @@ export default function App() {
   // Create feedback connection from two selected step nodes
   const handleCreateFeedback = useCallback(() => {
     const currentNodes = nodesRef.current
-    const selected = currentNodes.filter(n => n.selected)
+    const selected = currentNodes.filter((n) => n.selected)
 
     // Require exactly 2 step nodes
-    const stepNodes = selected.filter(n => n.type === 'step')
+    const stepNodes = selected.filter((n) => n.type === 'step')
     if (stepNodes.length !== 2) {
       alert('Select exactly two step nodes to create a feedback connection.')
       return
@@ -797,95 +856,107 @@ export default function App() {
   }, [])
 
   // Handle feedback dialog confirmation
-  const handleFeedbackConfirm = useCallback((result: FeedbackResult) => {
-    setFeedbackDialog(null)
+  const handleFeedbackConfirm = useCallback(
+    (result: FeedbackResult) => {
+      setFeedbackDialog(null)
 
-    // Snapshot for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-
-    const groupName = feedbackDialog!.groupName
-    const sourceSpec = `${result.sourceStepName}.${result.sourceOutputFlag}`
-    const targetSpec = `${result.targetStepName}.${result.targetInputFlag}`
-
-    // Update multiPassGroups: add feedback mapping
-    const mpInfo = (multiPassGroups[groupName] || {}) as Record<string, unknown>
-    const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
-    const feedback = { ...(mpConfig.feedback as Record<string, string> || {}), [sourceSpec]: targetSpec }
-    const updatedMultiPass = { ...mpConfig, feedback }
-
-    // If no multi_pass config yet, initialize with default schedule
-    if (!mpConfig.schedule && !mpConfig.expressions) {
-      (updatedMultiPass as Record<string, unknown>).schedule = [{}]
-    }
-    if (result.conditionScript) {
-      (updatedMultiPass as Record<string, unknown>).condition = {
-        script: result.conditionScript,
-      }
-    }
-
-    // Collect template steps for new group creation
-    const mpSteps = (mpInfo.steps as Record<string, unknown>[]) ||
-      feedbackDialog!.steps.map((s) => {
-        const step: Record<string, unknown> = { name: s.name, task: s.task }
-        if (Object.keys(s.inputs || {}).length) step.inputs = s.inputs
-        if (Object.keys(s.outputs || {}).length) step.outputs = s.outputs
-        if (Object.keys(s.args || {}).length) step.args = s.args
-        if (s.optional) step.optional = true
-        if (s.disabled) step.disabled = true
-        return step
+      // Snapshot for undo
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
       })
 
-    setMultiPassGroups((prev) => ({
-      ...prev,
-      [groupName]: {
-        ...(prev[groupName] as Record<string, unknown> || {}),
-        multi_pass: updatedMultiPass,
-        steps: mpSteps,
-      },
-    }))
+      const groupName = feedbackDialog!.groupName
+      const sourceSpec = `${result.sourceStepName}.${result.sourceOutputFlag}`
+      const targetSpec = `${result.targetStepName}.${result.targetInputFlag}`
 
-    // Find target step node id
-    const targetStepNode = nodesRef.current.find(
-      (n) => n.type === 'step' && (n.data as StepData).name === result.targetStepName
-    )
-
-    // Create feedback edge from data node to target step
-    if (targetStepNode) {
-      const feedbackEdge: Edge = {
-        id: `e_feedback_${result.dataNodeId}_${result.targetStepName}_${result.targetInputFlag}`,
-        source: result.dataNodeId,
-        target: targetStepNode.id,
-        sourceHandle: 'value',
-        targetHandle: result.targetInputFlag,
-        type: 'feedback',
-        data: {
-          feedback: true,
-          groupName,
-          multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'],
-        },
+      // Update multiPassGroups: add feedback mapping
+      const mpInfo = (multiPassGroups[groupName] || {}) as Record<string, unknown>
+      const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
+      const feedback = {
+        ...((mpConfig.feedback as Record<string, string>) || {}),
+        [sourceSpec]: targetSpec,
       }
-      // Refresh sibling feedback edges in the same group so their labels/panels stay in sync
-      setEdges((eds) => [
-        ...eds.map((e) =>
-          e.type === 'feedback' && (e.data as Record<string, unknown> | undefined)?.groupName === groupName
-            ? { ...e, data: { ...e.data, multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'] } }
-            : e
-        ),
-        feedbackEdge,
-      ])
-    }
+      const updatedMultiPass = { ...mpConfig, feedback }
 
-    setHasChanges(true)
-  }, [feedbackDialog, multiPassGroups, snapshot, setEdges])
+      // If no multi_pass config yet, initialize with default schedule
+      if (!mpConfig.schedule && !mpConfig.expressions) {
+        ;(updatedMultiPass as Record<string, unknown>).schedule = [{}]
+      }
+      if (result.conditionScript) {
+        ;(updatedMultiPass as Record<string, unknown>).condition = {
+          script: result.conditionScript,
+        }
+      }
+
+      // Collect template steps for new group creation
+      const mpSteps =
+        (mpInfo.steps as Record<string, unknown>[]) ||
+        feedbackDialog!.steps.map((s) => {
+          const step: Record<string, unknown> = { name: s.name, task: s.task }
+          if (Object.keys(s.inputs || {}).length) step.inputs = s.inputs
+          if (Object.keys(s.outputs || {}).length) step.outputs = s.outputs
+          if (Object.keys(s.args || {}).length) step.args = s.args
+          if (s.optional) step.optional = true
+          if (s.disabled) step.disabled = true
+          return step
+        })
+
+      setMultiPassGroups((prev) => ({
+        ...prev,
+        [groupName]: {
+          ...((prev[groupName] as Record<string, unknown>) || {}),
+          multi_pass: updatedMultiPass,
+          steps: mpSteps,
+        },
+      }))
+
+      // Find target step node id
+      const targetStepNode = nodesRef.current.find(
+        (n) => n.type === 'step' && (n.data as StepData).name === result.targetStepName,
+      )
+
+      // Create feedback edge from data node to target step
+      if (targetStepNode) {
+        const feedbackEdge: Edge = {
+          id: `e_feedback_${result.dataNodeId}_${result.targetStepName}_${result.targetInputFlag}`,
+          source: result.dataNodeId,
+          target: targetStepNode.id,
+          sourceHandle: 'value',
+          targetHandle: result.targetInputFlag,
+          type: 'feedback',
+          data: {
+            feedback: true,
+            groupName,
+            multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'],
+          },
+        }
+        // Refresh sibling feedback edges in the same group so their labels/panels stay in sync
+        setEdges((eds) => [
+          ...eds.map((e) =>
+            e.type === 'feedback' &&
+            (e.data as Record<string, unknown> | undefined)?.groupName === groupName
+              ? {
+                  ...e,
+                  data: { ...e.data, multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'] },
+                }
+              : e,
+          ),
+          feedbackEdge,
+        ])
+      }
+
+      setHasChanges(true)
+    },
+    [feedbackDialog, multiPassGroups, snapshot, setEdges],
+  )
 
   // Keyboard shortcuts for undo/redo/save/layout/sidebar/parameter-toggle
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
 
@@ -941,7 +1012,16 @@ export default function App() {
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, getCurrentState, handleSave, handleAutoLayout, handleCreateFeedback, leftCollapsed, rightCollapsed])
+  }, [
+    undo,
+    redo,
+    getCurrentState,
+    handleSave,
+    handleAutoLayout,
+    handleCreateFeedback,
+    leftCollapsed,
+    rightCollapsed,
+  ])
 
   // Save dialog handlers
   const handleSaveConfirm = useCallback(() => {
@@ -977,7 +1057,7 @@ export default function App() {
 
     const pipeline = nodes
       .filter((n) => n.type === 'step')
-      .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x))
+      .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
       .map((node) => {
         const data = node.data as StepData
         const step: Record<string, unknown> = {
@@ -1007,298 +1087,350 @@ export default function App() {
     URL.revokeObjectURL(url)
   }, [nodes, parameters])
 
-  const handleAddTask = useCallback((task: TaskInfo, position?: { x: number; y: number }) => {
-    // Snapshot before change for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-
-    // Build inputs from task schema - use empty string as placeholder for variable reference
-    const inputs: Record<string, string> = {}
-    const inputTypes: Record<string, DataType> = {}
-    if (task.inputs) {
-      Object.entries(task.inputs).forEach(([key, schema]) => {
-        inputs[key] = ''
-        if (schema.type) {
-          inputTypes[key] = schema.type
-        }
+  const handleAddTask = useCallback(
+    (task: TaskInfo, position?: { x: number; y: number }) => {
+      // Snapshot before change for undo
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
       })
-    }
 
-    // Build outputs from task schema
-    const outputs: Record<string, string> = {}
-    const outputTypes: Record<string, DataType> = {}
-    if (task.outputs) {
-      Object.entries(task.outputs).forEach(([key, schema]) => {
-        outputs[key] = ''
-        if (schema.type) {
-          outputTypes[key] = schema.type
-        }
-      })
-    }
-
-    // Build args from task schema with default values
-    const args: Record<string, unknown> = {}
-    if (task.args) {
-      Object.entries(task.args).forEach(([key, schema]) => {
-        if (schema.default !== undefined) {
-          args[key] = schema.default
-        }
-      })
-    }
-
-    // Generate unique name - avoid duplicates
-    const existingNames = new Set(
-      nodesRef.current
-        .filter((n) => n.type === 'step')
-        .map((n) => (n.data as StepData).name)
-    )
-    let stepName = task.name
-    if (existingNames.has(stepName)) {
-      let counter = 2
-      while (existingNames.has(`${task.name}_${counter}`)) {
-        counter++
+      // Build inputs from task schema - use empty string as placeholder for variable reference
+      const inputs: Record<string, string> = {}
+      const inputTypes: Record<string, DataType> = {}
+      if (task.inputs) {
+        Object.entries(task.inputs).forEach(([key, schema]) => {
+          inputs[key] = ''
+          if (schema.type) {
+            inputTypes[key] = schema.type
+          }
+        })
       }
-      stepName = `${task.name}_${counter}`
-    }
 
-    const newNode: StepNode = {
-      id: `step_${Date.now()}`,
-      type: 'step',
-      position: position ?? { x: 400, y: 100 + nodes.length * 50 },
-      data: {
-        name: stepName,
-        task: task.path,
-        inputs,
-        outputs,
-        args,
-        optional: false,
-        disabled: false,
-        inputTypes: Object.keys(inputTypes).length > 0 ? inputTypes : undefined,
-        outputTypes: Object.keys(outputTypes).length > 0 ? outputTypes : undefined,
-      },
-    }
-    setNodes((nds) => [...nds, newNode])
-  }, [nodes.length, setNodes, snapshot])
-
-  const handleAddData = useCallback((dataType: DataType, position?: { x: number; y: number }) => {
-    // Snapshot before change for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-    const dataCount = nodes.filter((n) => n.type === 'data').length
-
-    // Generate unique name - avoid duplicates
-    const existingNames = new Set(
-      nodesRef.current
-        .filter((n) => n.type === 'data')
-        .map((n) => (n.data as DataNodeData).name)
-    )
-    let dataName = `new_${dataType}`
-    if (existingNames.has(dataName)) {
-      let counter = 2
-      while (existingNames.has(`new_${dataType}_${counter}`)) {
-        counter++
+      // Build outputs from task schema
+      const outputs: Record<string, string> = {}
+      const outputTypes: Record<string, DataType> = {}
+      if (task.outputs) {
+        Object.entries(task.outputs).forEach(([key, schema]) => {
+          outputs[key] = ''
+          if (schema.type) {
+            outputTypes[key] = schema.type
+          }
+        })
       }
-      dataName = `new_${dataType}_${counter}`
-    }
 
-    // Generate key from name
-    const key = dataName.toLowerCase().replace(/\s+/g, '_')
-    const newNode: DataNode = {
-      id: `data_${Date.now()}`,
-      type: 'data',
-      position: position ?? { x: 50, y: 50 + dataCount * 80 },
-      data: {
-        key,
-        name: dataName,
-        type: dataType,
-        path: '',
-      },
-    }
-    setNodes((nds) => [...nds, newNode])
-  }, [nodes, setNodes, snapshot])
+      // Build args from task schema with default values
+      const args: Record<string, unknown> = {}
+      if (task.args) {
+        Object.entries(task.args).forEach(([key, schema]) => {
+          if (schema.default !== undefined) {
+            args[key] = schema.default
+          }
+        })
+      }
 
-  const handleUpdateNode = useCallback((id: string, data: Partial<StepData | DataNodeData>) => {
-    // Check if this is a data node path change
-    const node = nodesRef.current.find(n => n.id === id)
-    const isDataPathChange = node?.type === 'data' && 'path' in data
+      // Generate unique name - avoid duplicates
+      const existingNames = new Set(
+        nodesRef.current.filter((n) => n.type === 'step').map((n) => (n.data as StepData).name),
+      )
+      let stepName = task.name
+      if (existingNames.has(stepName)) {
+        let counter = 2
+        while (existingNames.has(`${task.name}_${counter}`)) {
+          counter++
+        }
+        stepName = `${task.name}_${counter}`
+      }
 
-    // Debounced snapshot to avoid flooding history with keystroke micro-changes
-    debouncedSnapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+      const newNode: StepNode = {
+        id: `step_${Date.now()}`,
+        type: 'step',
+        position: position ?? { x: 400, y: 100 + nodes.length * 50 },
+        data: {
+          name: stepName,
+          task: task.path,
+          inputs,
+          outputs,
+          args,
+          optional: false,
+          disabled: false,
+          inputTypes: Object.keys(inputTypes).length > 0 ? inputTypes : undefined,
+          outputTypes: Object.keys(outputTypes).length > 0 ? outputTypes : undefined,
+        },
+      }
+      setNodes((nds) => [...nds, newNode])
+    },
+    [nodes.length, setNodes, snapshot],
+  )
 
-    // Reset exists to undefined when path changes (shows "checking" state)
-    const finalData = isDataPathChange
-      ? { ...data, exists: undefined }
-      : data
+  const handleAddData = useCallback(
+    (dataType: DataType, position?: { x: number; y: number }) => {
+      // Snapshot before change for undo
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
+      const dataCount = nodes.filter((n) => n.type === 'data').length
 
-    setNodes((nds) =>
-      nds.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...finalData } } : node
-      ) as PipelineNode[]
-    )
+      // Generate unique name - avoid duplicates
+      const existingNames = new Set(
+        nodesRef.current.filter((n) => n.type === 'data').map((n) => (n.data as DataNodeData).name),
+      )
+      let dataName = `new_${dataType}`
+      if (existingNames.has(dataName)) {
+        let counter = 2
+        while (existingNames.has(`new_${dataType}_${counter}`)) {
+          counter++
+        }
+        dataName = `new_${dataType}_${counter}`
+      }
 
-    // Trigger debounced path check for data nodes
-    if (isDataPathChange && data.path) {
-      debouncedPathCheck(id, data.path as string)
-    }
-  }, [setNodes, debouncedSnapshot, debouncedPathCheck])
+      // Generate key from name
+      const key = dataName.toLowerCase().replace(/\s+/g, '_')
+      const newNode: DataNode = {
+        id: `data_${Date.now()}`,
+        type: 'data',
+        position: position ?? { x: 50, y: 50 + dataCount * 80 },
+        data: {
+          key,
+          name: dataName,
+          type: dataType,
+          path: '',
+        },
+      }
+      setNodes((nds) => [...nds, newNode])
+    },
+    [nodes, setNodes, snapshot],
+  )
 
-  const handleDeleteNode = useCallback((id: string) => {
-    // Snapshot before change for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+  const handleUpdateNode = useCallback(
+    (id: string, data: Partial<StepData | DataNodeData>) => {
+      // Check if this is a data node path change
+      const node = nodesRef.current.find((n) => n.id === id)
+      const isDataPathChange = node?.type === 'data' && 'path' in data
 
-    // If deleting a parameter node, clear any arg references in connected steps
-    const nodeToDelete = nodesRef.current.find((n) => n.id === id)
-    if (nodeToDelete?.type === 'parameter') {
-      // Find all edges from this parameter to step args
-      const paramEdges = edgesRef.current.filter(
-        (e) => e.source === id && e.targetHandle
+      // Debounced snapshot to avoid flooding history with keystroke micro-changes
+      debouncedSnapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
+
+      // Reset exists to undefined when path changes (shows "checking" state)
+      const finalData = isDataPathChange ? { ...data, exists: undefined } : data
+
+      setNodes(
+        (nds) =>
+          nds.map((node) =>
+            node.id === id ? { ...node, data: { ...node.data, ...finalData } } : node,
+          ) as PipelineNode[],
       )
 
-      if (paramEdges.length > 0) {
-        // Clear the arg values in affected steps
-        setNodes((nds) =>
-          nds
-            .filter((node) => node.id !== id)
-            .map((node) => {
-              if (node.type !== 'step') return node
+      // Trigger debounced path check for data nodes
+      if (isDataPathChange && data.path) {
+        debouncedPathCheck(id, data.path as string)
+      }
+    },
+    [setNodes, debouncedSnapshot, debouncedPathCheck],
+  )
 
-              const affectedEdge = paramEdges.find((e) => e.target === node.id)
-              if (!affectedEdge || !affectedEdge.targetHandle) return node
+  const handleDeleteNode = useCallback(
+    (id: string) => {
+      // Snapshot before change for undo
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
 
-              const stepData = node.data as StepData
-              const newArgs = { ...(stepData.args || {}) }
-              newArgs[affectedEdge.targetHandle] = ''
-              return { ...node, data: { ...stepData, args: newArgs } }
-            })
-        )
+      // If deleting a parameter node, clear any arg references in connected steps
+      const nodeToDelete = nodesRef.current.find((n) => n.id === id)
+      if (nodeToDelete?.type === 'parameter') {
+        // Find all edges from this parameter to step args
+        const paramEdges = edgesRef.current.filter((e) => e.source === id && e.targetHandle)
+
+        if (paramEdges.length > 0) {
+          // Clear the arg values in affected steps
+          setNodes((nds) =>
+            nds
+              .filter((node) => node.id !== id)
+              .map((node) => {
+                if (node.type !== 'step') return node
+
+                const affectedEdge = paramEdges.find((e) => e.target === node.id)
+                if (!affectedEdge || !affectedEdge.targetHandle) return node
+
+                const stepData = node.data as StepData
+                const newArgs = { ...(stepData.args || {}) }
+                newArgs[affectedEdge.targetHandle] = ''
+                return { ...node, data: { ...stepData, args: newArgs } }
+              }),
+          )
+        } else {
+          setNodes((nds) => nds.filter((node) => node.id !== id))
+        }
       } else {
         setNodes((nds) => nds.filter((node) => node.id !== id))
       }
-    } else {
-      setNodes((nds) => nds.filter((node) => node.id !== id))
-    }
 
-    setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id))
-    setSelectedNodes((sel) => sel.filter((n) => n.id !== id))
-  }, [setNodes, setEdges, snapshot])
+      setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id))
+      setSelectedNodes((sel) => sel.filter((n) => n.id !== id))
+    },
+    [setNodes, setEdges, snapshot],
+  )
 
   // Handle disconnecting a parameter from a step arg
-  const handleDisconnectArg = useCallback((stepId: string, argKey: string) => {
-    // Snapshot for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-
-    // Remove the edge connecting parameter to this arg
-    setEdges((eds) =>
-      eds.filter((edge) => !(edge.target === stepId && edge.targetHandle === argKey))
-    )
-
-    // Update the step's arg to empty string (user can now edit it)
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === stepId && node.type === 'step') {
-          const newArgs = { ...(node.data.args || {}) }
-          newArgs[argKey] = '' // Clear the value
-          return { ...node, data: { ...node.data, args: newArgs } }
-        }
-        return node
+  const handleDisconnectArg = useCallback(
+    (stepId: string, argKey: string) => {
+      // Snapshot for undo
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
       })
-    )
-  }, [snapshot, setEdges, setNodes])
+
+      // Remove the edge connecting parameter to this arg
+      setEdges((eds) =>
+        eds.filter((edge) => !(edge.target === stepId && edge.targetHandle === argKey)),
+      )
+
+      // Update the step's arg to empty string (user can now edit it)
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === stepId && node.type === 'step') {
+            const newArgs = { ...(node.data.args || {}) }
+            newArgs[argKey] = '' // Clear the value
+            return { ...node, data: { ...node.data, args: newArgs } }
+          }
+          return node
+        }),
+      )
+    },
+    [snapshot, setEdges, setNodes],
+  )
 
   // Handle updating multi-pass config for a group
-  const handleUpdateMultiPass = useCallback((groupName: string, multiPass: Record<string, unknown>) => {
-    // Snapshot before change for undo
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+  const handleUpdateMultiPass = useCallback(
+    (groupName: string, multiPass: Record<string, unknown>) => {
+      // Snapshot before change for undo
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
 
-    // Update multiPassGroups state
-    setMultiPassGroups((prev) => ({
-      ...prev,
-      [groupName]: {
-        ...(prev[groupName] as Record<string, unknown> || {}),
-        multi_pass: multiPass,
-      },
-    }))
+      // Update multiPassGroups state
+      setMultiPassGroups((prev) => ({
+        ...prev,
+        [groupName]: {
+          ...((prev[groupName] as Record<string, unknown>) || {}),
+          multi_pass: multiPass,
+        },
+      }))
 
-    // Update feedback edge data on matching edges so labels stay in sync
-    setEdges((eds) =>
-      eds.map((e) => {
-        if (e.type === 'feedback' && e.data && (e.data as Record<string, unknown>).groupName === groupName) {
-          return {
-            ...e,
-            data: {
-              ...e.data,
-              multiPass: multiPass,
+      // Update feedback edge data on matching edges so labels stay in sync
+      setEdges((eds) =>
+        eds.map((e) => {
+          if (
+            e.type === 'feedback' &&
+            e.data &&
+            (e.data as Record<string, unknown>).groupName === groupName
+          ) {
+            return {
+              ...e,
+              data: {
+                ...e.data,
+                multiPass: multiPass,
+              },
+            }
+          }
+          return e
+        }),
+      )
+
+      setHasChanges(true)
+    },
+    [snapshot, setEdges],
+  )
+
+  // Handle deletion of edges — sync multiPassGroups when feedback edges are removed
+  const handleEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      const feedbackEdges = deleted.filter((e) => e.type === 'feedback')
+      if (feedbackEdges.length === 0) return
+
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
+
+      setMultiPassGroups((prev) => {
+        let next = prev
+        for (const edge of feedbackEdges) {
+          const groupName = (edge.data as Record<string, unknown> | undefined)?.groupName as
+            | string
+            | undefined
+          if (!groupName || !next[groupName]) continue
+
+          // Resolve target step name from the edge's target node id
+          const targetStepNode = nodesRef.current.find((n) => n.id === edge.target)
+          const targetStepName =
+            targetStepNode && targetStepNode.type === 'step'
+              ? (targetStepNode.data as StepData).name
+              : undefined
+          const targetFlag = edge.targetHandle ?? undefined
+          if (!targetStepName || !targetFlag) continue
+
+          const mpInfo = next[groupName] as Record<string, unknown>
+          const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
+          const existingFeedback = (mpConfig.feedback as Record<string, string> | undefined) || {}
+
+          // Find the mapping key by matching BOTH target step name AND target flag
+          let matchedKey: string | undefined
+          for (const [src, tgt] of Object.entries(existingFeedback)) {
+            const [tgtStep, tgtFlag] = tgt.split('.', 2)
+            if (tgtStep === targetStepName && tgtFlag === targetFlag) {
+              matchedKey = src
+              break
+            }
+          }
+          if (!matchedKey) continue
+
+          const newFeedback = { ...existingFeedback }
+          delete newFeedback[matchedKey]
+
+          next = {
+            ...next,
+            [groupName]: {
+              ...mpInfo,
+              multi_pass: { ...mpConfig, feedback: newFeedback },
             },
           }
         }
-        return e
+        return next
       })
-    )
 
-    setHasChanges(true)
-  }, [snapshot, setEdges])
-
-  // Handle deletion of edges — sync multiPassGroups when feedback edges are removed
-  const handleEdgesDelete = useCallback((deleted: Edge[]) => {
-    const feedbackEdges = deleted.filter((e) => e.type === 'feedback')
-    if (feedbackEdges.length === 0) return
-
-    snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-
-    setMultiPassGroups((prev) => {
-      let next = prev
-      for (const edge of feedbackEdges) {
-        const groupName = (edge.data as Record<string, unknown> | undefined)?.groupName as string | undefined
-        if (!groupName || !next[groupName]) continue
-
-        // Resolve target step name from the edge's target node id
-        const targetStepNode = nodesRef.current.find((n) => n.id === edge.target)
-        const targetStepName = targetStepNode && targetStepNode.type === 'step'
-          ? (targetStepNode.data as StepData).name
-          : undefined
-        const targetFlag = edge.targetHandle ?? undefined
-        if (!targetStepName || !targetFlag) continue
-
-        const mpInfo = next[groupName] as Record<string, unknown>
-        const mpConfig = (mpInfo.multi_pass || {}) as Record<string, unknown>
-        const existingFeedback = (mpConfig.feedback as Record<string, string> | undefined) || {}
-
-        // Find the mapping key by matching BOTH target step name AND target flag
-        let matchedKey: string | undefined
-        for (const [src, tgt] of Object.entries(existingFeedback)) {
-          const [tgtStep, tgtFlag] = tgt.split('.', 2)
-          if (tgtStep === targetStepName && tgtFlag === targetFlag) {
-            matchedKey = src
-            break
-          }
-        }
-        if (!matchedKey) continue
-
-        const newFeedback = { ...existingFeedback }
-        delete newFeedback[matchedKey]
-
-        next = {
-          ...next,
-          [groupName]: {
-            ...mpInfo,
-            multi_pass: { ...mpConfig, feedback: newFeedback },
-          },
-        }
-      }
-      return next
-    })
-
-    setHasChanges(true)
-  }, [snapshot])
+      setHasChanges(true)
+    },
+    [snapshot],
+  )
 
   // Handle trashing variable data
-  const handleTrashData = useCallback(async (variableName: string) => {
-    const result = await trashData(variableName)
-    if (result.success) {
-      // Refresh variable status to update the UI
-      await refreshVariableStatus()
-    } else {
-      alert(`Failed to trash data: ${result.message}`)
-    }
-  }, [trashData, refreshVariableStatus])
+  const handleTrashData = useCallback(
+    async (variableName: string) => {
+      const result = await trashData(variableName)
+      if (result.success) {
+        // Refresh variable status to update the UI
+        await refreshVariableStatus()
+      } else {
+        alert(`Failed to trash data: ${result.message}`)
+      }
+    },
+    [trashData, refreshVariableStatus],
+  )
 
   // Handle showing the clean dialog
   const handleShowCleanDialog = useCallback(async () => {
@@ -1310,24 +1442,27 @@ export default function App() {
   }, [previewClean])
 
   // Handle cleaning all data
-  const handleClean = useCallback(async (mode: 'trash' | 'permanent') => {
-    setCleanLoading(true)
-    try {
-      const result = await cleanAllData(mode)
-      if (result) {
-        setShowCleanDialog(false)
-        setCleanPreview(null)
-        // Refresh variable status and freshness to update the UI
-        await refreshVariableStatus()
-        refreshFreshness()
-        if (result.failed_count > 0) {
-          alert(`Cleaned ${result.cleaned_count} file(s), but ${result.failed_count} failed.`)
+  const handleClean = useCallback(
+    async (mode: 'trash' | 'permanent') => {
+      setCleanLoading(true)
+      try {
+        const result = await cleanAllData(mode)
+        if (result) {
+          setShowCleanDialog(false)
+          setCleanPreview(null)
+          // Refresh variable status and freshness to update the UI
+          await refreshVariableStatus()
+          refreshFreshness()
+          if (result.failed_count > 0) {
+            alert(`Cleaned ${result.cleaned_count} file(s), but ${result.failed_count} failed.`)
+          }
         }
+      } finally {
+        setCleanLoading(false)
       }
-    } finally {
-      setCleanLoading(false)
-    }
-  }, [cleanAllData, refreshVariableStatus, refreshFreshness])
+    },
+    [cleanAllData, refreshVariableStatus, refreshFreshness],
+  )
 
   // Handle closing the clean dialog
   const handleCloseCleanDialog = useCallback(() => {
@@ -1344,123 +1479,143 @@ export default function App() {
   }, [listPipelines])
 
   // Perform the actual pipeline switch
-  const performOpenPipeline = useCallback(async (pipelinePath: string) => {
-    // Check if any step is currently running
-    const hasRunningSteps = Object.values(independentStepStatuses).some(
-      (status) => status === 'running'
-    )
-    if (hasRunningSteps) {
-      alert('Cannot switch pipelines while steps are running. Please wait for execution to complete.')
-      return
-    }
+  const performOpenPipeline = useCallback(
+    async (pipelinePath: string) => {
+      // Check if any step is currently running
+      const hasRunningSteps = Object.values(independentStepStatuses).some(
+        (status) => status === 'running',
+      )
+      if (hasRunningSteps) {
+        alert(
+          'Cannot switch pipelines while steps are running. Please wait for execution to complete.',
+        )
+        return
+      }
 
-    // Call backend to switch pipeline
-    const result = await openPipeline(pipelinePath)
-    if (!result.success) {
-      alert(`Failed to open pipeline: ${result.error}`)
-      return
-    }
+      // Call backend to switch pipeline
+      const result = await openPipeline(pipelinePath)
+      if (!result.success) {
+        alert(`Failed to open pipeline: ${result.error}`)
+        return
+      }
 
-    // Set loading flag to skip change tracking during reload
-    isLoadingRef.current = true
+      // Set loading flag to skip change tracking during reload
+      isLoadingRef.current = true
 
-    // Clear current state
-    skipNextChangeTrackingRef.current = true
-    setNodes([])
-    setEdges([])
-    setParameters({})
-    setHasChanges(false)
-    clearHistory()
-    setValidationWarnings([])
-    setTerminalVisible(false)
-    setStepTerminalOutputs(new Map())
+      // Clear current state
+      skipNextChangeTrackingRef.current = true
+      setNodes([])
+      setEdges([])
+      setParameters({})
+      setHasChanges(false)
+      clearHistory()
+      setValidationWarnings([])
+      setTerminalVisible(false)
+      setStepTerminalOutputs(new Map())
 
-    // Update config path
-    setConfigPath(result.configPath || null)
+      // Update config path
+      setConfigPath(result.configPath || null)
 
-    // Reload tasks from new directory
-    const loadedTasks = await loadTasks()
-    setTasks(loadedTasks)
+      // Reload tasks from new directory
+      const loadedTasks = await loadTasks()
+      setTasks(loadedTasks)
 
-    // Load the new pipeline
-    if (result.configPath) {
-      const graph = await loadConfig(result.configPath)
-      if (graph) {
-        // Apply Dagre layout if no saved layout
-        let layoutedNodes = graph.hasLayout
-          ? graph.nodes
-          : applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[]
-        // Enrich step nodes with type information
-        layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
-        setNodes(layoutedNodes)
-        setEdges(graph.edges)
-        setParameters(graph.parameters)
-        if (graph.multiPassGroups) {
-          setMultiPassGroups(graph.multiPassGroups)
-        }
+      // Load the new pipeline
+      if (result.configPath) {
+        const graph = await loadConfig(result.configPath)
+        if (graph) {
+          // Apply Dagre layout if no saved layout
+          let layoutedNodes = graph.hasLayout
+            ? graph.nodes
+            : (applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[])
+          // Enrich step nodes with type information
+          layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
+          setNodes(layoutedNodes)
+          setEdges(graph.edges)
+          setParameters(graph.parameters)
+          if (graph.multiPassGroups) {
+            setMultiPassGroups(graph.multiPassGroups)
+          }
 
-        // Load editor options
-        if (graph.editor) {
-          setSkipSaveConfirmation(graph.editor.autoSave ?? false)
-        }
+          // Load editor options
+          if (graph.editor) {
+            setSkipSaveConfirmation(graph.editor.autoSave ?? false)
+          }
 
-        // Load execution options
-        if (graph.execution) {
-          setParallelEnabled(graph.execution.parallel ?? false)
-          setMaxWorkers(graph.execution.maxWorkers ?? null)
-        } else {
-          setParallelEnabled(false)
-          setMaxWorkers(null)
-        }
+          // Load execution options
+          if (graph.execution) {
+            setParallelEnabled(graph.execution.parallel ?? false)
+            setMaxWorkers(graph.execution.maxWorkers ?? null)
+          } else {
+            setParallelEnabled(false)
+            setMaxWorkers(null)
+          }
 
-        // Check file existence
-        const status = await loadDataStatus()
-        if (Object.keys(status).length > 0) {
-          setNodes((nds) =>
-            nds.map((node) => {
-              if (node.type === 'data') {
-                const data = node.data as DataNodeData
-                const exists = status[data.key]
-                if (exists !== undefined) {
-                  return { ...node, data: { ...data, exists } }
+          // Check file existence
+          const status = await loadDataStatus()
+          if (Object.keys(status).length > 0) {
+            setNodes((nds) =>
+              nds.map((node) => {
+                if (node.type === 'data') {
+                  const data = node.data as DataNodeData
+                  const exists = status[data.key]
+                  if (exists !== undefined) {
+                    return { ...node, data: { ...data, exists } }
+                  }
                 }
-              }
-              if (node.type === 'step') {
-                const data = node.data as StepData
-                const allExist = checkStepCompleted(data, status)
-                if (allExist) {
-                  return { ...node, data: { ...data, executionState: 'completed' as StepExecutionState } }
+                if (node.type === 'step') {
+                  const data = node.data as StepData
+                  const allExist = checkStepCompleted(data, status)
+                  if (allExist) {
+                    return {
+                      ...node,
+                      data: { ...data, executionState: 'completed' as StepExecutionState },
+                    }
+                  }
                 }
-              }
-              return node
-            })
-          )
-        }
+                return node
+              }),
+            )
+          }
 
-        // Fetch freshness status
-        refreshFreshness()
+          // Fetch freshness status
+          refreshFreshness()
 
-        // Validate the loaded config
-        const validationResult = await validateConfig(result.configPath)
-        if (validationResult.warnings.length > 0) {
-          setValidationWarnings(validationResult.warnings)
-          setShowWarnings(true)
+          // Validate the loaded config
+          const validationResult = await validateConfig(result.configPath)
+          if (validationResult.warnings.length > 0) {
+            setValidationWarnings(validationResult.warnings)
+            setShowWarnings(true)
+          }
         }
       }
-    }
 
-    // Update URL hash to reflect the opened pipeline
-    const matched = pipelines.find(p => p.path === pipelinePath)
-    programmaticHashChangeRef.current = true
-    if (matched && matched.relative_path) {
-      window.location.hash = `/pipeline/${matched.relative_path}`
-    } else {
-      window.location.hash = ''
-    }
+      // Update URL hash to reflect the opened pipeline
+      const matched = pipelines.find((p) => p.path === pipelinePath)
+      programmaticHashChangeRef.current = true
+      if (matched && matched.relative_path) {
+        window.location.hash = `/pipeline/${matched.relative_path}`
+      } else {
+        window.location.hash = ''
+      }
 
-    // Mark loading as complete
-    isLoadingRef.current = false
-  }, [openPipeline, independentStepStatuses, pipelines, setNodes, setEdges, clearHistory, loadTasks, loadConfig, loadDataStatus, validateConfig, refreshFreshness])
+      // Mark loading as complete
+      isLoadingRef.current = false
+    },
+    [
+      openPipeline,
+      independentStepStatuses,
+      pipelines,
+      setNodes,
+      setEdges,
+      clearHistory,
+      loadTasks,
+      loadConfig,
+      loadDataStatus,
+      validateConfig,
+      refreshFreshness,
+    ],
+  )
 
   // Listen for hash changes (browser back/forward) to navigate between pipelines
   useEffect(() => {
@@ -1478,7 +1633,7 @@ export default function App() {
 
       if (pipelineMatch) {
         const relativePath = pipelineMatch[1]
-        const matched = pipelines.find(p => p.relative_path === relativePath)
+        const matched = pipelines.find((p) => p.relative_path === relativePath)
         if (matched) {
           performOpenPipeline(matched.path)
         }
@@ -1490,20 +1645,23 @@ export default function App() {
   }, [isWorkspaceMode, pipelines, performOpenPipeline])
 
   // Handle pipeline selection from browser (checks for unsaved changes)
-  const handleSelectPipeline = useCallback((pipelinePath: string) => {
-    // Find the pipeline info for the dialog
-    const pipeline = pipelines.find(p => p.path === pipelinePath)
-    if (!pipeline) return
+  const handleSelectPipeline = useCallback(
+    (pipelinePath: string) => {
+      // Find the pipeline info for the dialog
+      const pipeline = pipelines.find((p) => p.path === pipelinePath)
+      if (!pipeline) return
 
-    // If current pipeline has unsaved changes, show dialog
-    if (hasChanges) {
-      setPendingPipeline(pipeline)
-      setShowUnsavedDialog(true)
-    } else {
-      // No unsaved changes, switch directly
-      performOpenPipeline(pipelinePath)
-    }
-  }, [pipelines, hasChanges, performOpenPipeline])
+      // If current pipeline has unsaved changes, show dialog
+      if (hasChanges) {
+        setPendingPipeline(pipeline)
+        setShowUnsavedDialog(true)
+      } else {
+        // No unsaved changes, switch directly
+        performOpenPipeline(pipelinePath)
+      }
+    },
+    [pipelines, hasChanges, performOpenPipeline],
+  )
 
   // Handle unsaved changes dialog actions
   const handleUnsavedSave = useCallback(async () => {
@@ -1529,49 +1687,61 @@ export default function App() {
   }, [])
 
   // Handle step execution state changes
-  const handleStepStatusChange = useCallback((stepName: string, state: StepExecutionState) => {
-    // Runtime-only change - don't mark document as dirty
-    skipNextChangeTrackingRef.current = true
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.type === 'step' && (node.data as StepData).name === stepName) {
-          return { ...node, data: { ...node.data, executionState: state } }
-        }
-        return node
-      })
-    )
-  }, [setNodes])
+  const handleStepStatusChange = useCallback(
+    (stepName: string, state: StepExecutionState) => {
+      // Runtime-only change - don't mark document as dirty
+      skipNextChangeTrackingRef.current = true
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.type === 'step' && (node.data as StepData).name === stepName) {
+            return { ...node, data: { ...node.data, executionState: state } }
+          }
+          return node
+        }),
+      )
+    },
+    [setNodes],
+  )
 
   // Execution handlers
-  const handleRun = useCallback(async (
-    mode: RunMode,
-    stepName?: string,
-    variableName?: string,
-    stepNames?: string[],
-    groupName?: string,
-  ) => {
-    // Handle unsaved changes before running
-    if (configPath && hasChanges) {
-      if (skipSaveConfirmation) {
-        // Auto-save enabled - save without prompting
-        await performSave()
-      } else {
-        // Ask user
-        const shouldSave = window.confirm('You have unsaved changes. Save before running?')
-        if (shouldSave) {
+  const handleRun = useCallback(
+    async (
+      mode: RunMode,
+      stepName?: string,
+      variableName?: string,
+      stepNames?: string[],
+      groupName?: string,
+    ) => {
+      // Handle unsaved changes before running
+      if (configPath && hasChanges) {
+        if (skipSaveConfirmation) {
+          // Auto-save enabled - save without prompting
           await performSave()
         } else {
-          return // Don't run if user declines to save
+          // Ask user
+          const shouldSave = window.confirm('You have unsaved changes. Save before running?')
+          if (shouldSave) {
+            await performSave()
+          } else {
+            return // Don't run if user declines to save
+          }
         }
       }
-    }
-    // Don't reset all steps - server sends per-step status updates (RUNNING, SUCCESS, FAILED)
-    // Clear orchestrated-run buffers so stale output from a previous run isn't appended to.
-    setStepTerminalOutputs(new Map())
-    setTerminalVisible(true)
-    // Create a new request object to trigger the terminal
-    setRunRequest({ mode, step_name: stepName, data_name: variableName, step_names: stepNames, group_name: groupName })
-  }, [configPath, hasChanges, skipSaveConfirmation, performSave])
+      // Don't reset all steps - server sends per-step status updates (RUNNING, SUCCESS, FAILED)
+      // Clear orchestrated-run buffers so stale output from a previous run isn't appended to.
+      setStepTerminalOutputs(new Map())
+      setTerminalVisible(true)
+      // Create a new request object to trigger the terminal
+      setRunRequest({
+        mode,
+        step_name: stepName,
+        data_name: variableName,
+        step_names: stepNames,
+        group_name: groupName,
+      })
+    },
+    [configPath, hasChanges, skipSaveConfirmation, performSave],
+  )
 
   // Handle per-step terminal output (for parallel execution)
   // Processes carriage returns (\r) to simulate terminal overwrite behavior (for tqdm etc.)
@@ -1582,7 +1752,7 @@ export default function App() {
       const combined = existing + output
 
       // Process carriage returns: for each line, keep only content after last \r
-      const processedLines = combined.split('\n').map(line => {
+      const processedLines = combined.split('\n').map((line) => {
         const lastCR = line.lastIndexOf('\r')
         return lastCR >= 0 ? line.slice(lastCR + 1) : line
       })
@@ -1597,37 +1767,43 @@ export default function App() {
   }, [])
 
   // Run a single step independently (concurrent execution)
-  const handleRunStepIndependent = useCallback(async (stepName: string) => {
-    // Handle unsaved changes before running
-    if (configPath && hasChanges) {
-      if (skipSaveConfirmation) {
-        // Auto-save enabled - save without prompting
-        await performSave()
-      } else {
-        // Ask user
-        const shouldSave = window.confirm('You have unsaved changes. Save before running?')
-        if (shouldSave) {
+  const handleRunStepIndependent = useCallback(
+    async (stepName: string) => {
+      // Handle unsaved changes before running
+      if (configPath && hasChanges) {
+        if (skipSaveConfirmation) {
+          // Auto-save enabled - save without prompting
           await performSave()
         } else {
-          return // Don't run if user declines to save
+          // Ask user
+          const shouldSave = window.confirm('You have unsaved changes. Save before running?')
+          if (shouldSave) {
+            await performSave()
+          } else {
+            return // Don't run if user declines to save
+          }
         }
       }
-    }
-    setActiveTerminalStep(stepName)
-    setTerminalVisible(true)
-    // Clear this step's previous output before re-running
-    setStepTerminalOutputs((prev) => {
-      const next = new Map(prev)
-      next.delete(stepName)
-      return next
-    })
-    runStepIndependent(stepName)
-  }, [configPath, hasChanges, skipSaveConfirmation, performSave, runStepIndependent])
+      setActiveTerminalStep(stepName)
+      setTerminalVisible(true)
+      // Clear this step's previous output before re-running
+      setStepTerminalOutputs((prev) => {
+        const next = new Map(prev)
+        next.delete(stepName)
+        return next
+      })
+      runStepIndependent(stepName)
+    },
+    [configPath, hasChanges, skipSaveConfirmation, performSave, runStepIndependent],
+  )
 
   // Cancel a specific step
-  const handleCancelStepIndependent = useCallback((stepName: string) => {
-    cancelStepIndependent(stepName)
-  }, [cancelStepIndependent])
+  const handleCancelStepIndependent = useCallback(
+    (stepName: string) => {
+      cancelStepIndependent(stepName)
+    },
+    [cancelStepIndependent],
+  )
 
   // Handle selection change - set active terminal step when a step is selected
   // Wrap onNodesChange to detect drag start and create snapshot
@@ -1643,7 +1819,11 @@ export default function App() {
           if (change.dragging === true && !isDraggingRef.current) {
             // Drag started - snapshot BEFORE drag begins
             isDraggingRef.current = true
-            snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+            snapshot({
+              nodes: nodesRef.current,
+              edges: edgesRef.current,
+              parameters: parametersRef.current,
+            })
           } else if (change.dragging === false && isDraggingRef.current) {
             // Drag ended
             isDraggingRef.current = false
@@ -1654,7 +1834,7 @@ export default function App() {
       // Pass through to original handler
       onNodesChange(realChanges)
     },
-    [onNodesChange, snapshot]
+    [onNodesChange, snapshot],
   )
 
   const handleSelectionChange = useCallback((nodes: PipelineNode[]) => {
@@ -1671,65 +1851,77 @@ export default function App() {
     if (edge) setSelectedNodes([])
   }, [])
 
-  const handleNodeDoubleClick = useCallback((node: PipelineNode) => {
-    if (node.type === 'data') {
-      const dataNode = node.data as DataNodeData
-      if (dataNode.path) {
-        // If file doesn't exist, show pulse error animation
-        if (dataNode.exists === false) {
-          // Runtime-only change - don't mark document as dirty
-          skipNextChangeTrackingRef.current = true
-          setNodes((nds) =>
-            nds.map((n) =>
-              n.id === node.id
-                ? { ...n, data: { ...n.data, pulseError: true } }
-                : n
-            ) as PipelineNode[]
-          )
-          // Clear the pulse after animation completes (0.4s * 3 = 1.2s)
-          setTimeout(() => {
+  const handleNodeDoubleClick = useCallback(
+    (node: PipelineNode) => {
+      if (node.type === 'data') {
+        const dataNode = node.data as DataNodeData
+        if (dataNode.path) {
+          // If file doesn't exist, show pulse error animation
+          if (dataNode.exists === false) {
             // Runtime-only change - don't mark document as dirty
             skipNextChangeTrackingRef.current = true
-            setNodes((nds) =>
-              nds.map((n) =>
-                n.id === node.id
-                  ? { ...n, data: { ...n.data, pulseError: false } }
-                  : n
-              ) as PipelineNode[]
+            setNodes(
+              (nds) =>
+                nds.map((n) =>
+                  n.id === node.id ? { ...n, data: { ...n.data, pulseError: true } } : n,
+                ) as PipelineNode[],
             )
-          }, 1300)
-        } else {
-          openPath(dataNode.path)
-        }
-      }
-    }
-  }, [openPath, setNodes])
-
-  const handleUpdateParameter = useCallback((name: string, value: unknown) => {
-    // Debounced snapshot to avoid flooding history with keystroke micro-changes
-    debouncedSnapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
-
-    setParameters((prev) => ({ ...prev, [name]: value }))
-
-    // Also update all parameter nodes with this name to keep them in sync
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.type === 'parameter' && node.data.name === name) {
-          return {
-            ...node,
-            data: { ...node.data, value },
+            // Clear the pulse after animation completes (0.4s * 3 = 1.2s)
+            setTimeout(() => {
+              // Runtime-only change - don't mark document as dirty
+              skipNextChangeTrackingRef.current = true
+              setNodes(
+                (nds) =>
+                  nds.map((n) =>
+                    n.id === node.id ? { ...n, data: { ...n.data, pulseError: false } } : n,
+                  ) as PipelineNode[],
+              )
+            }, 1300)
+          } else {
+            openPath(dataNode.path)
           }
         }
-        return node
+      }
+    },
+    [openPath, setNodes],
+  )
+
+  const handleUpdateParameter = useCallback(
+    (name: string, value: unknown) => {
+      // Debounced snapshot to avoid flooding history with keystroke micro-changes
+      debouncedSnapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
       })
-    )
-  }, [debouncedSnapshot, setNodes])
+
+      setParameters((prev) => ({ ...prev, [name]: value }))
+
+      // Also update all parameter nodes with this name to keep them in sync
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.type === 'parameter' && node.data.name === name) {
+            return {
+              ...node,
+              data: { ...node.data, value },
+            }
+          }
+          return node
+        }),
+      )
+    },
+    [debouncedSnapshot, setNodes],
+  )
 
   // Handler for dropping parameters from sidebar onto canvas
   const handleParameterDrop = useCallback(
     (name: string, value: unknown, position: { x: number; y: number }) => {
       // Snapshot for undo
-      snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
 
       // Create a new parameter node at the drop position with sequential ref ID
       let refIndex = 1
@@ -1746,47 +1938,53 @@ export default function App() {
       setNodes((nds) => [...nds, newNode])
       setHasChanges(true)
     },
-    [snapshot, setNodes]
+    [snapshot, setNodes],
   )
 
   // Sidebar resize handlers
-  const handleSidebarResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startWidth = sidebarWidth
+  const handleSidebarResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startWidth = sidebarWidth
 
-    const onMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - startX
-      setSidebarWidth(Math.max(200, Math.min(500, startWidth + delta)))
-    }
+      const onMouseMove = (e: MouseEvent) => {
+        const delta = e.clientX - startX
+        setSidebarWidth(Math.max(200, Math.min(500, startWidth + delta)))
+      }
 
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove)
+        document.removeEventListener('mouseup', onMouseUp)
+      }
 
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [sidebarWidth])
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', onMouseUp)
+    },
+    [sidebarWidth],
+  )
 
-  const handlePropertiesResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startWidth = propertiesWidth
+  const handlePropertiesResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startWidth = propertiesWidth
 
-    const onMouseMove = (e: MouseEvent) => {
-      const delta = startX - e.clientX // Reversed because dragging left increases width
-      setPropertiesWidth(Math.max(250, Math.min(600, startWidth + delta)))
-    }
+      const onMouseMove = (e: MouseEvent) => {
+        const delta = startX - e.clientX // Reversed because dragging left increases width
+        setPropertiesWidth(Math.max(250, Math.min(600, startWidth + delta)))
+      }
 
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove)
+        document.removeEventListener('mouseup', onMouseUp)
+      }
 
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [propertiesWidth])
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', onMouseUp)
+    },
+    [propertiesWidth],
+  )
 
   // Compute eligibility for selected step(s)
   const selectedStepId = selectedStepNodes.length === 1 ? selectedStepNodes[0].id : null
@@ -1800,8 +1998,8 @@ export default function App() {
   const groupStepIds = useMemo(() => {
     if (!detectedGroupName) return []
     return nodes
-      .filter(n => n.type === 'step' && (n.data as StepData).group === detectedGroupName)
-      .map(n => n.id)
+      .filter((n) => n.type === 'step' && (n.data as StepData).group === detectedGroupName)
+      .map((n) => n.id)
   }, [detectedGroupName, nodes])
   const groupEligibility =
     groupStepIds.length > 1
@@ -1869,21 +2067,30 @@ export default function App() {
                 </span>
               </div>
               <div className="space-y-1 max-h-48 overflow-y-auto">
-                {(expandWarnings ? validationWarnings : validationWarnings.slice(0, 3)).map((warning, index) => (
-                  <div key={index} className="text-slate-600 dark:text-slate-300 text-xs flex items-start gap-2">
-                    {warning.level === 'error' ? (
-                      <XCircle className="w-3 h-3 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                    ) : warning.level === 'warning' ? (
-                      <AlertTriangle className="w-3 h-3 text-amber-500 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                    ) : (
-                      <Info className="w-3 h-3 text-sky-500 dark:text-sky-400 mt-0.5 flex-shrink-0" />
-                    )}
-                    <span>
-                      {warning.step && <span className="text-slate-500 dark:text-slate-400 font-medium">[{warning.step}]</span>}{' '}
-                      {warning.message}
-                    </span>
-                  </div>
-                ))}
+                {(expandWarnings ? validationWarnings : validationWarnings.slice(0, 3)).map(
+                  (warning, index) => (
+                    <div
+                      key={index}
+                      className="text-slate-600 dark:text-slate-300 text-xs flex items-start gap-2"
+                    >
+                      {warning.level === 'error' ? (
+                        <XCircle className="w-3 h-3 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                      ) : warning.level === 'warning' ? (
+                        <AlertTriangle className="w-3 h-3 text-amber-500 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <Info className="w-3 h-3 text-sky-500 dark:text-sky-400 mt-0.5 flex-shrink-0" />
+                      )}
+                      <span>
+                        {warning.step && (
+                          <span className="text-slate-500 dark:text-slate-400 font-medium">
+                            [{warning.step}]
+                          </span>
+                        )}{' '}
+                        {warning.message}
+                      </span>
+                    </div>
+                  ),
+                )}
                 {!expandWarnings && validationWarnings.length > 3 && (
                   <div className="text-slate-400 dark:text-slate-500 text-xs">
                     ...and {validationWarnings.length - 3} more
@@ -1932,10 +2139,11 @@ export default function App() {
               className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
               title={leftCollapsed ? 'Expand sidebar (Ctrl+Tab)' : 'Collapse sidebar (Ctrl+Tab)'}
             >
-              {leftCollapsed
-                ? <ChevronRight className="w-3 h-3" />
-                : <ChevronLeft className="w-3 h-3" />
-              }
+              {leftCollapsed ? (
+                <ChevronRight className="w-3 h-3" />
+              ) : (
+                <ChevronLeft className="w-3 h-3" />
+              )}
             </button>
             {!leftCollapsed && (
               <div
@@ -1956,7 +2164,13 @@ export default function App() {
             setEdges={setEdges}
             onSelectionChange={handleSelectionChange}
             onEdgeSelect={handleEdgeSelect}
-            onSnapshot={() => snapshot({ nodes: nodesRef.current, edges: edgesRef.current, parameters: parametersRef.current })}
+            onSnapshot={() =>
+              snapshot({
+                nodes: nodesRef.current,
+                edges: edgesRef.current,
+                parameters: parametersRef.current,
+              })
+            }
             onNodeDoubleClick={handleNodeDoubleClick}
             onParameterDrop={handleParameterDrop}
             hideParameterNodes={!showParameterNodes}
@@ -1976,10 +2190,11 @@ export default function App() {
               className="h-8 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 transition-colors text-slate-500 dark:text-slate-400 hover:text-white"
               title={rightCollapsed ? 'Expand panel (Ctrl+Tab)' : 'Collapse panel (Ctrl+Tab)'}
             >
-              {rightCollapsed
-                ? <ChevronLeft className="w-3 h-3" />
-                : <ChevronRight className="w-3 h-3" />
-              }
+              {rightCollapsed ? (
+                <ChevronLeft className="w-3 h-3" />
+              ) : (
+                <ChevronRight className="w-3 h-3" />
+              )}
             </button>
             {!rightCollapsed && (
               <div
@@ -2040,7 +2255,10 @@ export default function App() {
       {/* Auto-layout confirmation dialog */}
       {showAutoLayoutConfirm && (
         <AutoLayoutConfirmDialog
-          onConfirm={() => { setShowAutoLayoutConfirm(false); performAutoLayoutAndSave() }}
+          onConfirm={() => {
+            setShowAutoLayoutConfirm(false)
+            performAutoLayoutAndSave()
+          }}
           onCancel={() => setShowAutoLayoutConfirm(false)}
         />
       )}
@@ -2083,7 +2301,8 @@ export default function App() {
           nodes={nodes}
           edges={edges}
           existingMultiPass={
-            (multiPassGroups[feedbackDialog.groupName] as Record<string, unknown> | undefined)?.multi_pass as Record<string, unknown> | undefined
+            (multiPassGroups[feedbackDialog.groupName] as Record<string, unknown> | undefined)
+              ?.multi_pass as Record<string, unknown> | undefined
           }
           groupName={feedbackDialog.groupName}
           onConfirm={handleFeedbackConfirm}

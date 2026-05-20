@@ -80,7 +80,7 @@ describe('High Priority Issue #5: AbortController for Request Cancellation', () 
       expect.stringContaining('/api/config'),
       expect.objectContaining({
         signal: expect.any(AbortSignal),
-      })
+      }),
     )
   })
 
@@ -214,7 +214,7 @@ describe('High Priority Issue #7: Sync Status Indicator', () => {
    */
   async function saveWithSyncTracking(
     saveConfig: () => Promise<boolean>,
-    syncTracker: ReturnType<typeof createSyncTracker>
+    syncTracker: ReturnType<typeof createSyncTracker>,
   ): Promise<boolean> {
     syncTracker.setPending()
     try {
@@ -263,10 +263,7 @@ describe('High Priority Issue #7: Sync Status Indicator', () => {
   it('should capture error message on exception', async () => {
     const syncTracker = createSyncTracker()
 
-    await saveWithSyncTracking(
-      () => Promise.reject(new Error('Network error')),
-      syncTracker
-    )
+    await saveWithSyncTracking(() => Promise.reject(new Error('Network error')), syncTracker)
 
     expect(syncTracker.getState().status).toBe('error')
     expect(syncTracker.getState().lastError).toBe('Network error')
@@ -309,7 +306,9 @@ describe('Pipeline Browser API Functions', () => {
     /**
      * Implementation of listPipelines that mirrors useApi.ts
      */
-    async function listPipelines(): Promise<Array<{ name: string; path: string; relative_path: string }>> {
+    async function listPipelines(): Promise<
+      Array<{ name: string; path: string; relative_path: string }>
+    > {
       try {
         const res = await fetch('/api/pipelines')
         if (!res.ok) return []
@@ -321,8 +320,16 @@ describe('Pipeline Browser API Functions', () => {
 
     it('should fetch pipelines from /api/pipelines', async () => {
       const mockPipelines = [
-        { name: 'project_a', path: '/workspace/project_a/pipeline.yml', relative_path: 'project_a' },
-        { name: 'project_b', path: '/workspace/project_b/pipeline.yml', relative_path: 'project_b' },
+        {
+          name: 'project_a',
+          path: '/workspace/project_a/pipeline.yml',
+          relative_path: 'project_a',
+        },
+        {
+          name: 'project_b',
+          path: '/workspace/project_b/pipeline.yml',
+          relative_path: 'project_b',
+        },
       ]
       fetchMock.mockResolvedValue({
         ok: true,
@@ -383,29 +390,31 @@ describe('Pipeline Browser API Functions', () => {
       const pipelinePath = '/workspace/my project/pipeline.yml'
       fetchMock.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          status: 'ok',
-          configPath: pipelinePath,
-          tasksDir: '/workspace/my project/tasks',
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'ok',
+            configPath: pipelinePath,
+            tasksDir: '/workspace/my project/tasks',
+          }),
       })
 
       await openPipeline(pipelinePath)
 
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/pipelines/open?path=${encodeURIComponent(pipelinePath)}`,
-        { method: 'POST' }
+        { method: 'POST' },
       )
     })
 
     it('should return success with config and tasks paths', async () => {
       fetchMock.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          status: 'ok',
-          configPath: '/path/to/pipeline.yml',
-          tasksDir: '/path/to/tasks',
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'ok',
+            configPath: '/path/to/pipeline.yml',
+            tasksDir: '/path/to/tasks',
+          }),
       })
 
       const result = await openPipeline('/path/to/pipeline.yml')

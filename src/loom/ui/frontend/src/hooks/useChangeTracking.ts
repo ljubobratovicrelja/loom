@@ -80,7 +80,7 @@ export function useChangeTracking(dependencies: unknown[]): ChangeTrackingState 
  */
 export function shouldTrackChange(
   isInitialMount: boolean,
-  shouldSkip: boolean
+  shouldSkip: boolean,
 ): { markDirty: boolean; newIsInitialMount: boolean; newShouldSkip: boolean } {
   if (isInitialMount) {
     return { markDirty: false, newIsInitialMount: false, newShouldSkip: shouldSkip }

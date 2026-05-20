@@ -18,7 +18,7 @@ export function resetNodeIdCounter(): void {
 
 export function createStepNode(
   name: string,
-  options: Partial<StepData> & { id?: string; position?: { x: number; y: number } } = {}
+  options: Partial<StepData> & { id?: string; position?: { x: number; y: number } } = {},
 ): Node<StepData, 'step'> {
   const id = options.id ?? `step_${name}_${++nodeIdCounter}`
   return {
@@ -41,7 +41,7 @@ export function createStepNode(
 export function createParameterNode(
   name: string,
   value: unknown = '',
-  options: { id?: string; position?: { x: number; y: number } } = {}
+  options: { id?: string; position?: { x: number; y: number } } = {},
 ): Node<ParameterData, 'parameter'> {
   const id = options.id ?? `param_${name}_${++nodeIdCounter}`
   return {
@@ -59,7 +59,7 @@ export function createDataNode(
   name: string,
   dataType: DataType = 'csv',
   path: string = `data/${name}.${dataType === 'csv' ? 'csv' : dataType === 'json' ? 'json' : dataType === 'video' ? 'mp4' : dataType === 'image' ? 'png' : ''}`,
-  options: Partial<DataNodeData> & { id?: string; position?: { x: number; y: number } } = {}
+  options: Partial<DataNodeData> & { id?: string; position?: { x: number; y: number } } = {},
 ): Node<DataNodeData, 'data'> {
   const id = options.id ?? `data_${name}_${++nodeIdCounter}`
   const key = options.key ?? name.toLowerCase().replace(/\s+/g, '_')
@@ -91,9 +91,10 @@ export function createEdge(
     id?: string
     sourceHandle?: string
     targetHandle?: string
-  } = {}
+  } = {},
 ): Edge {
-  const id = options.id ?? `e_${source}_${target}${options.targetHandle ? `_${options.targetHandle}` : ''}`
+  const id =
+    options.id ?? `e_${source}_${target}${options.targetHandle ? `_${options.targetHandle}` : ''}`
   return {
     id,
     source,
@@ -103,7 +104,11 @@ export function createEdge(
   }
 }
 
-export function createParameterToStepEdge(parameterId: string, stepId: string, argHandle: string): Edge {
+export function createParameterToStepEdge(
+  parameterId: string,
+  stepId: string,
+  argHandle: string,
+): Edge {
   return createEdge(parameterId, stepId, { targetHandle: argHandle })
 }
 
@@ -136,7 +141,7 @@ export function connectParameterToStep(
   state: GraphState,
   parameterId: string,
   stepId: string,
-  argKey: string
+  argKey: string,
 ): GraphState {
   const paramNode = state.nodes.find((n) => n.id === parameterId)
   if (!paramNode || paramNode.type !== 'parameter') {
@@ -152,7 +157,7 @@ export function connectParameterToStep(
 
   // Remove any existing parameter connection to this arg
   const newEdges = state.edges.filter(
-    (e) => !(e.target === stepId && e.targetHandle === argKey && e.source.startsWith('param_'))
+    (e) => !(e.target === stepId && e.targetHandle === argKey && e.source.startsWith('param_')),
   )
 
   // Add new edge
@@ -184,11 +189,11 @@ export function connectParameterToStep(
 export function disconnectParameterFromStep(
   state: GraphState,
   stepId: string,
-  argKey: string
+  argKey: string,
 ): GraphState {
   // Remove edge
   const newEdges = state.edges.filter(
-    (e) => !(e.target === stepId && e.targetHandle === argKey && e.source.startsWith('param_'))
+    (e) => !(e.target === stepId && e.targetHandle === argKey && e.source.startsWith('param_')),
   )
 
   // Clear step's arg
@@ -266,7 +271,7 @@ export function reconnectEdge(
   state: GraphState,
   oldEdge: Edge,
   newTarget: string,
-  newTargetHandle?: string
+  newTargetHandle?: string,
 ): GraphState {
   // For parameter edges, handle arg updates
   const isParamEdge = oldEdge.source.startsWith('param_')
@@ -355,10 +360,10 @@ export function isParameterConnected(
   state: GraphState,
   parameterId: string,
   stepId: string,
-  argKey: string
+  argKey: string,
 ): boolean {
   return state.edges.some(
-    (e) => e.source === parameterId && e.target === stepId && e.targetHandle === argKey
+    (e) => e.source === parameterId && e.target === stepId && e.targetHandle === argKey,
   )
 }
 

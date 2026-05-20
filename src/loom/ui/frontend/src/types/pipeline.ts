@@ -16,10 +16,10 @@ export type DataType =
   | 'data_folder'
 
 export interface LoopConfig {
-  over: string      // e.g. "$raw_images" — data var to iterate over
-  into: string      // e.g. "$processed_images" — data var to collect outputs into
+  over: string // e.g. "$raw_images" — data var to iterate over
+  into: string // e.g. "$processed_images" — data var to collect outputs into
   parallel?: boolean
-  filter?: string   // Glob pattern, e.g. "*.jpg"
+  filter?: string // Glob pattern, e.g. "*.jpg"
 }
 
 export interface StepData {
@@ -56,21 +56,21 @@ export interface GroupNodeData {
 
 export interface ParameterData {
   name: string
-  value: unknown  // string | number | boolean
+  value: unknown // string | number | boolean
   // Index signature for React Flow compatibility
   [key: string]: unknown
 }
 
 // Data node - typed file/directory data
 export interface DataNodeData {
-  key: string            // Programmatic identifier for $references (e.g., "gaze_csv")
-  name: string           // Display name (e.g., "Gaze Positions")
-  type: DataType         // The semantic data type
-  path: string           // File/directory path
-  description?: string   // Optional description
-  pattern?: string       // Optional file pattern for directories
-  exists?: boolean       // Runtime: does path exist?
-  pulseError?: boolean   // Animation flag for error state
+  key: string // Programmatic identifier for $references (e.g., "gaze_csv")
+  name: string // Display name (e.g., "Gaze Positions")
+  type: DataType // The semantic data type
+  path: string // File/directory path
+  description?: string // Optional description
+  pattern?: string // Optional file pattern for directories
+  exists?: boolean // Runtime: does path exist?
+  pulseError?: boolean // Animation flag for error state
   // Index signature for React Flow compatibility
   [key: string]: unknown
 }
@@ -94,7 +94,7 @@ export interface ExecutionOptions {
 export interface DataEntry {
   type: DataType
   path: string
-  name?: string          // Display name (optional, falls back to key)
+  name?: string // Display name (optional, falls back to key)
   description?: string
   pattern?: string
 }
@@ -120,12 +120,12 @@ export interface FeedbackEdgeData {
 export interface PipelineGraph {
   variables: Record<string, string>
   parameters: Record<string, unknown>
-  data: Record<string, DataEntry>  // NEW: Data nodes section
+  data: Record<string, DataEntry> // NEW: Data nodes section
   nodes: PipelineNode[]
   edges: Edge[]
   editor?: EditorOptions
   execution?: ExecutionOptions
-  hasLayout?: boolean  // True if positions were loaded from YAML
+  hasLayout?: boolean // True if positions were loaded from YAML
   multiPassGroups?: Record<string, unknown>
 }
 
@@ -137,8 +137,8 @@ export interface EditorState {
 }
 
 export interface PipelineInfo {
-  name: string          // Display name (parent directory name)
-  path: string          // Absolute path to pipeline.yml
+  name: string // Display name (parent directory name)
+  path: string // Absolute path to pipeline.yml
   relative_path: string // Path relative to workspace directory
 }
 
@@ -153,7 +153,7 @@ export interface ArgSchema {
 // Input/output schema with optional type for validation
 export interface InputOutputSchema {
   description: string
-  type?: DataType  // Optional type for connection validation
+  type?: DataType // Optional type for connection validation
 }
 
 export interface TaskInfo {
@@ -173,9 +173,9 @@ export type ExecutionStatus = 'idle' | 'running' | 'cancelled' | 'completed' | '
 export interface RunRequest {
   mode: RunMode
   step_name?: string
-  step_names?: string[]  // For parallel mode
+  step_names?: string[] // For parallel mode
   data_name?: string
-  group_name?: string  // For group mode
+  group_name?: string // For group mode
 }
 
 // Per-step terminal output for parallel execution

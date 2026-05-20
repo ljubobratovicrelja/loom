@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run all linting (Python + Frontend)
+# Auto-format all code (Python via ruff, TypeScript/CSS/JSON via prettier).
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,17 +13,15 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
     nvm use 20 --silent 2>/dev/null || true
 fi
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo -e "${BLUE}=== Linting Python ===${NC}"
+echo -e "${BLUE}=== Formatting Python ===${NC}"
 
 cd "$ROOT_DIR"
 
-# Activate venv if not already active
 if [ -z "$VIRTUAL_ENV" ]; then
     if [ -f "venv/bin/activate" ]; then
         source venv/bin/activate
@@ -33,35 +31,23 @@ if [ -z "$VIRTUAL_ENV" ]; then
     fi
 fi
 
-echo "Running ruff format --check..."
-ruff format --check src/ tests/ examples/
+ruff format src/ tests/ examples/
 
-echo "Running ruff check..."
-ruff check src/ tests/ examples/
-
-echo "Running mypy..."
-mypy src/ tests/
-
-echo -e "${GREEN}Python linting passed!${NC}"
+echo -e "${GREEN}Python formatting done!${NC}"
 
 echo ""
-echo -e "${BLUE}=== Linting Frontend ===${NC}"
+echo -e "${BLUE}=== Formatting Frontend ===${NC}"
 
 cd "$FRONTEND_DIR"
 
-# Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo "Installing frontend dependencies..."
     npm install
 fi
 
-echo "Running Prettier --check..."
-npm run format:check
+npm run format
 
-echo "Running ESLint..."
-npm run lint
-
-echo -e "${GREEN}Frontend linting passed!${NC}"
+echo -e "${GREEN}Frontend formatting done!${NC}"
 
 echo ""
-echo -e "${GREEN}=== All linting passed! ===${NC}"
+echo -e "${GREEN}=== All formatting done! ===${NC}"

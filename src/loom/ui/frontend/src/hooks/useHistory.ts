@@ -74,7 +74,7 @@ export function useHistory(options: UseHistoryOptions = {}): UseHistoryReturn {
         futureCount: 0,
       })
     },
-    [maxHistory]
+    [maxHistory],
   )
 
   const undo = useCallback(
@@ -94,7 +94,7 @@ export function useHistory(options: UseHistoryOptions = {}): UseHistoryReturn {
 
       onRestore?.(stateToRestore)
     },
-    [onRestore]
+    [onRestore],
   )
 
   const redo = useCallback(
@@ -114,7 +114,7 @@ export function useHistory(options: UseHistoryOptions = {}): UseHistoryReturn {
 
       onRestore?.(stateToRestore)
     },
-    [onRestore]
+    [onRestore],
   )
 
   const clear = useCallback(() => {

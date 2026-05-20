@@ -27,7 +27,12 @@ export function useTerminal(options: UseTerminalOptions = {}) {
     onStepStatusChangeRef.current = options.onStepStatusChange
     onStepOutputRef.current = options.onStepOutput
     onPipelineMessageRef.current = options.onPipelineMessage
-  }, [options.onStatusChange, options.onStepStatusChange, options.onStepOutput, options.onPipelineMessage])
+  }, [
+    options.onStatusChange,
+    options.onStepStatusChange,
+    options.onStepOutput,
+    options.onPipelineMessage,
+  ])
 
   const updateStatus = useCallback((newStatus: ExecutionStatus) => {
     setStatus(newStatus)
@@ -35,7 +40,7 @@ export function useTerminal(options: UseTerminalOptions = {}) {
   }, [])
 
   const markRunning = useCallback((stepName: string, isRunning: boolean) => {
-    setRunningSteps(prev => {
+    setRunningSteps((prev) => {
       const next = new Set(prev)
       if (isRunning) next.add(stepName)
       else next.delete(stepName)
@@ -45,22 +50,25 @@ export function useTerminal(options: UseTerminalOptions = {}) {
 
   // Helper invoked for parallel-demultiplexed chunks so we still track per-step
   // status purely from their content.
-  const parseMarkersForStep = useCallback((output: string, stepName: string) => {
-    const plain = output.replace(/\x1b\[[0-9;]*m/g, '')
-    if (plain.includes('[RUNNING]')) markRunning(stepName, true)
-    if (plain.includes('[SUCCESS]')) {
-      markRunning(stepName, false)
-      onStepStatusChangeRef.current?.(stepName, 'completed')
-    }
-    if (plain.includes('[FAILED]')) {
-      markRunning(stepName, false)
-      onStepStatusChangeRef.current?.(stepName, 'failed')
-    }
-    if (plain.includes('[CANCELLED]')) {
-      markRunning(stepName, false)
-      onStepStatusChangeRef.current?.(stepName, 'idle')
-    }
-  }, [markRunning])
+  const parseMarkersForStep = useCallback(
+    (output: string, stepName: string) => {
+      const plain = output.replace(/\x1b\[[0-9;]*m/g, '')
+      if (plain.includes('[RUNNING]')) markRunning(stepName, true)
+      if (plain.includes('[SUCCESS]')) {
+        markRunning(stepName, false)
+        onStepStatusChangeRef.current?.(stepName, 'completed')
+      }
+      if (plain.includes('[FAILED]')) {
+        markRunning(stepName, false)
+        onStepStatusChangeRef.current?.(stepName, 'failed')
+      }
+      if (plain.includes('[CANCELLED]')) {
+        markRunning(stepName, false)
+        onStepStatusChangeRef.current?.(stepName, 'idle')
+      }
+    },
+    [markRunning],
+  )
 
   const run = useCallback(
     (request: RunRequest) => {
@@ -113,9 +121,13 @@ export function useTerminal(options: UseTerminalOptions = {}) {
           const msg = JSON.parse(text)
           if (msg.type === 'step_status') {
             const state: StepExecutionState =
-              msg.status === 'running' ? 'running' :
-              msg.status === 'completed' ? 'completed' :
-              msg.status === 'failed' ? 'failed' : 'idle'
+              msg.status === 'running'
+                ? 'running'
+                : msg.status === 'completed'
+                  ? 'completed'
+                  : msg.status === 'failed'
+                    ? 'failed'
+                    : 'idle'
             if (msg.status === 'running') {
               currentStepRef.current = msg.step
               markRunning(msg.step, true)
@@ -180,7 +192,7 @@ export function useTerminal(options: UseTerminalOptions = {}) {
         updateStatus('failed')
       }
     },
-    [updateStatus, markRunning, parseMarkersForStep]
+    [updateStatus, markRunning, parseMarkersForStep],
   )
 
   const cancel = useCallback(() => {

@@ -66,7 +66,7 @@ export function createEdgeId(source: string, target: string, targetHandle?: stri
 export function handleConnect(
   nodes: Node[],
   edges: Edge[],
-  connection: Connection
+  connection: Connection,
 ): ConnectionResult {
   const { source, target, sourceHandle, targetHandle } = connection
 
@@ -85,11 +85,7 @@ export function handleConnect(
     // Remove any existing parameter connection to this target handle
     const filteredEdges = edges.filter(
       (e) =>
-        !(
-          e.target === target &&
-          e.targetHandle === targetHandle &&
-          isParameterSource(e.source)
-        )
+        !(e.target === target && e.targetHandle === targetHandle && isParameterSource(e.source)),
     )
 
     // Add new edge
@@ -137,7 +133,7 @@ export function handleReconnect(
   nodes: Node[],
   edges: Edge[],
   oldEdge: Edge,
-  newConnection: Connection
+  newConnection: Connection,
 ): ConnectionResult {
   const { source, target, targetHandle } = newConnection
 
@@ -174,11 +170,7 @@ export function handleReconnect(
     let changed = false
 
     // Clear old connection if it was a parameter to step arg
-    if (
-      isParameterSource(oldEdge.source) &&
-      node.id === oldEdge.target &&
-      oldEdge.targetHandle
-    ) {
+    if (isParameterSource(oldEdge.source) && node.id === oldEdge.target && oldEdge.targetHandle) {
       newArgs = { ...newArgs }
       newArgs[oldEdge.targetHandle] = ''
       changed = true
@@ -202,11 +194,7 @@ export function handleReconnect(
  * - Removes the edge
  * - If it was a parameter edge, clears the arg value
  */
-export function handleEdgeDrop(
-  nodes: Node[],
-  edges: Edge[],
-  droppedEdge: Edge
-): ConnectionResult {
+export function handleEdgeDrop(nodes: Node[], edges: Edge[], droppedEdge: Edge): ConnectionResult {
   // Remove the edge
   const newEdges = edges.filter((e) => e.id !== droppedEdge.id)
 
@@ -237,12 +225,10 @@ export function handleDisconnectArg(
   nodes: Node[],
   edges: Edge[],
   stepId: string,
-  argKey: string
+  argKey: string,
 ): ConnectionResult {
   // Remove the edge
-  const newEdges = edges.filter(
-    (edge) => !(edge.target === stepId && edge.targetHandle === argKey)
-  )
+  const newEdges = edges.filter((edge) => !(edge.target === stepId && edge.targetHandle === argKey))
 
   // Clear the arg value
   const newNodes = nodes.map((node) => {
@@ -265,28 +251,20 @@ export function handleDisconnectArg(
  * - Removes all edges connected to the node
  * - If deleting a parameter node, clears arg values in connected steps
  */
-export function handleDeleteNode(
-  nodes: Node[],
-  edges: Edge[],
-  nodeId: string
-): ConnectionResult {
+export function handleDeleteNode(nodes: Node[], edges: Edge[], nodeId: string): ConnectionResult {
   const nodeToDelete = nodes.find((n) => n.id === nodeId)
   if (!nodeToDelete) {
     return { nodes, edges, success: false }
   }
 
   // Remove edges connected to this node
-  const newEdges = edges.filter(
-    (edge) => edge.source !== nodeId && edge.target !== nodeId
-  )
+  const newEdges = edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
 
   // If deleting a parameter node, clear arg references in connected steps
   let newNodes: Node[]
   if (nodeToDelete.type === 'parameter') {
     // Find all edges from this parameter to step args
-    const paramEdges = edges.filter(
-      (e) => e.source === nodeId && e.targetHandle
-    )
+    const paramEdges = edges.filter((e) => e.source === nodeId && e.targetHandle)
 
     newNodes = nodes
       .filter((node) => node.id !== nodeId)

@@ -5,7 +5,10 @@ interface AutoLayoutConfirmDialogProps {
   onCancel: () => void
 }
 
-export default function AutoLayoutConfirmDialog({ onConfirm, onCancel }: AutoLayoutConfirmDialogProps) {
+export default function AutoLayoutConfirmDialog({
+  onConfirm,
+  onCancel,
+}: AutoLayoutConfirmDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -15,7 +18,9 @@ export default function AutoLayoutConfirmDialog({ onConfirm, onCancel }: AutoLay
       <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 p-6 max-w-md w-full mx-4">
         <div className="flex items-start gap-3 mb-4">
           <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Apply Auto-Layout</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Apply Auto-Layout
+          </h2>
         </div>
 
         <p className="text-slate-600 dark:text-slate-300 mb-6">

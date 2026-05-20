@@ -104,7 +104,9 @@ export default function Sidebar({
   return (
     <div className="flex-1 bg-slate-100 dark:bg-slate-900 flex flex-col overflow-hidden">
       <div className="p-4 border-b border-slate-300 dark:border-slate-700 shrink-0">
-        <h2 className="text-slate-900 dark:text-white font-semibold text-sm uppercase tracking-wide">Add Nodes</h2>
+        <h2 className="text-slate-900 dark:text-white font-semibold text-sm uppercase tracking-wide">
+          Add Nodes
+        </h2>
       </div>
 
       {/* Pipeline Browser (workspace mode only) */}
@@ -120,7 +122,9 @@ export default function Sidebar({
 
       {/* Data Types Palette */}
       <div className="p-3 border-t border-slate-300 dark:border-slate-700 shrink-0">
-        <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide mb-2">Data Types</h3>
+        <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide mb-2">
+          Data Types
+        </h3>
         <div className="grid grid-cols-2 gap-1">
           {DATA_TYPES.map((dt) => (
             <button
@@ -139,7 +143,9 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto">
         {/* Tasks */}
         <div className="p-3 border-t border-slate-300 dark:border-slate-700">
-          <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide mb-2">Tasks</h3>
+          <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide mb-2">
+            Tasks
+          </h3>
           <div className="space-y-1">
             {tasks.map((task) => (
               <button
@@ -159,7 +165,9 @@ export default function Sidebar({
         {/* Parameters */}
         <div className="p-3 border-t border-slate-300 dark:border-slate-700">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Parameters</h3>
+            <h3 className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">
+              Parameters
+            </h3>
             {!addingParam && (
               <button
                 onClick={() => setAddingParam(true)}
@@ -221,14 +229,19 @@ export default function Sidebar({
                 onDragStart={(e) => {
                   e.dataTransfer.setData(
                     'application/loom-parameter',
-                    JSON.stringify({ name, value })
+                    JSON.stringify({ name, value }),
                   )
                   e.dataTransfer.effectAllowed = 'move'
                 }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-purple-600 dark:text-purple-300 text-xs font-medium">${name}</div>
-                  <span className="text-purple-400 dark:text-purple-500 text-[10px]" title="Drag to canvas">
+                  <div className="text-purple-600 dark:text-purple-300 text-xs font-medium">
+                    ${name}
+                  </div>
+                  <span
+                    className="text-purple-400 dark:text-purple-500 text-[10px]"
+                    title="Drag to canvas"
+                  >
                     &#8943;&#8943;
                   </span>
                 </div>

@@ -82,10 +82,7 @@ describe('useRunEligibility', () => {
         createStepNode('step2', 'process'),
         createDataNode('var1', 'data'),
       ]
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
       const stepStatuses = new Map<string, StepExecutionState>([['step1', 'running']])
 
       const { result } = renderHook(() => useRunEligibility(nodes, edges, stepStatuses))
@@ -130,10 +127,7 @@ describe('useRunEligibility', () => {
         createStepNode('step2', 'process'),
         createDataNode('var1', 'data'),
       ]
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
       const stepStatuses = new Map<string, StepExecutionState>([['step2', 'running']])
 
       const { result } = renderHook(() => useRunEligibility(nodes, edges, stepStatuses))
@@ -153,10 +147,7 @@ describe('useRunEligibility', () => {
         createStepNode('step2', 'extract_v2'),
         createDataNode('var1', 'output'),
       ]
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('step2', 'var1'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('step2', 'var1')]
       const stepStatuses = new Map<string, StepExecutionState>([['step1', 'running']])
 
       const { result } = renderHook(() => useRunEligibility(nodes, edges, stepStatuses))
@@ -177,10 +168,7 @@ describe('useRunEligibility', () => {
         createDataNode('var1', 'data_a'),
         createDataNode('var2', 'data_b'),
       ]
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('step2', 'var2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('step2', 'var2')]
       const stepStatuses = new Map<string, StepExecutionState>([['step1', 'running']])
 
       const { result } = renderHook(() => useRunEligibility(nodes, edges, stepStatuses))
@@ -260,10 +248,7 @@ describe('getParallelRunEligibility', () => {
       createDataNode('var1', 'data_a'),
       createDataNode('var2', 'data_b'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('step2', 'var2'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('step2', 'var2')]
 
     const result = getParallelRunEligibility(['step1', 'step2'], nodes, edges, new Map())
     expect(result.canRun).toBe(true)
@@ -276,10 +261,7 @@ describe('getParallelRunEligibility', () => {
       createStepNode('step2', 'process'),
       createDataNode('var1', 'data'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('var1', 'step2'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
     const result = getParallelRunEligibility(['step1', 'step2'], nodes, edges, new Map())
     expect(result.canRun).toBe(false)
@@ -293,10 +275,7 @@ describe('getParallelRunEligibility', () => {
       createStepNode('step2', 'extract_v2'),
       createDataNode('var1', 'output'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('step2', 'var1'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('step2', 'var1')]
 
     const result = getParallelRunEligibility(['step1', 'step2'], nodes, edges, new Map())
     expect(result.canRun).toBe(false)
@@ -319,10 +298,7 @@ describe('getParallelRunEligibility', () => {
       createStepNode('step2', 'process'),
       createDataNode('var1', 'data'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('var1', 'step2'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
     const stepStatuses = new Map<string, StepExecutionState>([['step1', 'running']])
 
     // Trying to run step2 while step1 (upstream) is running
@@ -338,10 +314,7 @@ describe('getParallelRunEligibility', () => {
       createStepNode('step2', 'process'),
       createDataNode('var1', 'data'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('var1', 'step2'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
     const stepStatuses = new Map<string, StepExecutionState>([['step2', 'running']])
 
     // Trying to run step1 while step2 (downstream) is running
@@ -368,10 +341,7 @@ describe('getGroupRunEligibility', () => {
       createStepNode('step2', 'process'),
       createDataNode('var1', 'data'),
     ]
-    const edges = [
-      createEdge('step1', 'var1'),
-      createEdge('var1', 'step2'),
-    ]
+    const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
     // This should be allowed for group run (orchestrator handles ordering)
     const result = getGroupRunEligibility(['step1', 'step2'], nodes, edges, new Map())
@@ -379,10 +349,7 @@ describe('getGroupRunEligibility', () => {
   })
 
   it('should block if a group step is already running', () => {
-    const nodes = [
-      createStepNode('step1', 'extract'),
-      createStepNode('step2', 'process'),
-    ]
+    const nodes = [createStepNode('step1', 'extract'), createStepNode('step2', 'process')]
     const stepStatuses = new Map<string, StepExecutionState>([['step1', 'running']])
 
     const result = getGroupRunEligibility(['step1', 'step2'], nodes, [], stepStatuses)

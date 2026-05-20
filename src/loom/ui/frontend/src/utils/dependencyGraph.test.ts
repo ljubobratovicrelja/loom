@@ -19,7 +19,12 @@ const createDataNode = (id: string, name: string): Node => ({
 })
 
 // Helper to create edges
-const createEdge = (source: string, target: string, sourceHandle?: string, targetHandle?: string): Edge => ({
+const createEdge = (
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+): Edge => ({
   id: `e_${source}_${target}`,
   source,
   target,
@@ -59,7 +64,7 @@ describe('buildDependencyGraph', () => {
 
       const edges = [
         createEdge('step1', 'var1', 'output', 'input'), // step1 -> var1
-        createEdge('var1', 'step2', 'value', 'data'),  // var1 -> step2
+        createEdge('var1', 'step2', 'value', 'data'), // var1 -> step2
       ]
 
       const graph = buildDependencyGraph(nodes, edges)
@@ -75,10 +80,7 @@ describe('buildDependencyGraph', () => {
         createDataNode('var1', 'data'),
       ]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
       const graph = buildDependencyGraph(nodes, edges)
 
@@ -143,10 +145,7 @@ describe('buildDependencyGraph', () => {
         createDataNode('var1', 'output'),
       ]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('step2', 'var1'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('step2', 'var1')]
 
       const graph = buildDependencyGraph(nodes, edges)
 
@@ -162,10 +161,7 @@ describe('buildDependencyGraph', () => {
         createDataNode('var2', 'output2'),
       ]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('step2', 'var2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('step2', 'var2')]
 
       const graph = buildDependencyGraph(nodes, edges)
 
@@ -189,10 +185,7 @@ describe('buildDependencyGraph', () => {
         createDataNode('var1', 'data'),
       ]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
       const graph = buildDependencyGraph(nodes, edges)
 
@@ -209,10 +202,7 @@ describe('buildDependencyGraph', () => {
         createDataNode('var1', 'data'),
       ]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
       const graph = buildDependencyGraph(nodes, edges)
 
@@ -303,10 +293,7 @@ describe('buildDependencyGraph', () => {
         createDataNode('var1', 'data'),
       ]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
       const graph = buildDependencyGraph(nodes, edges)
 
@@ -340,10 +327,7 @@ describe('buildDependencyGraph', () => {
     })
 
     it('should handle variable nodes without connections', () => {
-      const nodes = [
-        createStepNode('step1', 'extract'),
-        createDataNode('var1', 'orphan'),
-      ]
+      const nodes = [createStepNode('step1', 'extract'), createDataNode('var1', 'orphan')]
 
       const graph = buildDependencyGraph(nodes, [])
 
@@ -401,15 +385,9 @@ describe('buildDependencyGraph', () => {
 
     it('should detect self-loop cycle', () => {
       // step1 -> var1 -> step1 (self-loop)
-      const nodes = [
-        createStepNode('step1', 'recursive'),
-        createDataNode('var1', 'data'),
-      ]
+      const nodes = [createStepNode('step1', 'recursive'), createDataNode('var1', 'data')]
 
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step1'),
-      ]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step1')]
 
       const graph = buildDependencyGraph(nodes, edges)
 

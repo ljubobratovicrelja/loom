@@ -26,7 +26,8 @@ export default function UnsavedChangesDialog({
                 Unsaved Changes
               </h3>
               <p className="text-slate-600 dark:text-slate-300 text-sm">
-                You have unsaved changes in the current pipeline. Would you like to save them before opening{' '}
+                You have unsaved changes in the current pipeline. Would you like to save them before
+                opening{' '}
                 <span className="font-medium text-slate-900 dark:text-white">{pipelineName}</span>?
               </p>
             </div>

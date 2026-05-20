@@ -24,32 +24,39 @@ function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<Group
 
   // Selection visual state
   const { anyGroupSelected, isSelected } = data
-  const selectionFilter = anyGroupSelected && !isSelected ? 'saturate(0.3) brightness(0.85)' : 'none'
+  const selectionFilter =
+    anyGroupSelected && !isSelected ? 'saturate(0.3) brightness(0.85)' : 'none'
   const selectionScale = anyGroupSelected && isSelected ? 'scale(1.02)' : 'none'
 
   const { onGroupClick, onGroupDoubleClick } = data
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    // Clear any pending timer from a previous click (onClick fires per-click, not per-pair)
-    if (clickTimer.current) {
-      clearTimeout(clickTimer.current)
-    }
-    clickTimer.current = setTimeout(() => {
-      clickTimer.current = null
-      onGroupClick?.()
-    }, 250)
-  }, [onGroupClick])
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      // Clear any pending timer from a previous click (onClick fires per-click, not per-pair)
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current)
+      }
+      clickTimer.current = setTimeout(() => {
+        clickTimer.current = null
+        onGroupClick?.()
+      }, 250)
+    },
+    [onGroupClick],
+  )
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (clickTimer.current) {
-      clearTimeout(clickTimer.current)
-      clickTimer.current = null
-    }
-    onGroupDoubleClick?.()
-  }, [onGroupDoubleClick])
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current)
+        clickTimer.current = null
+      }
+      onGroupDoubleClick?.()
+    },
+    [onGroupDoubleClick],
+  )
 
   return (
     <div
@@ -67,7 +74,8 @@ function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<Group
         cursor: zoomed ? 'pointer' : 'default',
         filter: selectionFilter,
         transform: selectionScale,
-        transition: 'background-color 0.4s ease, border-color 0.4s ease, transform 0.3s ease, filter 0.3s ease',
+        transition:
+          'background-color 0.4s ease, border-color 0.4s ease, transform 0.3s ease, filter 0.3s ease',
       }}
     >
       <span

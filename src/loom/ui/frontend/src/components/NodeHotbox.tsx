@@ -1,4 +1,12 @@
-import { useState, useRef, useCallback, useEffect, useMemo, useLayoutEffect, type ReactNode } from 'react'
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useLayoutEffect,
+  type ReactNode,
+} from 'react'
 import { Cog, Image, Video, Table2, Braces, FolderOpen, Folder, DollarSign } from 'lucide-react'
 import type { TaskInfo, DataType } from '../types/pipeline'
 import { fuzzySearch } from '../utils/fuzzySearch'
@@ -54,69 +62,85 @@ export default function NodeHotbox({
   const [adjustedPosition, setAdjustedPosition] = useState(position)
 
   // Build unified item list
-  const allItems = useMemo<HotboxItem[]>(() => [
-    ...tasks.map((t): HotboxItem => ({
-      id: `task:${t.path}`,
-      label: t.name,
-      category: 'task',
-      icon: <Cog className="w-4 h-4" />,
-      task: t,
-    })),
-    ...Object.entries(parameters).map(([name, value]): HotboxItem => ({
-      id: `param:${name}`,
-      label: name,
-      category: 'param',
-      icon: <DollarSign className="w-4 h-4" />,
-      paramName: name,
-      paramValue: value,
-    })),
-    ...DATA_TYPE_ENTRIES.map((dt): HotboxItem => ({
-      id: `data:${dt.type}`,
-      label: dt.label,
-      category: 'data',
-      icon: dt.icon,
-      dataType: dt.type,
-    })),
-  ], [tasks, parameters])
+  const allItems = useMemo<HotboxItem[]>(
+    () => [
+      ...tasks.map(
+        (t): HotboxItem => ({
+          id: `task:${t.path}`,
+          label: t.name,
+          category: 'task',
+          icon: <Cog className="w-4 h-4" />,
+          task: t,
+        }),
+      ),
+      ...Object.entries(parameters).map(
+        ([name, value]): HotboxItem => ({
+          id: `param:${name}`,
+          label: name,
+          category: 'param',
+          icon: <DollarSign className="w-4 h-4" />,
+          paramName: name,
+          paramValue: value,
+        }),
+      ),
+      ...DATA_TYPE_ENTRIES.map(
+        (dt): HotboxItem => ({
+          id: `data:${dt.type}`,
+          label: dt.label,
+          category: 'data',
+          icon: dt.icon,
+          dataType: dt.type,
+        }),
+      ),
+    ],
+    [tasks, parameters],
+  )
 
   // Filter with fuzzy search only when query is long enough
-  const results = useMemo(() =>
-    query.length >= MIN_QUERY_LENGTH
-      ? fuzzySearch(query, allItems, (item) => item.label)
-          .map((m) => m.item)
-      : []
-  , [query, allItems])
+  const results = useMemo(
+    () =>
+      query.length >= MIN_QUERY_LENGTH
+        ? fuzzySearch(query, allItems, (item) => item.label).map((m) => m.item)
+        : [],
+    [query, allItems],
+  )
 
-  const selectItem = useCallback((item: HotboxItem) => {
-    if (item.category === 'task' && item.task) {
-      onAddTask(item.task, flowPosition)
-    } else if (item.category === 'param' && item.paramName !== undefined) {
-      onAddParameter(item.paramName, item.paramValue, flowPosition)
-    } else if (item.category === 'data' && item.dataType) {
-      onAddData(item.dataType, flowPosition)
-    }
-    onClose()
-  }, [flowPosition, onAddTask, onAddParameter, onAddData, onClose])
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' || e.key === 'Tab') {
-      e.preventDefault()
-      onClose()
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (results.length === 0) return
-      setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      if (results.length === 0) return
-      setSelectedIndex((i) => Math.max(i - 1, 0))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (results.length > 0 && selectedIndex < results.length) {
-        selectItem(results[selectedIndex])
+  const selectItem = useCallback(
+    (item: HotboxItem) => {
+      if (item.category === 'task' && item.task) {
+        onAddTask(item.task, flowPosition)
+      } else if (item.category === 'param' && item.paramName !== undefined) {
+        onAddParameter(item.paramName, item.paramValue, flowPosition)
+      } else if (item.category === 'data' && item.dataType) {
+        onAddData(item.dataType, flowPosition)
       }
-    }
-  }, [onClose, results, selectedIndex, selectItem])
+      onClose()
+    },
+    [flowPosition, onAddTask, onAddParameter, onAddData, onClose],
+  )
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === 'Tab') {
+        e.preventDefault()
+        onClose()
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (results.length === 0) return
+        setSelectedIndex((i) => Math.min(i + 1, results.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (results.length === 0) return
+        setSelectedIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (results.length > 0 && selectedIndex < results.length) {
+          selectItem(results[selectedIndex])
+        }
+      }
+    },
+    [onClose, results, selectedIndex, selectItem],
+  )
 
   // Reset selection when results change
   const prevResultsLen = useRef(results.length)
@@ -151,7 +175,7 @@ export default function NodeHotbox({
     if (x !== adjustedPosition.x || y !== adjustedPosition.y) {
       setAdjustedPosition({ x, y })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only recompute on initial render
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only recompute on initial render
   }, [])
 
   return (
@@ -179,7 +203,10 @@ export default function NodeHotbox({
         </div>
 
         {results.length > 0 && (
-          <div ref={listRef} className="max-h-60 overflow-y-auto border-t border-slate-200 dark:border-slate-700">
+          <div
+            ref={listRef}
+            className="max-h-60 overflow-y-auto border-t border-slate-200 dark:border-slate-700"
+          >
             {results.map((item, idx) => (
               <button
                 key={item.id}
@@ -190,16 +217,24 @@ export default function NodeHotbox({
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
-                <span className="flex-shrink-0 text-slate-500 dark:text-slate-400">{item.icon}</span>
+                <span className="flex-shrink-0 text-slate-500 dark:text-slate-400">
+                  {item.icon}
+                </span>
                 <span className="flex-1 truncate">{item.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                  item.category === 'task'
-                    ? 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    item.category === 'task'
+                      ? 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                      : item.category === 'param'
+                        ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                        : 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
+                  }`}
+                >
+                  {item.category === 'task'
+                    ? 'task'
                     : item.category === 'param'
-                    ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                    : 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
-                }`}>
-                  {item.category === 'task' ? 'task' : item.category === 'param' ? 'param' : item.dataType}
+                      ? 'param'
+                      : item.dataType}
                 </span>
               </button>
             ))}
@@ -208,7 +243,8 @@ export default function NodeHotbox({
 
         {query.length > 0 && query.length < MIN_QUERY_LENGTH && (
           <div className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500 border-t border-slate-200 dark:border-slate-700">
-            Type {MIN_QUERY_LENGTH - query.length} more character{MIN_QUERY_LENGTH - query.length > 1 ? 's' : ''} to search...
+            Type {MIN_QUERY_LENGTH - query.length} more character
+            {MIN_QUERY_LENGTH - query.length > 1 ? 's' : ''} to search...
           </div>
         )}
 

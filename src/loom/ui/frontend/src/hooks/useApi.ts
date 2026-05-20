@@ -1,5 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import type { PipelineGraph, EditorState, TaskInfo, ValidationResult, CleanPreview, CleanResult, PipelineInfo } from '../types/pipeline'
+import type {
+  PipelineGraph,
+  EditorState,
+  TaskInfo,
+  ValidationResult,
+  CleanPreview,
+  CleanResult,
+  PipelineInfo,
+} from '../types/pipeline'
 
 const API_BASE = '/api'
 
@@ -51,52 +59,62 @@ export function useApi() {
     abortControllers.current.delete(operationKey)
   }, [])
 
-  const loadConfig = useCallback(async (path?: string): Promise<PipelineGraph | null> => {
-    setLoading(true)
-    setError(null)
-    const signal = getSignal('loadConfig')
-    try {
-      const url = path ? `${API_BASE}/config?path=${encodeURIComponent(path)}` : `${API_BASE}/config`
-      const res = await fetch(url, { signal })
-      if (!res.ok) throw new Error(`Failed to load: ${res.statusText}`)
-      return await res.json()
-    } catch (e) {
-      if (isAbortError(e)) {
-        return null // Request was cancelled
+  const loadConfig = useCallback(
+    async (path?: string): Promise<PipelineGraph | null> => {
+      setLoading(true)
+      setError(null)
+      const signal = getSignal('loadConfig')
+      try {
+        const url = path
+          ? `${API_BASE}/config?path=${encodeURIComponent(path)}`
+          : `${API_BASE}/config`
+        const res = await fetch(url, { signal })
+        if (!res.ok) throw new Error(`Failed to load: ${res.statusText}`)
+        return await res.json()
+      } catch (e) {
+        if (isAbortError(e)) {
+          return null // Request was cancelled
+        }
+        setError(e instanceof Error ? e.message : 'Unknown error')
+        return null
+      } finally {
+        cleanupSignal('loadConfig')
+        setLoading(false)
       }
-      setError(e instanceof Error ? e.message : 'Unknown error')
-      return null
-    } finally {
-      cleanupSignal('loadConfig')
-      setLoading(false)
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
-  const saveConfig = useCallback(async (graph: PipelineGraph, path?: string): Promise<boolean> => {
-    setLoading(true)
-    setError(null)
-    const signal = getSignal('saveConfig')
-    try {
-      const url = path ? `${API_BASE}/config?path=${encodeURIComponent(path)}` : `${API_BASE}/config`
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(graph),
-        signal,
-      })
-      if (!res.ok) throw new Error(`Failed to save: ${res.statusText}`)
-      return true
-    } catch (e) {
-      if (isAbortError(e)) {
-        return false // Request was cancelled
+  const saveConfig = useCallback(
+    async (graph: PipelineGraph, path?: string): Promise<boolean> => {
+      setLoading(true)
+      setError(null)
+      const signal = getSignal('saveConfig')
+      try {
+        const url = path
+          ? `${API_BASE}/config?path=${encodeURIComponent(path)}`
+          : `${API_BASE}/config`
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(graph),
+          signal,
+        })
+        if (!res.ok) throw new Error(`Failed to save: ${res.statusText}`)
+        return true
+      } catch (e) {
+        if (isAbortError(e)) {
+          return false // Request was cancelled
+        }
+        setError(e instanceof Error ? e.message : 'Unknown error')
+        return false
+      } finally {
+        cleanupSignal('saveConfig')
+        setLoading(false)
       }
-      setError(e instanceof Error ? e.message : 'Unknown error')
-      return false
-    } finally {
-      cleanupSignal('saveConfig')
-      setLoading(false)
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
   const loadState = useCallback(async (): Promise<EditorState | null> => {
     const signal = getSignal('loadState')
@@ -146,64 +164,73 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  const trashData = useCallback(async (name: string): Promise<{ success: boolean; message: string }> => {
-    const signal = getSignal(`trashData_${name}`)
-    try {
-      const res = await fetch(`${API_BASE}/data/${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-        signal,
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        return { success: false, message: data.detail || 'Failed to trash data' }
+  const trashData = useCallback(
+    async (name: string): Promise<{ success: boolean; message: string }> => {
+      const signal = getSignal(`trashData_${name}`)
+      try {
+        const res = await fetch(`${API_BASE}/data/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+          signal,
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          return { success: false, message: data.detail || 'Failed to trash data' }
+        }
+        return { success: true, message: data.message || 'Moved to trash' }
+      } catch (e) {
+        if (isAbortError(e)) {
+          return { success: false, message: 'Request cancelled' }
+        }
+        return { success: false, message: e instanceof Error ? e.message : 'Unknown error' }
+      } finally {
+        cleanupSignal(`trashData_${name}`)
       }
-      return { success: true, message: data.message || 'Moved to trash' }
-    } catch (e) {
-      if (isAbortError(e)) {
-        return { success: false, message: 'Request cancelled' }
-      }
-      return { success: false, message: e instanceof Error ? e.message : 'Unknown error' }
-    } finally {
-      cleanupSignal(`trashData_${name}`)
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
-  const openPath = useCallback(async (path: string): Promise<boolean> => {
-    const signal = getSignal('openPath')
-    try {
-      const res = await fetch(`${API_BASE}/open-path?path=${encodeURIComponent(path)}`, {
-        method: 'POST',
-        signal,
-      })
-      return res.ok
-    } catch (e) {
-      if (isAbortError(e)) {
+  const openPath = useCallback(
+    async (path: string): Promise<boolean> => {
+      const signal = getSignal('openPath')
+      try {
+        const res = await fetch(`${API_BASE}/open-path?path=${encodeURIComponent(path)}`, {
+          method: 'POST',
+          signal,
+        })
+        return res.ok
+      } catch (e) {
+        if (isAbortError(e)) {
+          return false
+        }
         return false
+      } finally {
+        cleanupSignal('openPath')
       }
-      return false
-    } finally {
-      cleanupSignal('openPath')
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
-  const validateConfig = useCallback(async (path?: string): Promise<ValidationResult> => {
-    const signal = getSignal('validateConfig')
-    try {
-      const url = path
-        ? `${API_BASE}/config/validate?path=${encodeURIComponent(path)}`
-        : `${API_BASE}/config/validate`
-      const res = await fetch(url, { signal })
-      if (!res.ok) return { warnings: [] }
-      return await res.json()
-    } catch (e) {
-      if (isAbortError(e)) {
+  const validateConfig = useCallback(
+    async (path?: string): Promise<ValidationResult> => {
+      const signal = getSignal('validateConfig')
+      try {
+        const url = path
+          ? `${API_BASE}/config/validate?path=${encodeURIComponent(path)}`
+          : `${API_BASE}/config/validate`
+        const res = await fetch(url, { signal })
+        if (!res.ok) return { warnings: [] }
+        return await res.json()
+      } catch (e) {
+        if (isAbortError(e)) {
+          return { warnings: [] }
+        }
         return { warnings: [] }
+      } finally {
+        cleanupSignal('validateConfig')
       }
-      return { warnings: [] }
-    } finally {
-      cleanupSignal('validateConfig')
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
   const previewClean = useCallback(async (): Promise<CleanPreview | null> => {
     const signal = getSignal('previewClean')
@@ -225,32 +252,35 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  const cleanAllData = useCallback(async (
-    mode: 'trash' | 'permanent',
-    includeThumbnails: boolean = true
-  ): Promise<CleanResult | null> => {
-    const signal = getSignal('cleanAllData')
-    try {
-      const url = `${API_BASE}/clean?mode=${encodeURIComponent(mode)}&include_thumbnails=${includeThumbnails}`
-      const res = await fetch(url, {
-        method: 'POST',
-        signal,
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.detail || 'Failed to clean data')
-      }
-      return await res.json()
-    } catch (e) {
-      if (isAbortError(e)) {
+  const cleanAllData = useCallback(
+    async (
+      mode: 'trash' | 'permanent',
+      includeThumbnails: boolean = true,
+    ): Promise<CleanResult | null> => {
+      const signal = getSignal('cleanAllData')
+      try {
+        const url = `${API_BASE}/clean?mode=${encodeURIComponent(mode)}&include_thumbnails=${includeThumbnails}`
+        const res = await fetch(url, {
+          method: 'POST',
+          signal,
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.detail || 'Failed to clean data')
+        }
+        return await res.json()
+      } catch (e) {
+        if (isAbortError(e)) {
+          return null
+        }
+        setError(e instanceof Error ? e.message : 'Unknown error')
         return null
+      } finally {
+        cleanupSignal('cleanAllData')
       }
-      setError(e instanceof Error ? e.message : 'Unknown error')
-      return null
-    } finally {
-      cleanupSignal('cleanAllData')
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
   const listPipelines = useCallback(async (): Promise<PipelineInfo[]> => {
     const signal = getSignal('listPipelines')
@@ -268,48 +298,72 @@ export function useApi() {
     }
   }, [getSignal, cleanupSignal])
 
-  const openPipeline = useCallback(async (path: string): Promise<{ success: boolean; configPath?: string; tasksDir?: string; error?: string }> => {
-    const signal = getSignal('openPipeline')
-    try {
-      const res = await fetch(`${API_BASE}/pipelines/open?path=${encodeURIComponent(path)}`, {
-        method: 'POST',
-        signal,
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        return { success: false, error: data.detail || 'Failed to open pipeline' }
+  const openPipeline = useCallback(
+    async (
+      path: string,
+    ): Promise<{ success: boolean; configPath?: string; tasksDir?: string; error?: string }> => {
+      const signal = getSignal('openPipeline')
+      try {
+        const res = await fetch(`${API_BASE}/pipelines/open?path=${encodeURIComponent(path)}`, {
+          method: 'POST',
+          signal,
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          return { success: false, error: data.detail || 'Failed to open pipeline' }
+        }
+        return { success: true, configPath: data.configPath, tasksDir: data.tasksDir }
+      } catch (e) {
+        if (isAbortError(e)) {
+          return { success: false, error: 'Request cancelled' }
+        }
+        return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
+      } finally {
+        cleanupSignal('openPipeline')
       }
-      return { success: true, configPath: data.configPath, tasksDir: data.tasksDir }
-    } catch (e) {
-      if (isAbortError(e)) {
-        return { success: false, error: 'Request cancelled' }
-      }
-      return { success: false, error: e instanceof Error ? e.message : 'Unknown error' }
-    } finally {
-      cleanupSignal('openPipeline')
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
-  const checkPath = useCallback(async (path: string): Promise<{ exists: boolean; resolved_path: string | null }> => {
-    const signal = getSignal('checkPath')
-    try {
-      const res = await fetch(`${API_BASE}/check-path?path=${encodeURIComponent(path)}`, {
-        method: 'POST',
-        signal,
-      })
-      if (!res.ok) {
+  const checkPath = useCallback(
+    async (path: string): Promise<{ exists: boolean; resolved_path: string | null }> => {
+      const signal = getSignal('checkPath')
+      try {
+        const res = await fetch(`${API_BASE}/check-path?path=${encodeURIComponent(path)}`, {
+          method: 'POST',
+          signal,
+        })
+        if (!res.ok) {
+          return { exists: false, resolved_path: null }
+        }
+        return await res.json()
+      } catch (e) {
+        if (isAbortError(e)) {
+          return { exists: false, resolved_path: null }
+        }
         return { exists: false, resolved_path: null }
+      } finally {
+        cleanupSignal('checkPath')
       }
-      return await res.json()
-    } catch (e) {
-      if (isAbortError(e)) {
-        return { exists: false, resolved_path: null }
-      }
-      return { exists: false, resolved_path: null }
-    } finally {
-      cleanupSignal('checkPath')
-    }
-  }, [getSignal, cleanupSignal])
+    },
+    [getSignal, cleanupSignal],
+  )
 
-  return { loadConfig, saveConfig, loadState, loadTasks, loadDataStatus, trashData, openPath, validateConfig, previewClean, cleanAllData, listPipelines, openPipeline, checkPath, loading, error }
+  return {
+    loadConfig,
+    saveConfig,
+    loadState,
+    loadTasks,
+    loadDataStatus,
+    trashData,
+    openPath,
+    validateConfig,
+    previewClean,
+    cleanAllData,
+    listPipelines,
+    openPipeline,
+    checkPath,
+    loading,
+    error,
+  }
 }

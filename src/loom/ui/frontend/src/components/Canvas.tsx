@@ -1,4 +1,12 @@
-import { useCallback, useRef, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import {
   ReactFlow,
   Background,
@@ -23,7 +31,18 @@ import DataNode from './DataNode'
 import GroupNode from './GroupNode'
 import FeedbackEdge from './FeedbackEdge'
 import NodeHotbox from './NodeHotbox'
-import type { PipelineNode, StepData, ParameterData, DataNodeData, TaskInfo, DataNode as DataNodeType, DataType, LoopConfig, GroupNode as GroupNodeType, FeedbackEdgeData } from '../types/pipeline'
+import type {
+  PipelineNode,
+  StepData,
+  ParameterData,
+  DataNodeData,
+  TaskInfo,
+  DataNode as DataNodeType,
+  DataType,
+  LoopConfig,
+  GroupNode as GroupNodeType,
+  FeedbackEdgeData,
+} from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 import { HighlightContext } from '../contexts/HighlightContext'
 
@@ -39,7 +58,16 @@ const edgeTypes = {
 }
 
 // Color palette for group rectangles (in order of appearance)
-const GROUP_COLORS = ['#a5b4fc', '#f9a8d4', '#5eead4', '#fdba74', '#c4b5fd', '#67e8f9', '#bef264', '#fda4af']
+const GROUP_COLORS = [
+  '#a5b4fc',
+  '#f9a8d4',
+  '#5eead4',
+  '#fdba74',
+  '#c4b5fd',
+  '#67e8f9',
+  '#bef264',
+  '#fda4af',
+]
 
 /**
  * Deep clones a node, including nested data objects.
@@ -109,7 +137,7 @@ export default function Canvas({
   const [isZoomedOut, setIsZoomedOut] = useState(false)
   const onViewportChange = useCallback(
     ({ zoom }: Viewport) => setIsZoomedOut(zoom < ZOOM_THRESHOLD),
-    [ZOOM_THRESHOLD]
+    [ZOOM_THRESHOLD],
   )
 
   // Mouse position tracking for hotbox placement
@@ -143,10 +171,7 @@ export default function Canvas({
       const modifier = isMac ? e.metaKey : e.ctrlKey
 
       // Don't intercept if user is typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
 
@@ -164,7 +189,9 @@ export default function Canvas({
             const sourceInSelection = selectedIds.has(edge.source)
             const targetInSelection = selectedIds.has(edge.target)
             // Keep edges that connect a selected node to an external node
-            return (sourceInSelection && !targetInSelection) || (!sourceInSelection && targetInSelection)
+            return (
+              (sourceInSelection && !targetInSelection) || (!sourceInSelection && targetInSelection)
+            )
           })
         }
       } else if (modifier && e.key === 'v') {
@@ -197,7 +224,9 @@ export default function Canvas({
           // Collect existing names from current nodes
           setNodes((currentNodes) => {
             const existingNames = new Set(
-              currentNodes.map((n) => (n.data as { name?: string }).name).filter(Boolean) as string[]
+              currentNodes
+                .map((n) => (n.data as { name?: string }).name)
+                .filter(Boolean) as string[],
             )
 
             const newNodes = copiedNodesRef.current.map((node): PipelineNode => {
@@ -310,21 +339,28 @@ export default function Canvas({
                 e.target === params.target &&
                 e.targetHandle === params.targetHandle &&
                 e.source.startsWith('param_')
-              )
+              ),
           )
-          return addEdge({ ...params, id: `e_${params.source}_${params.target}_${params.targetHandle}` }, filtered)
+          return addEdge(
+            { ...params, id: `e_${params.source}_${params.target}_${params.targetHandle}` },
+            filtered,
+          )
         })
 
         // Update the target step's arg value
-        setNodes((nds) =>
-          nds.map((node) => {
-            if (node.id === params.target && node.type === 'step') {
-              const stepData = node.data as StepData
-              const newArgs = { ...(stepData.args || {}), [params.targetHandle!]: `$${paramName}` }
-              return { ...node, data: { ...stepData, args: newArgs } }
-            }
-            return node
-          }) as PipelineNode[]
+        setNodes(
+          (nds) =>
+            nds.map((node) => {
+              if (node.id === params.target && node.type === 'step') {
+                const stepData = node.data as StepData
+                const newArgs = {
+                  ...(stepData.args || {}),
+                  [params.targetHandle!]: `$${paramName}`,
+                }
+                return { ...node, data: { ...stepData, args: newArgs } }
+              }
+              return node
+            }) as PipelineNode[],
         )
       } else {
         // Get source and target nodes for validation
@@ -338,24 +374,28 @@ export default function Canvas({
             return
           }
           const dataKey = (sourceNode.data as DataNodeData).key
-          setNodes((nds) =>
-            nds.map((node) => {
-              if (node.id === params.target && node.type === 'step') {
-                const stepData = node.data as StepData
-                const loop: LoopConfig = { ...(stepData.loop || { over: '', into: '' }), over: `$${dataKey}` }
-                return { ...node, data: { ...stepData, loop } }
-              }
-              return node
-            }) as PipelineNode[]
+          setNodes(
+            (nds) =>
+              nds.map((node) => {
+                if (node.id === params.target && node.type === 'step') {
+                  const stepData = node.data as StepData
+                  const loop: LoopConfig = {
+                    ...(stepData.loop || { over: '', into: '' }),
+                    over: `$${dataKey}`,
+                  }
+                  return { ...node, data: { ...stepData, loop } }
+                }
+                return node
+              }) as PipelineNode[],
           )
           setEdges((eds) => {
             // Remove any existing loop-over edge for this step
             const filtered = eds.filter(
-              (e) => !(e.target === params.target && e.targetHandle === 'loop-over')
+              (e) => !(e.target === params.target && e.targetHandle === 'loop-over'),
             )
             return addEdge(
               { ...params, id: `e_loop_over_${params.source}_${params.target}` },
-              filtered
+              filtered,
             )
           })
           return
@@ -368,24 +408,28 @@ export default function Canvas({
             return
           }
           const dataKey = (targetNode.data as DataNodeData).key
-          setNodes((nds) =>
-            nds.map((node) => {
-              if (node.id === params.source && node.type === 'step') {
-                const stepData = node.data as StepData
-                const loop: LoopConfig = { ...(stepData.loop || { over: '', into: '' }), into: `$${dataKey}` }
-                return { ...node, data: { ...stepData, loop } }
-              }
-              return node
-            }) as PipelineNode[]
+          setNodes(
+            (nds) =>
+              nds.map((node) => {
+                if (node.id === params.source && node.type === 'step') {
+                  const stepData = node.data as StepData
+                  const loop: LoopConfig = {
+                    ...(stepData.loop || { over: '', into: '' }),
+                    into: `$${dataKey}`,
+                  }
+                  return { ...node, data: { ...stepData, loop } }
+                }
+                return node
+              }) as PipelineNode[],
           )
           setEdges((eds) => {
             // Remove any existing loop-into edge for this step
             const filtered = eds.filter(
-              (e) => !(e.source === params.source && e.sourceHandle === 'loop-into')
+              (e) => !(e.source === params.source && e.sourceHandle === 'loop-into'),
             )
             return addEdge(
               { ...params, id: `e_loop_into_${params.source}_${params.target}` },
-              filtered
+              filtered,
             )
           })
           return
@@ -405,9 +449,13 @@ export default function Canvas({
           const inferredType: DataType = outputSchema?.type || 'data_folder'
 
           // Generate unique key based on step name and output
-          const baseKey = `${sourceStepData.name}_${params.sourceHandle}`.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+          const baseKey = `${sourceStepData.name}_${params.sourceHandle}`
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
           const existingKeys = new Set(
-            nodesRef.current.filter((n) => n.type === 'data').map((n) => (n.data as DataNodeData).key)
+            nodesRef.current
+              .filter((n) => n.type === 'data')
+              .map((n) => (n.data as DataNodeData).key),
           )
           let finalKey = baseKey
           let counter = 2
@@ -492,7 +540,9 @@ export default function Canvas({
             const inputSchema = task?.inputs[params.targetHandle]
 
             if (inputSchema?.type && inputSchema.type !== dataType) {
-              alert(`Type mismatch: data node is "${dataType}" but input expects "${inputSchema.type}"`)
+              alert(
+                `Type mismatch: data node is "${dataType}" but input expects "${inputSchema.type}"`,
+              )
               return
             }
           }
@@ -505,7 +555,9 @@ export default function Canvas({
             const outputSchema = task?.outputs[params.sourceHandle]
 
             if (outputSchema?.type && outputSchema.type !== dataType) {
-              alert(`Type mismatch: step output is "${outputSchema.type}" but data node is "${dataType}"`)
+              alert(
+                `Type mismatch: step output is "${outputSchema.type}" but data node is "${dataType}"`,
+              )
               return
             }
           }
@@ -528,17 +580,26 @@ export default function Canvas({
           let producerStep: PipelineNode | null = null
           let sourceOutputFlag: string | undefined
           if (sourceNode?.type === 'data') {
-            const producerEdge = edgesRef.current.find(e => e.target === params.source)
-            producerStep = producerEdge ? (nodesRef.current.find(n => n.id === producerEdge.source) ?? null) : null
+            const producerEdge = edgesRef.current.find((e) => e.target === params.source)
+            producerStep = producerEdge
+              ? (nodesRef.current.find((n) => n.id === producerEdge.source) ?? null)
+              : null
             sourceOutputFlag = producerEdge?.sourceHandle ?? undefined
           } else if (sourceNode?.type === 'step') {
             producerStep = sourceNode
             sourceOutputFlag = params.sourceHandle ?? undefined
           }
-          const sourceGroup = producerStep?.type === 'step' ? (producerStep.data as StepData).group : undefined
-          const targetGroup = targetNode?.type === 'step' ? (targetNode.data as StepData).group : undefined
+          const sourceGroup =
+            producerStep?.type === 'step' ? (producerStep.data as StepData).group : undefined
+          const targetGroup =
+            targetNode?.type === 'step' ? (targetNode.data as StepData).group : undefined
 
-          if (sourceGroup && targetGroup && sourceGroup === targetGroup && multiPassGroups?.[sourceGroup]) {
+          if (
+            sourceGroup &&
+            targetGroup &&
+            sourceGroup === targetGroup &&
+            multiPassGroups?.[sourceGroup]
+          ) {
             const sourceStepName = (producerStep!.data as StepData).name
             const targetStepName = (targetNode!.data as StepData).name
             const targetInputFlag = params.targetHandle ?? undefined
@@ -558,7 +619,9 @@ export default function Canvas({
 
             // Reject collision with a different existing target
             if (existingFeedback[sourceSpec] && existingFeedback[sourceSpec] !== targetSpec) {
-              alert(`feedback from ${sourceSpec} is already wired to ${existingFeedback[sourceSpec]}; delete that first.`)
+              alert(
+                `feedback from ${sourceSpec} is already wired to ${existingFeedback[sourceSpec]}; delete that first.`,
+              )
               return
             }
 
@@ -591,24 +654,41 @@ export default function Canvas({
               addEdge(
                 feedbackEdge,
                 eds.map((e) =>
-                  e.type === 'feedback' && (e.data as Record<string, unknown> | undefined)?.groupName === sourceGroup
-                    ? { ...e, data: { ...e.data, multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'] } }
-                    : e
-                )
-              )
+                  e.type === 'feedback' &&
+                  (e.data as Record<string, unknown> | undefined)?.groupName === sourceGroup
+                    ? {
+                        ...e,
+                        data: {
+                          ...e.data,
+                          multiPass: updatedMultiPass as FeedbackEdgeData['multiPass'],
+                        },
+                      }
+                    : e,
+                ),
+              ),
             )
             return
           }
 
           // Warn user about circular dependency
-          alert('Cannot create connection: this would create a circular dependency in the pipeline.')
+          alert(
+            'Cannot create connection: this would create a circular dependency in the pipeline.',
+          )
           return
         }
 
         setEdges((eds) => addEdge({ ...params, id: `e_${params.source}_${params.target}` }, eds))
       }
     },
-    [setEdges, setNodes, onSnapshot, tasks, onSelectionChangeProp, multiPassGroups, setMultiPassGroups]
+    [
+      setEdges,
+      setNodes,
+      onSnapshot,
+      tasks,
+      onSelectionChangeProp,
+      multiPassGroups,
+      setMultiPassGroups,
+    ],
   )
 
   // Track edge being reconnected
@@ -632,7 +712,7 @@ export default function Canvas({
                 sourceHandle: newConnection.sourceHandle ?? undefined,
                 targetHandle: newConnection.targetHandle ?? undefined,
               }
-            : e
+            : e,
         )
         const graph = buildDependencyGraph(nodesRef.current, tempEdges)
 
@@ -649,7 +729,11 @@ export default function Canvas({
 
       // Determine if we need to set a new parameter connection
       let newParamName: string | null = null
-      if (newConnection.source && newConnection.source.startsWith('param_') && newConnection.targetHandle) {
+      if (
+        newConnection.source &&
+        newConnection.source.startsWith('param_') &&
+        newConnection.targetHandle
+      ) {
         // Use ref to avoid stale closure
         const paramNode = nodesRef.current.find((n) => n.id === newConnection.source)
         if (paramNode && paramNode.type === 'parameter') {
@@ -661,39 +745,40 @@ export default function Canvas({
       }
 
       // Handle both clearing old and setting new parameter connections in a single atomic update
-      setNodes((nds) =>
-        nds.map((node) => {
-          if (node.type !== 'step') return node
+      setNodes(
+        (nds) =>
+          nds.map((node) => {
+            if (node.type !== 'step') return node
 
-          const stepData = node.data as StepData
-          let newArgs = stepData.args || {}
-          let changed = false
+            const stepData = node.data as StepData
+            let newArgs = stepData.args || {}
+            let changed = false
 
-          // Clear old connection if it was a parameter to step arg
-          if (
-            oldEdge.source.startsWith('param_') &&
-            node.id === oldEdge.target &&
-            oldEdge.targetHandle
-          ) {
-            newArgs = { ...newArgs }
-            newArgs[oldEdge.targetHandle] = ''
-            changed = true
-          }
+            // Clear old connection if it was a parameter to step arg
+            if (
+              oldEdge.source.startsWith('param_') &&
+              node.id === oldEdge.target &&
+              oldEdge.targetHandle
+            ) {
+              newArgs = { ...newArgs }
+              newArgs[oldEdge.targetHandle] = ''
+              changed = true
+            }
 
-          // Set new connection if connecting a parameter to a step arg
-          if (newParamName && node.id === newConnection.target && newConnection.targetHandle) {
-            newArgs = { ...newArgs, [newConnection.targetHandle]: `$${newParamName}` }
-            changed = true
-          }
+            // Set new connection if connecting a parameter to a step arg
+            if (newParamName && node.id === newConnection.target && newConnection.targetHandle) {
+              newArgs = { ...newArgs, [newConnection.targetHandle]: `$${newParamName}` }
+              changed = true
+            }
 
-          return changed ? { ...node, data: { ...stepData, args: newArgs } } : node
-        }) as PipelineNode[]
+            return changed ? { ...node, data: { ...stepData, args: newArgs } } : node
+          }) as PipelineNode[],
       )
 
       // Mark reconnection as successful only after all operations complete
       edgeReconnectSuccessful.current = true
     },
-    [setEdges, setNodes, onSnapshot]
+    [setEdges, setNodes, onSnapshot],
   )
 
   const onReconnectEnd = useCallback(
@@ -705,22 +790,23 @@ export default function Canvas({
 
         // If it was a parameter edge, clear the arg value
         if (edge.source.startsWith('param_') && edge.targetHandle) {
-          setNodes((nds) =>
-            nds.map((node) => {
-              if (node.id === edge.target && node.type === 'step') {
-                const stepData = node.data as StepData
-                const newArgs = { ...(stepData.args || {}) }
-                newArgs[edge.targetHandle!] = '' // Clear the value
-                return { ...node, data: { ...stepData, args: newArgs } }
-              }
-              return node
-            }) as PipelineNode[]
+          setNodes(
+            (nds) =>
+              nds.map((node) => {
+                if (node.id === edge.target && node.type === 'step') {
+                  const stepData = node.data as StepData
+                  const newArgs = { ...(stepData.args || {}) }
+                  newArgs[edge.targetHandle!] = '' // Clear the value
+                  return { ...node, data: { ...stepData, args: newArgs } }
+                }
+                return node
+              }) as PipelineNode[],
           )
         }
       }
       edgeReconnectSuccessful.current = true
     },
-    [setEdges, setNodes, onSnapshot]
+    [setEdges, setNodes, onSnapshot],
   )
 
   const onSelectionChange = useCallback(
@@ -728,14 +814,14 @@ export default function Canvas({
       selectedNodesRef.current = selectedNodes
       onSelectionChangeProp(selectedNodes)
     },
-    [onSelectionChangeProp]
+    [onSelectionChangeProp],
   )
 
   const onEdgeClick = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
       onEdgeSelect?.(edge)
     },
-    [onEdgeSelect]
+    [onEdgeSelect],
   )
 
   // Drag and drop handlers for parameters from sidebar
@@ -762,7 +848,7 @@ export default function Canvas({
         // Invalid data, ignore
       }
     },
-    [onParameterDrop]
+    [onParameterDrop],
   )
 
   const { highlightedEdgeIds, neighborNodeIds } = useMemo(() => {
@@ -795,7 +881,7 @@ export default function Canvas({
               filter: 'drop-shadow(0 0 6px rgba(45, 212, 191, 0.7))',
             },
           }
-        : edge
+        : edge,
     )
   }, [edges, highlightedEdgeIds])
 
@@ -818,7 +904,7 @@ export default function Canvas({
       }))
       onNodesChange(changes)
     },
-    [onNodesChange]
+    [onNodesChange],
   )
 
   // Group double-click: pan to group center and zoom just past the threshold so nodes appear
@@ -829,7 +915,7 @@ export default function Canvas({
         duration: 600,
       })
     },
-    [ZOOM_THRESHOLD]
+    [ZOOM_THRESHOLD],
   )
 
   // Build display nodes: regular nodes + computed group rectangle nodes
@@ -898,13 +984,22 @@ export default function Canvas({
 
     // Compute bounding boxes and average x-positions for each group
     interface GroupBounds {
-      minX: number; maxX: number; minY: number; maxY: number; avgX: number
+      minX: number
+      maxX: number
+      minY: number
+      maxY: number
+      avgX: number
     }
     const groupBounds = new Map<string, GroupBounds>()
     for (const [groupName, members] of groupMap.entries()) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, sumX = 0
+      let minX = Infinity,
+        maxX = -Infinity,
+        minY = Infinity,
+        maxY = -Infinity,
+        sumX = 0
       for (const node of members) {
-        const x = node.position.x, y = node.position.y
+        const x = node.position.x,
+          y = node.position.y
         minX = Math.min(minX, x)
         maxX = Math.max(maxX, x + NODE_WIDTH)
         minY = Math.min(minY, y)
@@ -967,20 +1062,37 @@ export default function Canvas({
         })
 
     return [...groupNodes, ...styledRegularNodes]
-  }, [nodes, edges, hideParameterNodes, isZoomedOut, handleGroupClick, handleGroupDoubleClick, detectedGroupName])
+  }, [
+    nodes,
+    edges,
+    hideParameterNodes,
+    isZoomedOut,
+    handleGroupClick,
+    handleGroupDoubleClick,
+    detectedGroupName,
+  ])
 
   // Hotbox handlers
-  const handleHotboxAddTask = useCallback((task: TaskInfo, position: { x: number; y: number }) => {
-    onAddTask?.(task, position)
-  }, [onAddTask])
+  const handleHotboxAddTask = useCallback(
+    (task: TaskInfo, position: { x: number; y: number }) => {
+      onAddTask?.(task, position)
+    },
+    [onAddTask],
+  )
 
-  const handleHotboxAddData = useCallback((dataType: DataType, position: { x: number; y: number }) => {
-    onAddData?.(dataType, position)
-  }, [onAddData])
+  const handleHotboxAddData = useCallback(
+    (dataType: DataType, position: { x: number; y: number }) => {
+      onAddData?.(dataType, position)
+    },
+    [onAddData],
+  )
 
-  const handleHotboxAddParameter = useCallback((name: string, value: unknown, position: { x: number; y: number }) => {
-    onParameterDrop?.(name, value, position)
-  }, [onParameterDrop])
+  const handleHotboxAddParameter = useCallback(
+    (name: string, value: unknown, position: { x: number; y: number }) => {
+      onParameterDrop?.(name, value, position)
+    },
+    [onParameterDrop],
+  )
 
   const handleHotboxClose = useCallback(() => {
     setHotbox(null)
@@ -992,85 +1104,87 @@ export default function Canvas({
 
   return (
     <HighlightContext.Provider value={{ neighborNodeIds }}>
-    <div
-      ref={reactFlowWrapper}
-      className="flex-1 bg-slate-100 dark:bg-slate-950"
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onMouseMove={handleMouseMove}
-    >
-      <ReactFlow
-        nodes={displayNodes}
-        edges={styledEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onEdgesDelete={onEdgesDelete}
-        onConnect={onConnect}
-        onReconnectStart={onReconnectStart}
-        onReconnect={onReconnect}
-        onReconnectEnd={onReconnectEnd}
-        onSelectionChange={onSelectionChange}
-        onNodeDoubleClick={(_event, node) => onNodeDoubleClick?.(node)}
-        onEdgeClick={onEdgeClick}
-        onInit={(instance) => { reactFlowInstance.current = instance }}
-        onViewportChange={onViewportChange}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        minZoom={0.05}
-        panOnDrag={[1, 2]}
-        panOnScroll
-        zoomOnScroll={false}
-        zoomOnDoubleClick={!isZoomedOut}
-        selectionOnDrag
-        selectionMode={SelectionMode.Partial}
-        proOptions={{ hideAttribution: true }}
-        defaultEdgeOptions={{
-          style: { stroke: '#475569', strokeWidth: 2 },
-          type: 'bezier',
-          reconnectable: true,
-        }}
+      <div
+        ref={reactFlowWrapper}
+        className="flex-1 bg-slate-100 dark:bg-slate-950"
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onMouseMove={handleMouseMove}
       >
-        <Background className="!bg-slate-100 dark:[&]:!bg-slate-950" color="#94a3b8" gap={20} />
-        <Controls className="!bg-white dark:!bg-slate-800 !border-slate-300 dark:!border-slate-700 !rounded-lg [&>button]:!bg-slate-100 dark:[&>button]:!bg-slate-700 [&>button]:!border-slate-300 dark:[&>button]:!border-slate-600 [&>button:hover]:!bg-slate-200 dark:[&>button:hover]:!bg-slate-600 [&>button]:!text-slate-700 dark:[&>button]:!text-white" />
-        <MiniMap
-          className="!bg-slate-200 dark:!bg-slate-900 !border-slate-300 dark:!border-slate-700"
-          nodeColor={(node) => {
-            if (node.type === 'group') return 'transparent'
-            if (node.type === 'data') {
-              const dataData = node.data as DataNodeData
-              if (dataData.exists === true) return '#14b8a6' // teal
-              if (dataData.exists === false) return '#64748b' // grey
-              return '#0d9488' // teal (unknown)
-            }
-            if (node.type === 'parameter') {
-              return '#a855f7' // purple
-            }
-            if (node.type === 'step') {
-              const stepData = node.data as StepData
-              if (stepData.disabled) return '#4b5563' // gray-600 for disabled
-              if (stepData.executionState === 'running') return '#22d3ee' // cyan
-              if (stepData.executionState === 'completed') return '#22c55e' // green
-              if (stepData.executionState === 'failed') return '#ef4444' // red
-              return '#475569' // slate-600 (darker for better visibility on light bg)
-            }
-            return '#64748b'
+        <ReactFlow
+          nodes={displayNodes}
+          edges={styledEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onEdgesDelete={onEdgesDelete}
+          onConnect={onConnect}
+          onReconnectStart={onReconnectStart}
+          onReconnect={onReconnect}
+          onReconnectEnd={onReconnectEnd}
+          onSelectionChange={onSelectionChange}
+          onNodeDoubleClick={(_event, node) => onNodeDoubleClick?.(node)}
+          onEdgeClick={onEdgeClick}
+          onInit={(instance) => {
+            reactFlowInstance.current = instance
           }}
-        />
-      </ReactFlow>
-      {hotbox && onAddTask && onAddData && (
-        <NodeHotbox
-          position={hotbox.screenPosition}
-          flowPosition={hotbox.flowPosition}
-          tasks={tasks}
-          parameters={parameters ?? {}}
-          onAddTask={handleHotboxAddTask}
-          onAddData={handleHotboxAddData}
-          onAddParameter={handleHotboxAddParameter}
-          onClose={handleHotboxClose}
-        />
-      )}
-    </div>
+          onViewportChange={onViewportChange}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          minZoom={0.05}
+          panOnDrag={[1, 2]}
+          panOnScroll
+          zoomOnScroll={false}
+          zoomOnDoubleClick={!isZoomedOut}
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          proOptions={{ hideAttribution: true }}
+          defaultEdgeOptions={{
+            style: { stroke: '#475569', strokeWidth: 2 },
+            type: 'bezier',
+            reconnectable: true,
+          }}
+        >
+          <Background className="!bg-slate-100 dark:[&]:!bg-slate-950" color="#94a3b8" gap={20} />
+          <Controls className="!bg-white dark:!bg-slate-800 !border-slate-300 dark:!border-slate-700 !rounded-lg [&>button]:!bg-slate-100 dark:[&>button]:!bg-slate-700 [&>button]:!border-slate-300 dark:[&>button]:!border-slate-600 [&>button:hover]:!bg-slate-200 dark:[&>button:hover]:!bg-slate-600 [&>button]:!text-slate-700 dark:[&>button]:!text-white" />
+          <MiniMap
+            className="!bg-slate-200 dark:!bg-slate-900 !border-slate-300 dark:!border-slate-700"
+            nodeColor={(node) => {
+              if (node.type === 'group') return 'transparent'
+              if (node.type === 'data') {
+                const dataData = node.data as DataNodeData
+                if (dataData.exists === true) return '#14b8a6' // teal
+                if (dataData.exists === false) return '#64748b' // grey
+                return '#0d9488' // teal (unknown)
+              }
+              if (node.type === 'parameter') {
+                return '#a855f7' // purple
+              }
+              if (node.type === 'step') {
+                const stepData = node.data as StepData
+                if (stepData.disabled) return '#4b5563' // gray-600 for disabled
+                if (stepData.executionState === 'running') return '#22d3ee' // cyan
+                if (stepData.executionState === 'completed') return '#22c55e' // green
+                if (stepData.executionState === 'failed') return '#ef4444' // red
+                return '#475569' // slate-600 (darker for better visibility on light bg)
+              }
+              return '#64748b'
+            }}
+          />
+        </ReactFlow>
+        {hotbox && onAddTask && onAddData && (
+          <NodeHotbox
+            position={hotbox.screenPosition}
+            flowPosition={hotbox.flowPosition}
+            tasks={tasks}
+            parameters={parameters ?? {}}
+            onAddTask={handleHotboxAddTask}
+            onAddData={handleHotboxAddData}
+            onAddParameter={handleHotboxAddParameter}
+            onClose={handleHotboxClose}
+          />
+        )}
+      </div>
     </HighlightContext.Provider>
   )
 }

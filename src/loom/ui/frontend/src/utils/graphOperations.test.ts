@@ -349,7 +349,7 @@ describe('Graph Operations', () => {
       const stateWithArg = {
         ...state,
         nodes: state.nodes.map((n) =>
-          n.id === 'step1' ? { ...n, data: { ...n.data, args: { value: '$param' } } } : n
+          n.id === 'step1' ? { ...n, data: { ...n.data, args: { value: '$param' } } } : n,
         ),
       }
 
@@ -437,7 +437,7 @@ describe('Graph Operations', () => {
 
       // step1 has two parameter connections
       const paramEdges = state.edges.filter(
-        (e) => e.target === 'step1' && e.source.startsWith('param_')
+        (e) => e.target === 'step1' && e.source.startsWith('param_'),
       )
       expect(paramEdges.length).toBe(2)
 
@@ -446,7 +446,7 @@ describe('Graph Operations', () => {
 
       // Should have one less parameter edge
       const remainingParamEdges = newState.edges.filter(
-        (e) => e.target === 'step1' && e.source.startsWith('param_')
+        (e) => e.target === 'step1' && e.source.startsWith('param_'),
       )
       expect(remainingParamEdges.length).toBe(1)
 
@@ -610,7 +610,7 @@ describe('Regression Tests for Fixed Bugs', () => {
 
       // Should only have one edge to threshold
       const thresholdEdges = newState.edges.filter(
-        (e) => e.target === 'step1' && e.targetHandle === 'threshold'
+        (e) => e.target === 'step1' && e.targetHandle === 'threshold',
       )
       expect(thresholdEdges.length).toBe(1)
       expect(thresholdEdges[0].source).toBe('param_new')
@@ -625,7 +625,10 @@ describe('Regression Tests for Fixed Bugs', () => {
   describe('Bug #5: Orphaned Parameter References', () => {
     it('should clear all arg references when deleting parameter node', () => {
       // Setup: param connected to multiple args on multiple steps
-      const step1 = createStepNode('process1', { id: 'step1', args: { min: '$threshold', max: '$threshold' } })
+      const step1 = createStepNode('process1', {
+        id: 'step1',
+        args: { min: '$threshold', max: '$threshold' },
+      })
       const step2 = createStepNode('process2', { id: 'step2', args: { value: '$threshold' } })
       const param = createParameterNode('threshold', 0.5, { id: 'param_threshold' })
       const edges = [

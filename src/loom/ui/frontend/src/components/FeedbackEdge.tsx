@@ -15,13 +15,18 @@ export default function FeedbackEdge({
 
   // Custom looping path that curves below the nodes to convey feedback
   const dx = Math.max(40, Math.abs(sourceX - targetX) * 0.15)
-  const loopDrop = Math.max(60, Math.abs(sourceX - targetX) * 0.15 + Math.abs(sourceY - targetY) * 0.2)
+  const loopDrop = Math.max(
+    60,
+    Math.abs(sourceX - targetX) * 0.15 + Math.abs(sourceY - targetY) * 0.2,
+  )
   const bottomY = Math.max(sourceY, targetY) + loopDrop
   const midX = (sourceX + targetX) / 2
 
   // Label position with draggable offset stored in edge data
   // The label acts as the control point — dragging it reshapes the curve
-  const feedbackData = data as (FeedbackEdgeData & { labelOffsetX?: number; labelOffsetY?: number }) | undefined
+  const feedbackData = data as
+    | (FeedbackEdgeData & { labelOffsetX?: number; labelOffsetY?: number })
+    | undefined
   const offsetX = feedbackData?.labelOffsetX ?? 0
   const offsetY = feedbackData?.labelOffsetY ?? 0
   const controlX = midX + offsetX
@@ -84,8 +89,8 @@ export default function FeedbackEdge({
                     labelOffsetY: dragRef.current!.startOffsetY + movedY,
                   },
                 }
-              : edge
-          )
+              : edge,
+          ),
         )
       }
 
@@ -98,7 +103,7 @@ export default function FeedbackEdge({
       document.addEventListener('mousemove', onMouseMove)
       document.addEventListener('mouseup', onMouseUp)
     },
-    [id, offsetX, offsetY, getViewport, setEdges]
+    [id, offsetX, offsetY, getViewport, setEdges],
   )
 
   return (

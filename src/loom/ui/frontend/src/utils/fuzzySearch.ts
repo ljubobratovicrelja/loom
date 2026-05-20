@@ -34,10 +34,7 @@ export function fuzzySearch<T>(
   return results
 }
 
-function computeMatch(
-  query: string,
-  text: string,
-): { score: number; indices: number[] } | null {
+function computeMatch(query: string, text: string): { score: number; indices: number[] } | null {
   const indices: number[] = []
   let score = 0
   let textIdx = 0

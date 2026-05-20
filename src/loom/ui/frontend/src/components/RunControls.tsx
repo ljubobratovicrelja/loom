@@ -8,8 +8,14 @@ interface RunControlsProps {
   selectedStepNames: string[]
   selectedDataKey: string | null
   status: ExecutionStatus
-  onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[], groupName?: string) => void
-  onRunStep?: (stepName: string) => void  // Independent step execution
+  onRun: (
+    mode: RunMode,
+    stepName?: string,
+    variableName?: string,
+    stepNames?: string[],
+    groupName?: string,
+  ) => void
+  onRunStep?: (stepName: string) => void // Independent step execution
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
   groupEligibility?: RunEligibility
@@ -36,7 +42,9 @@ export default function RunControls({
 
   // Determine if parallel execution can run
   const canRunParallel = parallelEligibility?.canRun ?? !isRunning
-  const parallelBlockReason = parallelEligibility ? getBlockReasonMessage(parallelEligibility) : null
+  const parallelBlockReason = parallelEligibility
+    ? getBlockReasonMessage(parallelEligibility)
+    : null
 
   // Determine if group execution can run (allows in-group deps, orchestrator handles ordering)
   const canRunGroup = groupEligibility?.canRun ?? !isRunning
@@ -67,9 +75,11 @@ export default function RunControls({
         disabled={isRunning}
         className={`
           px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
-          ${isRunning
-            ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-            : 'bg-green-600 hover:bg-green-500 dark:bg-green-700 dark:hover:bg-green-600'}
+          ${
+            isRunning
+              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+              : 'bg-green-600 hover:bg-green-500 dark:bg-green-700 dark:hover:bg-green-600'
+          }
         `}
         title="Run entire pipeline"
       >
@@ -83,9 +93,11 @@ export default function RunControls({
           disabled={!canRunGroup}
           className={`
             px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
-            ${!canRunGroup
-              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-              : 'bg-teal-600 hover:bg-teal-500'}
+            ${
+              !canRunGroup
+                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                : 'bg-teal-600 hover:bg-teal-500'
+            }
           `}
           title={groupBlockReason || `Run all steps in group "${detectedGroupName}"`}
         >
@@ -100,11 +112,15 @@ export default function RunControls({
           disabled={!canRunParallel}
           className={`
             px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
-            ${!canRunParallel
-              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-              : 'bg-amber-600 hover:bg-amber-500'}
+            ${
+              !canRunParallel
+                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                : 'bg-amber-600 hover:bg-amber-500'
+            }
           `}
-          title={parallelBlockReason || `Run ${selectedStepNames.length} selected steps in parallel`}
+          title={
+            parallelBlockReason || `Run ${selectedStepNames.length} selected steps in parallel`
+          }
         >
           <Columns2 className="w-3.5 h-3.5" /> Run Parallel ({selectedStepNames.length})
         </button>
@@ -114,13 +130,17 @@ export default function RunControls({
       {selectedStepName && (
         <>
           <button
-            onClick={() => onRunStep ? onRunStep(selectedStepName) : onRun('step', selectedStepName)}
+            onClick={() =>
+              onRunStep ? onRunStep(selectedStepName) : onRun('step', selectedStepName)
+            }
             disabled={!canRunStep}
             className={`
               px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
-              ${!canRunStep
-                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-                : 'bg-blue-600 hover:bg-blue-500 dark:bg-blue-700 dark:hover:bg-blue-600'}
+              ${
+                !canRunStep
+                  ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                  : 'bg-blue-600 hover:bg-blue-500 dark:bg-blue-700 dark:hover:bg-blue-600'
+              }
             `}
             title={stepBlockReason || `Run only "${selectedStepName}"`}
           >
@@ -132,9 +152,11 @@ export default function RunControls({
             disabled={!canRunStep}
             className={`
               px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
-              ${!canRunStep
-                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-                : 'bg-purple-600 hover:bg-purple-500 dark:bg-purple-700 dark:hover:bg-purple-600'}
+              ${
+                !canRunStep
+                  ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                  : 'bg-purple-600 hover:bg-purple-500 dark:bg-purple-700 dark:hover:bg-purple-600'
+              }
             `}
             title={stepBlockReason || `Run from "${selectedStepName}" to end of pipeline`}
           >
@@ -150,16 +172,17 @@ export default function RunControls({
           disabled={isRunning}
           className={`
             px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
-            ${isRunning
-              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-              : 'bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-700 dark:hover:bg-cyan-600'}
+            ${
+              isRunning
+                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                : 'bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-700 dark:hover:bg-cyan-600'
+            }
           `}
           title={untilHereTooltip}
         >
           <ChevronsLeft className="w-3.5 h-3.5" /> Until Here
         </button>
       )}
-
     </div>
   )
 }

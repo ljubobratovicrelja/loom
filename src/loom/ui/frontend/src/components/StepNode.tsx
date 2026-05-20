@@ -6,18 +6,50 @@ import { HighlightContext } from '../contexts/HighlightContext'
 
 // Color configuration for data types - support both light and dark modes
 const TYPE_COLORS: Record<DataType, { bg: string; border: string; text: string }> = {
-  video: { bg: '!bg-rose-400', border: '!border-rose-400', text: 'text-rose-500 dark:text-rose-400' },
-  image: { bg: '!bg-amber-400', border: '!border-amber-400', text: 'text-amber-500 dark:text-amber-400' },
-  csv: { bg: '!bg-emerald-400', border: '!border-emerald-400', text: 'text-emerald-500 dark:text-emerald-400' },
+  video: {
+    bg: '!bg-rose-400',
+    border: '!border-rose-400',
+    text: 'text-rose-500 dark:text-rose-400',
+  },
+  image: {
+    bg: '!bg-amber-400',
+    border: '!border-amber-400',
+    text: 'text-amber-500 dark:text-amber-400',
+  },
+  csv: {
+    bg: '!bg-emerald-400',
+    border: '!border-emerald-400',
+    text: 'text-emerald-500 dark:text-emerald-400',
+  },
   json: { bg: '!bg-sky-400', border: '!border-sky-400', text: 'text-sky-500 dark:text-sky-400' },
-  image_directory: { bg: '!bg-orange-400', border: '!border-orange-400', text: 'text-orange-500 dark:text-orange-400' },
-  data_folder: { bg: '!bg-teal-400', border: '!border-teal-400', text: 'text-teal-500 dark:text-teal-400' },
-  txt: { bg: '!bg-slate-400', border: '!border-slate-400', text: 'text-slate-500 dark:text-slate-400' },
+  image_directory: {
+    bg: '!bg-orange-400',
+    border: '!border-orange-400',
+    text: 'text-orange-500 dark:text-orange-400',
+  },
+  data_folder: {
+    bg: '!bg-teal-400',
+    border: '!border-teal-400',
+    text: 'text-teal-500 dark:text-teal-400',
+  },
+  txt: {
+    bg: '!bg-slate-400',
+    border: '!border-slate-400',
+    text: 'text-slate-500 dark:text-slate-400',
+  },
 }
 
 // Default color for untyped inputs/outputs
-const DEFAULT_INPUT_COLOR = { bg: '!bg-blue-400', border: '!border-blue-400', text: 'text-blue-500 dark:text-blue-400' }
-const DEFAULT_OUTPUT_COLOR = { bg: '!bg-green-400', border: '!border-green-400', text: 'text-green-500 dark:text-green-400' }
+const DEFAULT_INPUT_COLOR = {
+  bg: '!bg-blue-400',
+  border: '!border-blue-400',
+  text: 'text-blue-500 dark:text-blue-400',
+}
+const DEFAULT_OUTPUT_COLOR = {
+  bg: '!bg-green-400',
+  border: '!border-green-400',
+  text: 'text-green-500 dark:text-green-400',
+}
 
 // Type icons using Lucide icons
 const TYPE_ICONS: Record<DataType, ReactNode> = {
@@ -136,14 +168,21 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
       `}
     >
       {/* Header */}
-      <div className={`px-3 py-2 rounded-t-md flex items-center gap-2 transition-colors duration-300 ${
-        isDisabled ? 'bg-slate-300 dark:bg-slate-600' :
-        data.executionState === 'running' ? 'bg-cyan-100 dark:bg-cyan-900/50' :
-        data.executionState === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
-        data.executionState === 'failed' ? 'bg-red-100 dark:bg-red-900/30' :
-        isLoop ? 'bg-violet-100 dark:bg-violet-900/30' :
-        'bg-slate-200 dark:bg-slate-700'
-      }`}>
+      <div
+        className={`px-3 py-2 rounded-t-md flex items-center gap-2 transition-colors duration-300 ${
+          isDisabled
+            ? 'bg-slate-300 dark:bg-slate-600'
+            : data.executionState === 'running'
+              ? 'bg-cyan-100 dark:bg-cyan-900/50'
+              : data.executionState === 'completed'
+                ? 'bg-green-100 dark:bg-green-900/30'
+                : data.executionState === 'failed'
+                  ? 'bg-red-100 dark:bg-red-900/30'
+                  : isLoop
+                    ? 'bg-violet-100 dark:bg-violet-900/30'
+                    : 'bg-slate-200 dark:bg-slate-700'
+        }`}
+      >
         <div className="relative">
           <div className={`w-2 h-2 rounded-full ${getStatusIndicator()}`} />
           {data.executionState === 'running' && (
@@ -164,7 +203,10 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
           <span className="ml-auto text-red-500 dark:text-red-400 text-xs">&#10007;</span>
         )}
         {!isDisabled && freshnessBadge && (
-          <span className={`ml-auto text-xs ${freshnessBadge.className}`} title={freshnessBadge.title}>
+          <span
+            className={`ml-auto text-xs ${freshnessBadge.className}`}
+            title={freshnessBadge.title}
+          >
             {freshnessBadge.text}
           </span>
         )}
@@ -175,10 +217,18 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
         <div className="px-3 py-2 border-b border-violet-200 dark:border-violet-800">
           {/* Loop summary */}
           <div className="text-[10px] text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 rounded px-2 py-1 mb-2">
-            <div>∀ item in <span className="font-mono">{data.loop.over.replace(/^\$/, '')}</span></div>
-            <div className="pl-2">→ into <span className="font-mono">{data.loop.into.replace(/^\$/, '')}</span></div>
-            {data.loop.parallel && <div className="text-violet-400 dark:text-violet-500">parallel: true</div>}
-            {data.loop.filter && <div className="text-violet-400 dark:text-violet-500">filter: {data.loop.filter}</div>}
+            <div>
+              ∀ item in <span className="font-mono">{data.loop.over.replace(/^\$/, '')}</span>
+            </div>
+            <div className="pl-2">
+              → into <span className="font-mono">{data.loop.into.replace(/^\$/, '')}</span>
+            </div>
+            {data.loop.parallel && (
+              <div className="text-violet-400 dark:text-violet-500">parallel: true</div>
+            )}
+            {data.loop.filter && (
+              <div className="text-violet-400 dark:text-violet-500">filter: {data.loop.filter}</div>
+            )}
           </div>
           {/* Loop-over handle (input from collection) */}
           <div className="flex items-center py-0.5 relative">
@@ -189,11 +239,15 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
               className="!bg-violet-500"
               style={{ top: 'auto', position: 'relative', transform: 'none' }}
             />
-            <span className="ml-2 text-violet-500 dark:text-violet-400 text-[10px]">collection in</span>
+            <span className="ml-2 text-violet-500 dark:text-violet-400 text-[10px]">
+              collection in
+            </span>
           </div>
           {/* Loop-into handle (output to collection) */}
           <div className="flex items-center justify-end py-0.5 relative">
-            <span className="mr-2 text-violet-500 dark:text-violet-400 text-[10px]">collection out</span>
+            <span className="mr-2 text-violet-500 dark:text-violet-400 text-[10px]">
+              collection out
+            </span>
             <Handle
               type="source"
               position={Position.Right}
@@ -220,7 +274,9 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
                 className={colors.bg}
                 style={{ top: 'auto', position: 'relative', transform: 'none' }}
               />
-              <span className={`ml-2 flex items-center gap-1 ${inputType ? colors.text : 'text-slate-500 dark:text-slate-400'}`}>
+              <span
+                className={`ml-2 flex items-center gap-1 ${inputType ? colors.text : 'text-slate-500 dark:text-slate-400'}`}
+              >
                 {inputType && <span className="flex-shrink-0">{TYPE_ICONS[inputType]}</span>}
                 {name}
               </span>
@@ -237,13 +293,19 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
                 type="target"
                 position={Position.Left}
                 id={argKey}
-                className={connected ? '!bg-purple-400' : '!bg-transparent !border-2 !border-purple-400'}
+                className={
+                  connected ? '!bg-purple-400' : '!bg-transparent !border-2 !border-purple-400'
+                }
                 style={{ top: 'auto', position: 'relative', transform: 'none' }}
               />
-              <span className={`ml-2 ${connected ? 'text-purple-500 dark:text-purple-400' : 'text-purple-400/60'}`}>
+              <span
+                className={`ml-2 ${connected ? 'text-purple-500 dark:text-purple-400' : 'text-purple-400/60'}`}
+              >
                 {argKey.replace(/^-+/, '')}
                 {!connected && argValue !== undefined && argValue !== '' && (
-                  <span className="text-slate-400 dark:text-slate-500 ml-1 text-[10px]">= {String(argValue)}</span>
+                  <span className="text-slate-400 dark:text-slate-500 ml-1 text-[10px]">
+                    = {String(argValue)}
+                  </span>
                 )}
               </span>
             </div>
@@ -256,7 +318,9 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
           const colors = getOutputColor(flag)
           return (
             <div key={`output-${flag}`} className="flex items-center justify-end py-1 relative">
-              <span className={`mr-2 flex items-center gap-1 ${outputType ? colors.text : 'text-slate-500 dark:text-slate-400'}`}>
+              <span
+                className={`mr-2 flex items-center gap-1 ${outputType ? colors.text : 'text-slate-500 dark:text-slate-400'}`}
+              >
                 {flag.replace(/^-+/, '')}
                 {outputType && <span className="flex-shrink-0">{TYPE_ICONS[outputType]}</span>}
               </span>
@@ -271,7 +335,6 @@ function StepNode({ data, id, selected }: NodeProps<StepNodeType>) {
           )
         })}
       </div>
-
     </div>
   )
 }

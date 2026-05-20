@@ -3,7 +3,13 @@ import type { Node, Edge } from '@xyflow/react'
 import type { StepExecutionState, StepData } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 
-export type BlockReason = 'running' | 'upstream_running' | 'downstream_running' | 'output_conflict' | 'disabled' | 'incomplete'
+export type BlockReason =
+  | 'running'
+  | 'upstream_running'
+  | 'downstream_running'
+  | 'output_conflict'
+  | 'disabled'
+  | 'incomplete'
 
 export interface RunEligibility {
   canRun: boolean
@@ -20,7 +26,7 @@ export interface RunEligibility {
 export function useRunEligibility(
   nodes: Node[],
   edges: Edge[],
-  stepStatuses: Map<string, StepExecutionState>
+  stepStatuses: Map<string, StepExecutionState>,
 ): Map<string, RunEligibility> {
   // Build dependency graph (memoized)
   const graph = useMemo(() => buildDependencyGraph(nodes, edges), [nodes, edges])
@@ -176,7 +182,7 @@ export function getParallelRunEligibility(
   stepIds: string[],
   nodes: Node[],
   edges: Edge[],
-  stepStatuses: Map<string, StepExecutionState>
+  stepStatuses: Map<string, StepExecutionState>,
 ): RunEligibility {
   if (stepIds.length === 0) {
     return { canRun: false, reason: 'running' }
@@ -285,7 +291,7 @@ export function getGroupRunEligibility(
   stepIds: string[],
   nodes: Node[],
   edges: Edge[],
-  stepStatuses: Map<string, StepExecutionState>
+  stepStatuses: Map<string, StepExecutionState>,
 ): RunEligibility {
   if (stepIds.length === 0) {
     return { canRun: false, reason: 'running' }

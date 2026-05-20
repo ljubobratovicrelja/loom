@@ -103,7 +103,12 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
   // Register virtual cluster nodes for each group (must exist before setParent).
   // paddingTop reserves space for the group label so external nodes don't overlap it.
   groupNames.forEach((name) => {
-    g.setNode(`_group_${name}`, { paddingTop: 50, paddingBottom: 20, paddingLeft: 20, paddingRight: 20 })
+    g.setNode(`_group_${name}`, {
+      paddingTop: 50,
+      paddingBottom: 20,
+      paddingLeft: 20,
+      paddingRight: 20,
+    })
   })
 
   // Build a map from node id to group for step nodes

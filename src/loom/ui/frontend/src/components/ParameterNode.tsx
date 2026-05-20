@@ -44,14 +44,12 @@ function ParameterNode({ data, id, selected }: NodeProps<ParameterNodeType>) {
             </span>
           )}
         </div>
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="value"
-          className="!bg-purple-400"
-        />
+        <Handle type="source" position={Position.Right} id="value" className="!bg-purple-400" />
       </div>
-      <div className="px-3 pb-2 text-xs text-purple-600 dark:text-purple-300 truncate max-w-[150px]" title={displayValue()}>
+      <div
+        className="px-3 pb-2 text-xs text-purple-600 dark:text-purple-300 truncate max-w-[150px]"
+        title={displayValue()}
+      >
         {displayValue()}
       </div>
     </div>

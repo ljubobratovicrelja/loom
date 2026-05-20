@@ -57,10 +57,7 @@ describe('applyDagreLayout', () => {
     })
 
     it('should assign positions to all nodes', () => {
-      const nodes = [
-        createStepNode('step1'),
-        createDataNode('var1'),
-      ]
+      const nodes = [createStepNode('step1'), createDataNode('var1')]
 
       const result = applyDagreLayout(nodes, [])
 
@@ -74,10 +71,7 @@ describe('applyDagreLayout', () => {
     })
 
     it('should preserve node data', () => {
-      const nodes = [
-        createStepNode('step1'),
-        createDataNode('var1'),
-      ]
+      const nodes = [createStepNode('step1'), createDataNode('var1')]
 
       const result = applyDagreLayout(nodes, [])
 
@@ -92,15 +86,8 @@ describe('applyDagreLayout', () => {
   describe('layout with edges', () => {
     it('should layout connected nodes left-to-right', () => {
       // step1 -> var1 -> step2
-      const nodes = [
-        createStepNode('step1'),
-        createDataNode('var1'),
-        createStepNode('step2'),
-      ]
-      const edges = [
-        createEdge('step1', 'var1'),
-        createEdge('var1', 'step2'),
-      ]
+      const nodes = [createStepNode('step1'), createDataNode('var1'), createStepNode('step2')]
+      const edges = [createEdge('step1', 'var1'), createEdge('var1', 'step2')]
 
       const result = applyDagreLayout(nodes, edges)
 
@@ -155,10 +142,7 @@ describe('applyDagreLayout', () => {
   describe('disconnected components', () => {
     it('should layout disconnected nodes', () => {
       // Two independent nodes
-      const nodes = [
-        createStepNode('step1'),
-        createStepNode('step2'),
-      ]
+      const nodes = [createStepNode('step1'), createStepNode('step2')]
 
       const result = applyDagreLayout(nodes, [])
 
@@ -174,15 +158,8 @@ describe('applyDagreLayout', () => {
   describe('node sizing', () => {
     it('should produce more compact layout for data nodes than steps with many I/O', () => {
       // Two data nodes stacked vertically
-      const dataNodes = [
-        createDataNode('d1'),
-        createDataNode('d2'),
-        createStepNode('s1'),
-      ]
-      const dataEdges = [
-        createEdge('d1', 's1'),
-        createEdge('d2', 's1'),
-      ]
+      const dataNodes = [createDataNode('d1'), createDataNode('d2'), createStepNode('s1')]
+      const dataEdges = [createEdge('d1', 's1'), createEdge('d2', 's1')]
 
       // Two step nodes with multiple I/O (taller) stacked vertically
       const stepNodes = [
@@ -190,10 +167,7 @@ describe('applyDagreLayout', () => {
         createStepNodeWithIO('s2', { a: 'x', b: 'y' }, { out: 'z' }, { p1: 1, p2: 2, p3: 3 }),
         createDataNode('d1'),
       ]
-      const stepEdges = [
-        createEdge('s1', 'd1'),
-        createEdge('s2', 'd1'),
-      ]
+      const stepEdges = [createEdge('s1', 'd1'), createEdge('s2', 'd1')]
 
       const dataResult = applyDagreLayout(dataNodes, dataEdges)
       const stepResult = applyDagreLayout(stepNodes, stepEdges)
@@ -211,15 +185,8 @@ describe('applyDagreLayout', () => {
 
   describe('parameter node handling', () => {
     it('should position parameter nodes to the left of their connected step', () => {
-      const nodes = [
-        createParameterNode('p1', 10),
-        createStepNode('step1'),
-        createDataNode('out1'),
-      ]
-      const edges = [
-        createEdge('p1', 'step1'),
-        createEdge('step1', 'out1'),
-      ]
+      const nodes = [createParameterNode('p1', 10), createStepNode('step1'), createDataNode('out1')]
+      const edges = [createEdge('p1', 'step1'), createEdge('step1', 'out1')]
 
       const result = applyDagreLayout(nodes, edges)
       const p1 = result.find((n) => n.id === 'p1')!
@@ -234,10 +201,7 @@ describe('applyDagreLayout', () => {
         createParameterNode('p2', 2),
         createStepNode('step1'),
       ]
-      const edges = [
-        createEdge('p1', 'step1'),
-        createEdge('p2', 'step1'),
-      ]
+      const edges = [createEdge('p1', 'step1'), createEdge('p2', 'step1')]
 
       const result = applyDagreLayout(nodes, edges)
       expect(result.length).toBe(3)
@@ -282,11 +246,15 @@ describe('applyDagreLayout', () => {
     it('should center-align parameters with different name lengths', () => {
       // Create parameters with different name lengths
       const shortParam: Node = {
-        id: 'short', type: 'parameter', position: { x: 0, y: 0 },
+        id: 'short',
+        type: 'parameter',
+        position: { x: 0, y: 0 },
         data: { name: 'w_lmk', value: 1 },
       }
       const longParam: Node = {
-        id: 'long', type: 'parameter', position: { x: 0, y: 0 },
+        id: 'long',
+        type: 'parameter',
+        position: { x: 0, y: 0 },
         data: { name: 'n_stage3_icp_passes', value: 20 },
       }
       const nodes = [shortParam, longParam, createStepNode('step1')]
@@ -302,10 +270,7 @@ describe('applyDagreLayout', () => {
     })
 
     it('should handle orphan parameters not connected to any step', () => {
-      const nodes = [
-        createParameterNode('orphan', 42),
-        createStepNode('step1'),
-      ]
+      const nodes = [createParameterNode('orphan', 42), createStepNode('step1')]
 
       const result = applyDagreLayout(nodes, [])
 
@@ -361,10 +326,7 @@ describe('applyDagreLayout', () => {
         createGroupedStepNode('step2', 'group_a'),
         createStepNode('step3'),
       ]
-      const edges = [
-        createEdge('step1', 'step3'),
-        createEdge('step2', 'step3'),
-      ]
+      const edges = [createEdge('step1', 'step3'), createEdge('step2', 'step3')]
 
       const result = applyDagreLayout(nodes, edges)
 

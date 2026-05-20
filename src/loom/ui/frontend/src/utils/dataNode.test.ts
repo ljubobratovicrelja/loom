@@ -16,7 +16,13 @@ import {
   createStepToDataEdge,
   createGraphState,
 } from './graphTestUtils'
-import type { StepData, DataNodeData, TaskInfo, DataType, InputOutputSchema } from '../types/pipeline'
+import type {
+  StepData,
+  DataNodeData,
+  TaskInfo,
+  DataType,
+  InputOutputSchema,
+} from '../types/pipeline'
 
 // ============================================================================
 // Test Utilities
@@ -28,7 +34,7 @@ import type { StepData, DataNodeData, TaskInfo, DataType, InputOutputSchema } fr
 function createMockTask(
   name: string,
   inputs: Record<string, InputOutputSchema> = {},
-  outputs: Record<string, InputOutputSchema> = {}
+  outputs: Record<string, InputOutputSchema> = {},
 ): TaskInfo {
   return {
     name,
@@ -48,7 +54,7 @@ function validateDataToStepConnection(
   dataNode: { data: DataNodeData },
   stepNode: { data: StepData },
   targetHandle: string,
-  tasks: TaskInfo[]
+  tasks: TaskInfo[],
 ): string | null {
   const task = tasks.find((t) => t.path === stepNode.data.task)
   if (!task) return null // No task schema, allow connection
@@ -71,7 +77,7 @@ function validateStepToDataConnection(
   stepNode: { data: StepData },
   dataNode: { data: DataNodeData },
   sourceHandle: string,
-  tasks: TaskInfo[]
+  tasks: TaskInfo[],
 ): string | null {
   const task = tasks.find((t) => t.path === stepNode.data.task)
   if (!task) return null // No task schema, allow connection
@@ -229,7 +235,7 @@ describe('Data Node Operations', () => {
           {},
           {
             '-o': { description: 'Output CSV file', type: 'csv' },
-          }
+          },
         ),
       ]
 
@@ -258,7 +264,7 @@ describe('Data Node Operations', () => {
         [
           createDataToStepEdge(videoData.id, step.id, 'video'),
           createDataToStepEdge(csvData.id, step.id, 'gaze'),
-        ]
+        ],
       )
 
       expect(state.nodes).toHaveLength(3)
@@ -280,7 +286,7 @@ describe('Data Node Operations', () => {
         [
           createDataToStepEdge(inputVideo.id, extract.id, 'video'),
           createStepToDataEdge(extract.id, outputCSV.id, '-o'),
-        ]
+        ],
       )
 
       expect(state.nodes).toHaveLength(3)

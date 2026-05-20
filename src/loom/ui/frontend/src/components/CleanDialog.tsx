@@ -7,26 +7,20 @@ interface CleanDialogProps {
   onClean: (mode: 'trash' | 'permanent') => void
 }
 
-export default function CleanDialog({
-  preview,
-  loading,
-  onCancel,
-  onClean,
-}: CleanDialogProps) {
+export default function CleanDialog({ preview, loading, onCancel, onClean }: CleanDialogProps) {
   const existingPaths = preview.paths.filter((p) => p.exists)
   const hasFilesToClean = existingPaths.length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/30 dark:bg-black/50"
-        onClick={onCancel}
-      />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/50" onClick={onCancel} />
 
       {/* Dialog */}
       <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 p-6 max-w-lg w-full mx-4">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Clean Pipeline Data</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+          Clean Pipeline Data
+        </h2>
 
         {hasFilesToClean ? (
           <>
@@ -41,8 +35,13 @@ export default function CleanDialog({
                   key={item.name}
                   className="px-3 py-2 border-b border-slate-300 dark:border-slate-700 last:border-b-0"
                 >
-                  <div className="text-sm text-slate-700 dark:text-slate-200 font-medium">{item.name}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate" title={item.path}>
+                  <div className="text-sm text-slate-700 dark:text-slate-200 font-medium">
+                    {item.name}
+                  </div>
+                  <div
+                    className="text-xs text-slate-500 dark:text-slate-400 truncate"
+                    title={item.path}
+                  >
                     {item.path}
                   </div>
                 </div>

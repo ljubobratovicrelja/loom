@@ -27,11 +27,7 @@ export default function PipelineBrowser({
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide hover:text-slate-700 dark:hover:text-slate-200"
         >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           <FolderOpen className="w-4 h-4" />
           <span>Pipelines</span>
         </button>

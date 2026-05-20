@@ -9,7 +9,10 @@ import type { DataType, FreshnessStatus, StepExecutionState } from '../types/pip
  * Colors for data types - used in nodes, badges, and handles.
  * Accent colors remain consistent across light/dark themes.
  */
-export const TYPE_COLORS: Record<DataType, { bg: string; border: string; text: string; handle: string }> = {
+export const TYPE_COLORS: Record<
+  DataType,
+  { bg: string; border: string; text: string; handle: string }
+> = {
   video: {
     bg: '!bg-rose-400',
     border: '!border-rose-400',
@@ -72,7 +75,10 @@ export const DEFAULT_OUTPUT_COLOR = {
 /**
  * Colors for execution status indicators.
  */
-export const STATUS_COLORS: Record<StepExecutionState, { border: string; shadow: string; indicator: string }> = {
+export const STATUS_COLORS: Record<
+  StepExecutionState,
+  { border: string; shadow: string; indicator: string }
+> = {
   idle: {
     border: 'border-slate-400 dark:border-slate-600',
     shadow: '',
@@ -121,11 +127,15 @@ export const FRESHNESS_INDICATOR_COLORS: Record<FreshnessStatus, string> = {
  * Badge colors for data types in the properties panel.
  */
 export const TYPE_BADGE_COLORS: Record<DataType, string> = {
-  video: 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-600',
-  image: 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600',
+  video:
+    'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-600',
+  image:
+    'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-600',
   csv: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-600',
   json: 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-600',
-  image_directory: 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-600',
-  data_folder: 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-600',
+  image_directory:
+    'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-600',
+  data_folder:
+    'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-600',
   txt: 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600',
 }

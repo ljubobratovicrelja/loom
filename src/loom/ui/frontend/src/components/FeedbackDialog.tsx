@@ -46,7 +46,7 @@ export default function FeedbackDialog({
   // Pre-fill condition script from existing config if available
   const existingCondition = existingMultiPass?.condition as Record<string, unknown> | undefined
   const [conditionScript, setConditionScript] = useState(
-    (existingCondition?.script as string) || ''
+    (existingCondition?.script as string) || '',
   )
 
   // Build output options from both steps
@@ -58,10 +58,7 @@ export default function FeedbackDialog({
   // Build input options: file inputs + args from both steps
   const inputOptions: { stepName: string; flags: string[] }[] = steps.map((step) => ({
     stepName: step.name,
-    flags: [
-      ...Object.keys(step.inputs || {}),
-      ...Object.keys(step.args || {}),
-    ],
+    flags: [...Object.keys(step.inputs || {}), ...Object.keys(step.args || {})],
   }))
 
   const canCreate = selectedOutput !== null && selectedInput !== null
@@ -71,16 +68,21 @@ export default function FeedbackDialog({
 
     // Walk edges to find the data node produced by the source output
     const sourceStepNode = nodes.find(
-      (n) => n.type === 'step' && (n.data as StepData).name === selectedOutput.stepName
+      (n) => n.type === 'step' && (n.data as StepData).name === selectedOutput.stepName,
     )
     if (!sourceStepNode) return
 
     // Find edge from source step output to a data node
     const dataEdge = edges.find(
-      (e) => e.source === sourceStepNode.id && e.sourceHandle === selectedOutput.flag && e.target.startsWith('data_')
+      (e) =>
+        e.source === sourceStepNode.id &&
+        e.sourceHandle === selectedOutput.flag &&
+        e.target.startsWith('data_'),
     )
     if (!dataEdge) {
-      alert(`No data node found for output ${selectedOutput.flag} of ${selectedOutput.stepName}. The output must be connected to a data node.`)
+      alert(
+        `No data node found for output ${selectedOutput.flag} of ${selectedOutput.stepName}. The output must be connected to a data node.`,
+      )
       return
     }
 
@@ -108,10 +110,7 @@ export default function FeedbackDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/30 dark:bg-black/50"
-        onClick={onCancel}
-      />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/50" onClick={onCancel} />
 
       {/* Dialog */}
       <div className="relative bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 w-full max-w-lg mx-4">
@@ -121,7 +120,8 @@ export default function FeedbackDialog({
             Create Feedback Connection
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Group: <span className="font-mono text-purple-500 dark:text-purple-400">{groupName}</span>
+            Group:{' '}
+            <span className="font-mono text-purple-500 dark:text-purple-400">{groupName}</span>
           </p>
         </div>
 
@@ -139,7 +139,9 @@ export default function FeedbackDialog({
                     {stepName}
                   </div>
                   {flags.length === 0 ? (
-                    <div className="text-xs text-slate-400 dark:text-slate-500 italic ml-2">no outputs</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500 italic ml-2">
+                      no outputs
+                    </div>
                   ) : (
                     flags.map((flag) => {
                       const isSelected =
@@ -154,10 +156,16 @@ export default function FeedbackDialog({
                               : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
                           }`}
                         >
-                          <span className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
-                            isSelected ? 'border-purple-500' : 'border-slate-400 dark:border-slate-500'
-                          }`}>
-                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
+                          <span
+                            className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
+                              isSelected
+                                ? 'border-purple-500'
+                                : 'border-slate-400 dark:border-slate-500'
+                            }`}
+                          >
+                            {isSelected && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                            )}
                           </span>
                           <span className="font-mono text-xs">{flag.replace(/^-+/, '')}</span>
                         </button>
@@ -181,7 +189,9 @@ export default function FeedbackDialog({
                     {stepName}
                   </div>
                   {flags.length === 0 ? (
-                    <div className="text-xs text-slate-400 dark:text-slate-500 italic ml-2">no inputs/args</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500 italic ml-2">
+                      no inputs/args
+                    </div>
                   ) : (
                     flags.map((flag) => {
                       const isSelected =
@@ -196,10 +206,16 @@ export default function FeedbackDialog({
                               : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
                           }`}
                         >
-                          <span className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
-                            isSelected ? 'border-purple-500' : 'border-slate-400 dark:border-slate-500'
-                          }`}>
-                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
+                          <span
+                            className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${
+                              isSelected
+                                ? 'border-purple-500'
+                                : 'border-slate-400 dark:border-slate-500'
+                            }`}
+                          >
+                            {isSelected && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                            )}
                           </span>
                           <span className="font-mono text-xs">{flag.replace(/^-+/, '')}</span>
                         </button>

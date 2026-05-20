@@ -32,7 +32,11 @@ function renderAnsiText(text: string): React.ReactNode[] {
     if (match.index > lastIndex) {
       const segment = text.slice(lastIndex, match.index)
       if (currentColor) {
-        parts.push(<span key={parts.length} className={currentColor}>{segment}</span>)
+        parts.push(
+          <span key={parts.length} className={currentColor}>
+            {segment}
+          </span>,
+        )
       } else {
         parts.push(segment)
       }
@@ -53,7 +57,11 @@ function renderAnsiText(text: string): React.ReactNode[] {
   if (lastIndex < text.length) {
     const segment = text.slice(lastIndex)
     if (currentColor) {
-      parts.push(<span key={parts.length} className={currentColor}>{segment}</span>)
+      parts.push(
+        <span key={parts.length} className={currentColor}>
+          {segment}
+        </span>,
+      )
     } else {
       parts.push(segment)
     }
@@ -146,10 +154,12 @@ export default function TerminalPanel({
   // Which step's buffer to display.
   // While running: the locked step (canvas selection cannot override).
   // While idle: whatever step the user has selected on the canvas.
-  const viewedStep = anyRunning ? lockedStep : activeTerminalStep ?? null
+  const viewedStep = anyRunning ? lockedStep : (activeTerminalStep ?? null)
   const viewedOutput = viewedStep ? stepOutputs?.get(viewedStep) : undefined
   const viewedStatus: StepExecutionState | undefined = viewedStep
-    ? (allRunningSteps.has(viewedStep) ? 'running' : stepStatuses?.get(viewedStep))
+    ? allRunningSteps.has(viewedStep)
+      ? 'running'
+      : stepStatuses?.get(viewedStep)
     : undefined
 
   useEffect(() => {
@@ -165,24 +175,27 @@ export default function TerminalPanel({
     }
   }, [runRequest, visible, run])
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const startY = e.clientY
-    const startHeight = height
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      const startY = e.clientY
+      const startHeight = height
 
-    const onMouseMove = (e: MouseEvent) => {
-      const delta = startY - e.clientY
-      setHeight(Math.max(150, Math.min(600, startHeight + delta)))
-    }
+      const onMouseMove = (e: MouseEvent) => {
+        const delta = startY - e.clientY
+        setHeight(Math.max(150, Math.min(600, startHeight + delta)))
+      }
 
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove)
+        document.removeEventListener('mouseup', onMouseUp)
+      }
 
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-  }, [height])
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', onMouseUp)
+    },
+    [height],
+  )
 
   const handleCancelViewed = useCallback(() => {
     if (!viewedStep) return
@@ -196,7 +209,14 @@ export default function TerminalPanel({
       // Sequential / pipeline-level cancel
       cancel()
     }
-  }, [viewedStep, externalRunningSteps, onCancelStep, orchestratedRunningSteps, cancelOrchestratedStep, cancel])
+  }, [
+    viewedStep,
+    externalRunningSteps,
+    onCancelStep,
+    orchestratedRunningSteps,
+    cancelOrchestratedStep,
+    cancel,
+  ])
 
   // Tab strip: only render when more than one step is concurrently running.
   const runningStepsList = useMemo(() => Array.from(allRunningSteps), [allRunningSteps])
@@ -213,7 +233,9 @@ export default function TerminalPanel({
           <span className="mr-2">&#9650;</span>
           Terminal
           {(status === 'running' || anyRunning) && (
-            <span className="ml-2 text-green-500 dark:text-green-400 animate-pulse">&#9679; Running</span>
+            <span className="ml-2 text-green-500 dark:text-green-400 animate-pulse">
+              &#9679; Running
+            </span>
           )}
         </button>
       )}
@@ -230,13 +252,22 @@ export default function TerminalPanel({
         <div className="h-9 bg-slate-200 dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-4 min-w-0">
             <span className="text-slate-900 dark:text-white text-sm font-medium whitespace-nowrap">
-              Terminal{viewedStep && (<>: <span className="text-cyan-500 dark:text-cyan-400">{viewedStep}</span></>)}
+              Terminal
+              {viewedStep && (
+                <>
+                  : <span className="text-cyan-500 dark:text-cyan-400">{viewedStep}</span>
+                </>
+              )}
               {anyRunning && (
-                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">(locked while running)</span>
+                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                  (locked while running)
+                </span>
               )}
             </span>
             {viewedStep && viewedStatus === 'running' && (
-              <span className="text-cyan-500 dark:text-cyan-400 text-xs animate-pulse">&#9679; Running</span>
+              <span className="text-cyan-500 dark:text-cyan-400 text-xs animate-pulse">
+                &#9679; Running
+              </span>
             )}
             {viewedStep && viewedStatus === 'completed' && (
               <span className="text-green-500 dark:text-green-400 text-xs">&#10003; Completed</span>
@@ -245,7 +276,9 @@ export default function TerminalPanel({
               <span className="text-red-500 dark:text-red-400 text-xs">&#10007; Failed</span>
             )}
             {!viewedStep && status === 'running' && (
-              <span className="text-green-500 dark:text-green-400 text-xs animate-pulse">&#9679; Running</span>
+              <span className="text-green-500 dark:text-green-400 text-xs animate-pulse">
+                &#9679; Running
+              </span>
             )}
             {!viewedStep && status === 'completed' && (
               <span className="text-green-500 dark:text-green-400 text-xs">&#10003; Completed</span>
@@ -254,7 +287,9 @@ export default function TerminalPanel({
               <span className="text-red-500 dark:text-red-400 text-xs">&#10007; Failed</span>
             )}
             {!viewedStep && status === 'cancelled' && (
-              <span className="text-yellow-500 dark:text-yellow-400 text-xs">&#9632; Cancelled</span>
+              <span className="text-yellow-500 dark:text-yellow-400 text-xs">
+                &#9632; Cancelled
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2">

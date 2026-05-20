@@ -14,8 +14,14 @@ interface ToolbarProps {
   selectedStepNames: string[]
   selectedDataKey: string | null
   executionStatus: ExecutionStatus
-  onRun: (mode: RunMode, stepName?: string, variableName?: string, stepNames?: string[], groupName?: string) => void
-  onRunStep?: (stepName: string) => void  // Independent step execution
+  onRun: (
+    mode: RunMode,
+    stepName?: string,
+    variableName?: string,
+    stepNames?: string[],
+    groupName?: string,
+  ) => void
+  onRunStep?: (stepName: string) => void // Independent step execution
   onToggleTerminal: () => void
   onUndo: () => void
   onRedo: () => void
@@ -73,12 +79,12 @@ export default function Toolbar({
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <svg viewBox="0 0 32 32" className="w-6 h-6">
-            <ellipse cx="16" cy="16" rx="14" ry="10" fill="none" stroke="#3b82f6" strokeWidth="2"/>
-            <circle cx="16" cy="16" r="6" fill="#3b82f6"/>
-            <circle cx="16" cy="16" r="3" className="fill-slate-100 dark:fill-slate-900"/>
-            <circle cx="14" cy="14" r="1.5" fill="#60a5fa"/>
-            <circle cx="4" cy="16" r="2" fill="#22c55e"/>
-            <circle cx="28" cy="16" r="2" fill="#22c55e"/>
+            <ellipse cx="16" cy="16" rx="14" ry="10" fill="none" stroke="#3b82f6" strokeWidth="2" />
+            <circle cx="16" cy="16" r="6" fill="#3b82f6" />
+            <circle cx="16" cy="16" r="3" className="fill-slate-100 dark:fill-slate-900" />
+            <circle cx="14" cy="14" r="1.5" fill="#60a5fa" />
+            <circle cx="4" cy="16" r="2" fill="#22c55e" />
+            <circle cx="28" cy="16" r="2" fill="#22c55e" />
           </svg>
           <h1 className="text-slate-900 dark:text-white font-semibold">Loom</h1>
         </div>
@@ -118,15 +124,21 @@ export default function Toolbar({
             disabled={!canUndo}
             className={`
               px-2 py-1.5 text-slate-700 dark:text-white text-sm rounded transition-colors
-              ${canUndo
-                ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
-                : 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50'}
+              ${
+                canUndo
+                  ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
+                  : 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50'
+              }
             `}
             title="Undo (Cmd+Z)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+              />
             </svg>
           </button>
           <button
@@ -134,15 +146,21 @@ export default function Toolbar({
             disabled={!canRedo}
             className={`
               px-2 py-1.5 text-slate-700 dark:text-white text-sm rounded transition-colors
-              ${canRedo
-                ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
-                : 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50'}
+              ${
+                canRedo
+                  ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600'
+                  : 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50'
+              }
             `}
             title="Redo (Cmd+Shift+Z)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"
+              />
             </svg>
           </button>
         </div>
@@ -155,16 +173,15 @@ export default function Toolbar({
           onClick={onToggleParameterNodes}
           className={`
             px-2 py-1.5 text-sm rounded transition-colors
-            ${showParameterNodes
-              ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white'
-              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'}
+            ${
+              showParameterNodes
+                ? 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500'
+            }
           `}
           title="Toggle parameter nodes (P)"
         >
-          {showParameterNodes
-            ? <Eye className="w-4 h-4" />
-            : <EyeOff className="w-4 h-4" />
-          }
+          {showParameterNodes ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
         </button>
 
         {/* Auto-layout button */}
@@ -192,9 +209,11 @@ export default function Toolbar({
           disabled={!configPath}
           className={`
             px-4 py-1.5 text-white text-sm rounded transition-colors
-            ${!configPath
-              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-              : 'bg-orange-600 hover:bg-orange-500'}
+            ${
+              !configPath
+                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                : 'bg-orange-600 hover:bg-orange-500'
+            }
           `}
         >
           Clean Data
@@ -253,9 +272,11 @@ export default function Toolbar({
           disabled={saving || !configPath}
           className={`
             px-4 py-1.5 text-white text-sm rounded transition-colors
-            ${saving || !configPath
-              ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
-              : 'bg-blue-600 hover:bg-blue-500'}
+            ${
+              saving || !configPath
+                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                : 'bg-blue-600 hover:bg-blue-500'
+            }
           `}
         >
           {saving ? 'Saving...' : 'Save'}
