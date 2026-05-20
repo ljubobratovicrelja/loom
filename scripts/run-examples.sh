@@ -55,6 +55,8 @@ for pipeline in "$EXAMPLES_DIR"/*/pipeline.yml; do
     if loom pipeline.yml; then
         echo -e "${GREEN}$example_name: passed${NC}"
         PASSED=$((PASSED + 1))
+        echo "Cleaning outputs (permanent)..."
+        loom pipeline.yml --clean --permanent -y 2>/dev/null || true
     else
         echo -e "${RED}$example_name: FAILED${NC}"
         FAILED=$((FAILED + 1))

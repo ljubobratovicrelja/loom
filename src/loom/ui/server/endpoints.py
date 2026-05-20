@@ -264,8 +264,18 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
     for step in config.steps:
         step_name = step.name
 
+        # Loop steps reference $loop_item / $loop_output which are only bound
+        # per iteration. For freshness, treat loop.into as the output and
+        # loop.over as the input — they point to the actual aggregate folders.
+        if step.loop is not None:
+            output_refs = [step.loop.into]
+            input_refs = [step.loop.over]
+        else:
+            output_refs = list(step.outputs.values())
+            input_refs = list(step.inputs.values())
+
         # Skip steps with no outputs
-        if not step.outputs:
+        if not output_refs:
             freshness[step_name] = {"status": "no_outputs", "reason": "No outputs defined"}
             continue
 
@@ -274,7 +284,7 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
         output_mtimes = []
         missing_outputs = []
 
-        for var_ref in step.outputs.values():
+        for var_ref in output_refs:
             try:
                 output_path = config.resolve_path(var_ref)
                 output_paths.append(output_path)
@@ -299,7 +309,7 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
         newest_input = None
         newest_input_path = None
 
-        for var_ref in step.inputs.values():
+        for var_ref in input_refs:
             try:
                 input_path = config.resolve_path(var_ref)
 

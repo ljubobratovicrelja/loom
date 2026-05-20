@@ -4,9 +4,26 @@ Bridges the editor server with the runner module to build commands for
 PTY-based execution without reimplementing command building logic.
 """
 
+import sys
 from pathlib import Path
 
 from loom.runner import PipelineConfig, PipelineExecutor, StepConfig
+
+
+def _build_step_command(
+    executor: PipelineExecutor, config: PipelineConfig, step: StepConfig, config_path: Path
+) -> list[str]:
+    """Build a command for one step, dispatching multi_pass groups to the loom CLI.
+
+    Multi_pass groups have a sentinel script ("__multi_pass__") and loop steps
+    reference $loop_item/$loop_output which are only bound during iteration.
+    Both have their iteration handled by PipelineExecutor (run_multi_pass_group /
+    run_loop_step), so re-invoke the loom CLI on just that step instead of
+    trying to build a single subprocess command.
+    """
+    if step.name in config.multi_pass_groups or step.loop is not None:
+        return [sys.executable, "-m", "loom.runner", str(config_path), "--step", step.name]
+    return executor.build_command(step)
 
 
 def _step_outputs_exist(config: PipelineConfig, step: StepConfig) -> bool:
@@ -46,7 +63,7 @@ def build_step_command(config_path: Path, step_name: str) -> list[str]:
     config = PipelineConfig.from_yaml(config_path)
     executor = PipelineExecutor(config, dry_run=True)
     step = config.get_step_by_name(step_name)
-    return executor.build_command(step)
+    return _build_step_command(executor, config, step, config_path)
 
 
 def _get_steps_to_produce_data(
@@ -209,7 +226,7 @@ def build_pipeline_commands(
     # Build commands for each step
     commands = []
     for step in steps:
-        cmd = executor.build_command(step)
+        cmd = _build_step_command(executor, config, step, config_path)
         commands.append((step.name, cmd))
 
     return commands
@@ -234,7 +251,7 @@ def build_group_commands(config_path: Path, group_name: str) -> list[tuple[str, 
 
     commands = []
     for step in group_steps:
-        cmd = executor.build_command(step)
+        cmd = _build_step_command(executor, config, step, config_path)
         commands.append((step.name, cmd))
 
     return commands
@@ -285,7 +302,7 @@ def build_parallel_commands(
     commands = []
     for name in step_names:
         step = config.get_step_by_name(name)
-        cmd = executor.build_command(step)
+        cmd = _build_step_command(executor, config, step, config_path)
         commands.append((name, cmd))
 
     return commands
@@ -303,6 +320,11 @@ def get_step_output_dirs(config_path: Path, step_name: str) -> list[Path]:
     """
     config = PipelineConfig.from_yaml(config_path)
     step = config.get_step_by_name(step_name)
+
+    # Loop steps reference $loop_output, which is only bound per iteration —
+    # the subprocess handles per-iter dir creation. Nothing to pre-create here.
+    if step.loop is not None:
+        return []
 
     dirs = []
     for var_ref in step.outputs.values():
