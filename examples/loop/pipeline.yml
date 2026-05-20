@@ -34,3 +34,24 @@ pipeline:
     folder: $processed_texts
   outputs:
     --output: $summary_txt
+layout:
+  uppercase_each:
+    x: 799
+    y: -17
+  summarize:
+    x: 1718
+    y: 98
+  data_input_texts:
+    x: 50
+    y: 114
+  data_processed_texts:
+    x: 1298
+    y: 114
+  data_summary_txt:
+    x: 2208
+    y: 114
+  param_prefix:
+    x: 368
+    y: 299
+editor:
+  autoSave: true

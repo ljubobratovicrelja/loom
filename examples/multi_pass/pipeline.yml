@@ -60,3 +60,28 @@ pipeline:
     input_csv: $cleaned_signal
 editor:
   autoSave: true
+layout:
+  generate_signal:
+    x: 428
+    y: 245
+  smooth_signal:
+    x: 2298
+    y: 232
+  filter_signal:
+    x: 4168
+    y: 150
+  summarize:
+    x: 6038
+    y: 258
+  data_input_signal:
+    x: 1398
+    y: 261
+  data_smoothed_signal:
+    x: 3268
+    y: 179
+  data_cleaned_signal:
+    x: 5138
+    y: 261
+  param_num_samples:
+    x: 50
+    y: 266
