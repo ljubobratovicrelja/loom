@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block announce %}
+  {% if config.extra.version %}
+    <style>
+      .md-announce {
+        background-color: var(--md-primary-fg-color);
+        color: var(--md-primary-bg-color);
+      }
+      .md-announce a {
+        color: var(--md-primary-bg-color);
+      }
+    </style>
+    <a href="{{ config.repo_url }}/releases/tag/{{ config.extra.version }}">
+      Version {{ config.extra.version }}
+    </a>
+  {% endif %}
+{% endblock %}
