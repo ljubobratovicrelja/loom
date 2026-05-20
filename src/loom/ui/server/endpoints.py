@@ -1,6 +1,8 @@
 """HTTP API endpoints for the pipeline editor server."""
 
+import glob as _glob
 import os
+import re as _re
 import signal
 import subprocess
 import sys
@@ -18,6 +20,35 @@ from . import state
 from .graph import update_yaml_from_graph, yaml_to_graph
 from .models import ExecutionStatus, PipelineGraph, PipelineInfo, ValidationResult
 from .validation import validate_pipeline
+
+# Matches bare ``{name}`` placeholders inside a path. These are user-defined
+# wildcards interpreted by the task itself (e.g. ``outputs/{stint_id}/train``),
+# not by loom — but for existence/freshness checks we treat them as glob ``*``.
+# Note: ``${NAME}`` (env var) has already been expanded by the time we look at
+# the resolved path, so this pattern won't match those.
+_WILDCARD_PLACEHOLDER = _re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+
+
+def _has_wildcard(path: Path) -> bool:
+    return bool(_WILDCARD_PLACEHOLDER.search(str(path)))
+
+
+def _glob_matches(path: Path) -> list[Path]:
+    """Return concrete paths matching a wildcard-bearing path.
+
+    Substitutes ``{name}`` placeholders with ``*`` and runs ``glob.glob``.
+    Returns ``[]`` if nothing matches.
+    """
+    pattern = _WILDCARD_PLACEHOLDER.sub("*", str(path))
+    return [Path(p) for p in _glob.glob(pattern, recursive=False)]
+
+
+def _path_or_wildcard_exists(path: Path) -> bool:
+    """Check existence supporting ``{name}`` wildcard placeholders."""
+    if _has_wildcard(path):
+        return bool(_glob_matches(path))
+    return path.exists()
+
 
 # Create YAML instance that preserves comments
 _yaml = YAML()
@@ -227,9 +258,10 @@ def get_data_status() -> dict[str, bool]:
                 # For URLs, check reachability
                 result[name] = check_url_exists(raw_path)
             else:
-                # For local paths, check existence
+                # For local paths, check existence — supports {placeholder}
+                # wildcards used by loop / multi_pass tasks.
                 path = config.resolve_path(f"${name}")
-                result[name] = path.exists()
+                result[name] = _path_or_wildcard_exists(path)
         except (ValueError, OSError):
             result[name] = False
 
@@ -289,7 +321,14 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
                 output_path = config.resolve_path(var_ref)
                 output_paths.append(output_path)
 
-                if output_path.exists():
+                if _has_wildcard(output_path):
+                    matches = _glob_matches(output_path)
+                    if matches:
+                        # Use the oldest match as the conservative "output mtime"
+                        output_mtimes.append(min(m.stat().st_mtime for m in matches))
+                    else:
+                        missing_outputs.append(str(output_path))
+                elif output_path.exists():
                     output_mtimes.append(output_path.stat().st_mtime)
                 else:
                     missing_outputs.append(str(output_path))
@@ -313,12 +352,18 @@ def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
             try:
                 input_path = config.resolve_path(var_ref)
 
-                if input_path.exists():
-                    mtime = input_path.stat().st_mtime
+                candidate_mtimes: list[tuple[float, Path]] = []
+                if _has_wildcard(input_path):
+                    for m in _glob_matches(input_path):
+                        candidate_mtimes.append((m.stat().st_mtime, m))
+                elif input_path.exists():
+                    candidate_mtimes.append((input_path.stat().st_mtime, input_path))
+
+                for mtime, p in candidate_mtimes:
                     input_mtimes.append(mtime)
                     if newest_input is None or mtime > newest_input:
                         newest_input = mtime
-                        newest_input_path = input_path
+                        newest_input_path = p
             except Exception:
                 pass  # Non-file inputs (parameters) are ignored
 
@@ -356,7 +401,7 @@ async def check_path(path: str = Query(..., description="Path to check")) -> dic
         config = PipelineConfig.from_yaml(state.config_path)
         # Resolve $variable references and parameter references in path
         resolved = config.resolve_path(path)
-        return {"exists": resolved.exists(), "resolved_path": str(resolved)}
+        return {"exists": _path_or_wildcard_exists(resolved), "resolved_path": str(resolved)}
     except EnvVarError as e:
         return {"exists": False, "resolved_path": None, "error": str(e)}
     except Exception:

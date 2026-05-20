@@ -1,97 +1,75 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
 import type { ExecutionStatus, RunRequest, StepExecutionState } from '../types/pipeline'
 
 interface UseTerminalOptions {
   onStatusChange?: (status: ExecutionStatus) => void
   onStepStatusChange?: (stepName: string, state: StepExecutionState) => void
-  onStepOutput?: (stepName: string, output: string) => void  // For parallel mode
+  onStepOutput?: (stepName: string, output: string) => void
+  onPipelineMessage?: (message: string) => void
 }
 
 export function useTerminal(options: UseTerminalOptions = {}) {
-  const terminalRef = useRef<Terminal | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const [status, setStatus] = useState<ExecutionStatus>('idle')
+  const [runningSteps, setRunningSteps] = useState<Set<string>>(new Set())
 
-  // Store callbacks in refs to avoid stale closures in WebSocket handlers
+  // For sequential / group / all runs: the step whose PTY output we're
+  // currently receiving. Parallel runs use the `[OUTPUT:name]` prefix instead.
+  const currentStepRef = useRef<string | null>(null)
+
   const onStatusChangeRef = useRef(options.onStatusChange)
   const onStepStatusChangeRef = useRef(options.onStepStatusChange)
   const onStepOutputRef = useRef(options.onStepOutput)
+  const onPipelineMessageRef = useRef(options.onPipelineMessage)
 
-  // Keep refs updated
   useEffect(() => {
     onStatusChangeRef.current = options.onStatusChange
     onStepStatusChangeRef.current = options.onStepStatusChange
     onStepOutputRef.current = options.onStepOutput
-  }, [options.onStatusChange, options.onStepStatusChange, options.onStepOutput])
+    onPipelineMessageRef.current = options.onPipelineMessage
+  }, [options.onStatusChange, options.onStepStatusChange, options.onStepOutput, options.onPipelineMessage])
 
   const updateStatus = useCallback((newStatus: ExecutionStatus) => {
     setStatus(newStatus)
     onStatusChangeRef.current?.(newStatus)
   }, [])
 
-  const initTerminal = useCallback((container: HTMLDivElement) => {
-    if (terminalRef.current) {
-      // Already initialized, just refit
-      fitAddonRef.current?.fit()
-      return
-    }
-
-    const terminal = new Terminal({
-      theme: {
-        background: '#0f172a',
-        foreground: '#e2e8f0',
-        cursor: '#60a5fa',
-        cursorAccent: '#0f172a',
-        selectionBackground: '#334155',
-        black: '#1e293b',
-        red: '#ef4444',
-        green: '#22c55e',
-        yellow: '#eab308',
-        blue: '#3b82f6',
-        magenta: '#a855f7',
-        cyan: '#06b6d4',
-        white: '#f1f5f9',
-        brightBlack: '#475569',
-        brightRed: '#f87171',
-        brightGreen: '#4ade80',
-        brightYellow: '#facc15',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#c084fc',
-        brightCyan: '#22d3ee',
-        brightWhite: '#ffffff',
-      },
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      lineHeight: 1.2,
-      cursorBlink: true,
-      convertEol: true,
+  const markRunning = useCallback((stepName: string, isRunning: boolean) => {
+    setRunningSteps(prev => {
+      const next = new Set(prev)
+      if (isRunning) next.add(stepName)
+      else next.delete(stepName)
+      return next
     })
-
-    const fitAddon = new FitAddon()
-    terminal.loadAddon(fitAddon)
-
-    terminal.open(container)
-    fitAddon.fit()
-
-    terminalRef.current = terminal
-    fitAddonRef.current = fitAddon
   }, [])
+
+  // Helper invoked for parallel-demultiplexed chunks so we still track per-step
+  // status purely from their content.
+  const parseMarkersForStep = useCallback((output: string, stepName: string) => {
+    const plain = output.replace(/\x1b\[[0-9;]*m/g, '')
+    if (plain.includes('[RUNNING]')) markRunning(stepName, true)
+    if (plain.includes('[SUCCESS]')) {
+      markRunning(stepName, false)
+      onStepStatusChangeRef.current?.(stepName, 'completed')
+    }
+    if (plain.includes('[FAILED]')) {
+      markRunning(stepName, false)
+      onStepStatusChangeRef.current?.(stepName, 'failed')
+    }
+    if (plain.includes('[CANCELLED]')) {
+      markRunning(stepName, false)
+      onStepStatusChangeRef.current?.(stepName, 'idle')
+    }
+  }, [markRunning])
 
   const run = useCallback(
     (request: RunRequest) => {
-      // Close existing connection
       if (wsRef.current) {
         wsRef.current.close()
       }
 
-      const terminal = terminalRef.current
-      if (!terminal) return
-
-      terminal.clear()
-      terminal.writeln('\x1b[36m[LOOM]\x1b[0m Starting execution...\r\n')
+      currentStepRef.current = null
+      setRunningSteps(new Set())
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws/terminal`)
@@ -105,85 +83,108 @@ export function useTerminal(options: UseTerminalOptions = {}) {
       }
 
       ws.onmessage = (event) => {
-        let text: string
-
         if (event.data instanceof ArrayBuffer) {
           const bytes = new Uint8Array(event.data)
-          text = new TextDecoder().decode(bytes)
+          const text = new TextDecoder().decode(bytes)
 
-          // Check for multiplexed output: [OUTPUT:step_name]...
-          const outputMatch = text.match(/^\[OUTPUT:(\S+)\](.*)$/s)
+          // Parallel mode multiplexer: chunks are prefixed with [OUTPUT:name]
+          const outputMatch = text.match(/^\[OUTPUT:(\S+)\]([\s\S]*)$/)
           if (outputMatch) {
             const [, stepName, output] = outputMatch
-            // Store per-step output for parallel mode
             onStepOutputRef.current?.(stepName, output)
-            // Still write to terminal for live view
-            terminal.write(output)
+            // Also parse markers inside the demultiplexed output
+            parseMarkersForStep(output, stepName)
+            return
+          }
+
+          // Sequential: route to currently running step
+          if (currentStepRef.current) {
+            onStepOutputRef.current?.(currentStepRef.current, text)
           } else {
-            // Sequential mode - write directly
-            terminal.write(bytes)
+            onPipelineMessageRef.current?.(text)
           }
-        } else {
-          text = event.data
-
-          // Try to parse as JSON (for step status messages in parallel mode)
-          try {
-            const msg = JSON.parse(text)
-            if (msg.type === 'step_status') {
-              const state: StepExecutionState =
-                msg.status === 'running' ? 'running' :
-                msg.status === 'completed' ? 'completed' :
-                msg.status === 'failed' ? 'failed' : 'idle'
-              onStepStatusChangeRef.current?.(msg.step, state)
-              return  // Don't write JSON to terminal
-            }
-          } catch {
-            // Not JSON, write as text
-          }
-
-          terminal.write(text)
+          return
         }
 
-        // Parse step status from output (for sequential mode)
-        // Strip ANSI escape codes first for reliable matching
+        const text = event.data as string
+
+        // JSON status messages (per-step)
+        try {
+          const msg = JSON.parse(text)
+          if (msg.type === 'step_status') {
+            const state: StepExecutionState =
+              msg.status === 'running' ? 'running' :
+              msg.status === 'completed' ? 'completed' :
+              msg.status === 'failed' ? 'failed' : 'idle'
+            if (msg.status === 'running') {
+              currentStepRef.current = msg.step
+              markRunning(msg.step, true)
+            } else {
+              if (currentStepRef.current === msg.step) {
+                currentStepRef.current = null
+              }
+              markRunning(msg.step, false)
+            }
+            onStepStatusChangeRef.current?.(msg.step, state)
+            return
+          }
+        } catch {
+          // Not JSON
+        }
+
+        // Plain text marker lines from the server: [RUNNING] / [SUCCESS] /
+        // [FAILED] / [CANCELLED] / [LOOM] / [COMPLETED] / [PARTIAL] / [ERROR]
         const plainText = text.replace(/\x1b\[[0-9;]*m/g, '')
-        // Matches: [RUNNING] step_name, [SUCCESS] step_name, [FAILED] step_name, [CANCELLED] step_name
         const runningMatch = plainText.match(/\[RUNNING\]\s*(\S+)/)
         const successMatch = plainText.match(/\[SUCCESS\]\s*(\S+)/)
         const failedMatch = plainText.match(/\[FAILED\]\s*(\S+)/)
         const cancelledMatch = plainText.match(/\[CANCELLED\]\s*(\S+)/)
 
         if (runningMatch) {
+          currentStepRef.current = runningMatch[1]
+          markRunning(runningMatch[1], true)
           onStepStatusChangeRef.current?.(runningMatch[1], 'running')
         }
         if (successMatch) {
+          markRunning(successMatch[1], false)
+          if (currentStepRef.current === successMatch[1]) currentStepRef.current = null
           onStepStatusChangeRef.current?.(successMatch[1], 'completed')
         }
         if (failedMatch) {
+          markRunning(failedMatch[1], false)
+          if (currentStepRef.current === failedMatch[1]) currentStepRef.current = null
           onStepStatusChangeRef.current?.(failedMatch[1], 'failed')
         }
         if (cancelledMatch) {
+          markRunning(cancelledMatch[1], false)
+          if (currentStepRef.current === cancelledMatch[1]) currentStepRef.current = null
           onStepStatusChangeRef.current?.(cancelledMatch[1], 'idle')
+        }
+
+        // Route the text into a step buffer if we know which step it belongs to.
+        if (currentStepRef.current) {
+          onStepOutputRef.current?.(currentStepRef.current, text)
+        } else {
+          onPipelineMessageRef.current?.(text)
         }
       }
 
       ws.onclose = () => {
-        terminal.writeln('\r\n\x1b[36m[LOOM]\x1b[0m Connection closed')
         updateStatus('idle')
+        currentStepRef.current = null
+        setRunningSteps(new Set())
       }
 
       ws.onerror = (event) => {
         console.error('WebSocket error:', event)
-        terminal.writeln('\r\n\x1b[31m[ERROR]\x1b[0m WebSocket error - check browser console')
         updateStatus('failed')
       }
     },
-    [updateStatus]
+    [updateStatus, markRunning, parseMarkersForStep]
   )
 
   const cancel = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      // Send cancel signal - the server will handle termination
       wsRef.current.send('__CANCEL__')
       updateStatus('cancelled')
     }
@@ -191,34 +192,21 @@ export function useTerminal(options: UseTerminalOptions = {}) {
 
   const cancelStep = useCallback((stepName: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      // Send per-step cancel for parallel mode
       wsRef.current.send(`__CANCEL__:${stepName}`)
     }
   }, [])
 
-  const resize = useCallback(() => {
-    fitAddonRef.current?.fit()
-  }, [])
-
-  const clear = useCallback(() => {
-    terminalRef.current?.clear()
-  }, [])
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       wsRef.current?.close()
-      terminalRef.current?.dispose()
     }
   }, [])
 
   return {
-    initTerminal,
     run,
     cancel,
     cancelStep,
-    resize,
-    clear,
     status,
+    runningSteps,
   }
 }

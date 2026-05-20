@@ -1,5 +1,6 @@
 """Tests for editor server HTTP endpoints and validation logic."""
 
+import os
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -1569,3 +1570,135 @@ pipeline: []
         # Should have skipped results (missing + thumbnails)
         skipped = [r for r in data["results"] if r["action"] == "skipped"]
         assert len(skipped) >= 1
+
+
+class TestWildcardPathExistence:
+    """Wildcard ``{name}`` placeholders in data paths (used by loop/multi_pass
+    tasks that produce per-iteration subdirectories) should be treated as
+    glob ``*`` for existence and freshness checks. Otherwise such nodes always
+    appear missing even after the producing task finishes."""
+
+    def test_data_status_wildcard_matches_existing_dir(self, tmp_path: Path) -> None:
+        """A path with ``{stint_id}`` exists if at least one concrete match exists."""
+        (tmp_path / "outputs" / "stint_a" / "train" / "clips").mkdir(parents=True)
+        (tmp_path / "outputs" / "stint_b" / "train" / "clips").mkdir(parents=True)
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text(f"""
+data:
+  clips:
+    type: data_folder
+    path: {tmp_path}/outputs/{{stint_id}}/train/clips
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/data/status")
+
+        assert response.status_code == 200
+        assert response.json()["clips"] is True
+
+    def test_data_status_wildcard_no_matches_is_false(self, tmp_path: Path) -> None:
+        """No producing run yet → no concrete matches → exists=False."""
+        config = tmp_path / "pipeline.yml"
+        config.write_text(f"""
+data:
+  clips:
+    type: data_folder
+    path: {tmp_path}/outputs/{{stint_id}}/train/clips
+pipeline: []
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/data/status")
+
+        assert response.status_code == 200
+        assert response.json()["clips"] is False
+
+    def test_check_path_wildcard_resolves_via_glob(self, tmp_path: Path) -> None:
+        """The /api/check-path endpoint (live path editing) also honors wildcards."""
+        (tmp_path / "outputs" / "stint_a").mkdir(parents=True)
+        config = tmp_path / "pipeline.yml"
+        config.write_text("data: {}\npipeline: []\n")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/check-path",
+            params={"path": f"{tmp_path}/outputs/{{stint_id}}"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["exists"] is True
+
+    def test_freshness_wildcard_outputs_present(self, tmp_path: Path) -> None:
+        """Step freshness should not report missing when wildcard outputs exist."""
+        (tmp_path / "data" / "input.txt").parent.mkdir(parents=True)
+        (tmp_path / "data" / "input.txt").write_text("seed")
+
+        # Create wildcard outputs with mtime newer than the input.
+        out_dir = tmp_path / "out" / "stint_a"
+        out_dir.mkdir(parents=True)
+        (out_dir / "result.txt").write_text("done")
+        # Bump output mtime ahead of input
+        future = time.time() + 10
+        os.utime(out_dir / "result.txt", (future, future))
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text(f"""
+data:
+  src:
+    type: txt
+    path: {tmp_path}/data/input.txt
+  produced:
+    type: data_folder
+    path: {tmp_path}/out/{{stint_id}}
+pipeline:
+  - name: process
+    task: dummy.py
+    inputs:
+      input: $src
+    outputs:
+      --output: $produced
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/steps/freshness")
+
+        assert response.status_code == 200
+        info = response.json()["freshness"]["process"]
+        assert info["status"] == "fresh", info
+
+    def test_freshness_wildcard_outputs_missing(self, tmp_path: Path) -> None:
+        """No wildcard matches → step is missing."""
+        (tmp_path / "data").mkdir()
+        (tmp_path / "data" / "input.txt").write_text("seed")
+
+        config = tmp_path / "pipeline.yml"
+        config.write_text(f"""
+data:
+  src:
+    type: txt
+    path: {tmp_path}/data/input.txt
+  produced:
+    type: data_folder
+    path: {tmp_path}/out/{{stint_id}}
+pipeline:
+  - name: process
+    task: dummy.py
+    inputs:
+      input: $src
+    outputs:
+      --output: $produced
+""")
+        configure(config_path=config)
+        client = TestClient(app)
+
+        response = client.get("/api/steps/freshness")
+
+        assert response.status_code == 200
+        assert response.json()["freshness"]["process"]["status"] == "missing"

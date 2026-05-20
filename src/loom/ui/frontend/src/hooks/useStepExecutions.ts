@@ -187,6 +187,14 @@ export function useStepExecutions(options: UseStepExecutionsOptions = {}) {
     return false
   }, [stepStatuses])
 
+  const runningSteps = useCallback((): Set<string> => {
+    const set = new Set<string>()
+    for (const [name, status] of stepStatuses) {
+      if (status === 'running') set.add(name)
+    }
+    return set
+  }, [stepStatuses])
+
   // Cleanup on unmount
   useEffect(() => {
     const executions = executionsRef.current
@@ -206,5 +214,6 @@ export function useStepExecutions(options: UseStepExecutionsOptions = {}) {
     getStepStatus,
     stepStatuses,
     isAnyRunning,
+    runningSteps,
   }
 }

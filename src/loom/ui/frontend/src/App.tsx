@@ -299,6 +299,7 @@ export default function App() {
     cancelStep: cancelStepIndependent,
     getStepStatus: getIndependentStepStatus,
     stepStatuses: independentStepStatuses,
+    runningSteps: independentRunningSteps,
   } = useStepExecutions({
     onStepStatusChange: (stepName, status) => {
       handleStepStatusChange(stepName, status)
@@ -1565,10 +1566,8 @@ export default function App() {
       }
     }
     // Don't reset all steps - server sends per-step status updates (RUNNING, SUCCESS, FAILED)
-    // Only clear parallel mode outputs
-    if (mode === 'parallel') {
-      setStepTerminalOutputs(new Map())
-    }
+    // Clear orchestrated-run buffers so stale output from a previous run isn't appended to.
+    setStepTerminalOutputs(new Map())
     setTerminalVisible(true)
     // Create a new request object to trigger the terminal
     setRunRequest({ mode, step_name: stepName, data_name: variableName, step_names: stepNames, group_name: groupName })
@@ -1616,6 +1615,12 @@ export default function App() {
     }
     setActiveTerminalStep(stepName)
     setTerminalVisible(true)
+    // Clear this step's previous output before re-running
+    setStepTerminalOutputs((prev) => {
+      const next = new Map(prev)
+      next.delete(stepName)
+      return next
+    })
     runStepIndependent(stepName)
   }, [configPath, hasChanges, skipSaveConfirmation, performSave, runStepIndependent])
 
@@ -2020,6 +2025,7 @@ export default function App() {
           activeTerminalStep={activeTerminalStep}
           stepOutputs={stepTerminalOutputs}
           stepStatuses={independentStepStatuses}
+          externalRunningSteps={independentRunningSteps()}
           onCancelStep={cancelStepIndependent}
           onClearStepOutput={(stepName) => {
             setStepTerminalOutputs((prev) => {
