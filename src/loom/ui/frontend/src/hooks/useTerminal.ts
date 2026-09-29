@@ -152,6 +152,12 @@ export function useTerminal(options: UseTerminalOptions = {}) {
         const failedMatch = plainText.match(/\[FAILED\]\s*(\S+)/)
         const cancelledMatch = plainText.match(/\[CANCELLED\]\s*(\S+)/)
 
+        // The step a marker line belongs to. Completion markers clear
+        // currentStepRef, so capture the name here to keep them in that step's
+        // buffer instead of leaking them to the pipeline-level messages.
+        const markerStep =
+          runningMatch?.[1] ?? successMatch?.[1] ?? failedMatch?.[1] ?? cancelledMatch?.[1]
+
         if (runningMatch) {
           currentStepRef.current = runningMatch[1]
           markRunning(runningMatch[1], true)
@@ -173,9 +179,10 @@ export function useTerminal(options: UseTerminalOptions = {}) {
           onStepStatusChangeRef.current?.(cancelledMatch[1], 'idle')
         }
 
-        // Route the text into a step buffer if we know which step it belongs to.
-        if (currentStepRef.current) {
-          onStepOutputRef.current?.(currentStepRef.current, text)
+        // Route the text into the step buffer it belongs to.
+        const targetStep = markerStep ?? currentStepRef.current
+        if (targetStep) {
+          onStepOutputRef.current?.(targetStep, text)
         } else {
           onPipelineMessageRef.current?.(text)
         }

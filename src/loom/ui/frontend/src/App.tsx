@@ -29,6 +29,7 @@ import {
 import { useFreshness } from './hooks/useFreshness'
 import { applyDagreLayout } from './utils/layout'
 import { collapseParameterRefs, splitParameterRefNodes } from './utils/parameterRefs'
+import { appendTerminalOutput, startRun, type TerminalBuffer } from './utils/terminalOutput'
 import { documentSignature } from './utils/documentSignature'
 import type {
   PipelineGraph,
@@ -307,7 +308,12 @@ export default function App() {
 
   // Per-step terminal output for parallel execution
   const [activeTerminalStep, setActiveTerminalStep] = useState<string | null>(null)
-  const [stepTerminalOutputs, setStepTerminalOutputs] = useState<Map<string, string>>(new Map())
+  const [stepTerminalOutputs, setStepTerminalOutputs] = useState<Map<string, TerminalBuffer>>(
+    new Map(),
+  )
+  // Steps whose current run already has a terminal separator, so repeated
+  // status messages within one run don't stack separators.
+  const separatorStartedStepsRef = useRef<Set<string>>(new Set())
 
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
@@ -1781,6 +1787,21 @@ export default function App() {
   // Handle step execution state changes
   const handleStepStatusChange = useCallback(
     (stepName: string, state: StepExecutionState) => {
+      // A step going running means a fresh execution: start a new run block in
+      // its terminal buffer so prior runs are preserved and clearly separated.
+      if (state === 'running') {
+        if (!separatorStartedStepsRef.current.has(stepName)) {
+          separatorStartedStepsRef.current.add(stepName)
+          setStepTerminalOutputs((prev) => {
+            const next = new Map(prev)
+            next.set(stepName, startRun(next.get(stepName) ?? [], Date.now()))
+            return next
+          })
+        }
+      } else {
+        separatorStartedStepsRef.current.delete(stepName)
+      }
+
       setNodes((nds) =>
         nds.map((node) => {
           if (node.type === 'step' && (node.data as StepData).name === stepName) {
@@ -1817,9 +1838,8 @@ export default function App() {
           }
         }
       }
-      // Don't reset all steps - server sends per-step status updates (RUNNING, SUCCESS, FAILED)
-      // Clear orchestrated-run buffers so stale output from a previous run isn't appended to.
-      setStepTerminalOutputs(new Map())
+      // Don't reset step status or terminal buffers: each run appends a new,
+      // separator-delimited block so previous runs stay visible.
       setTerminalVisible(true)
       // Create a new request object to trigger the terminal
       setRunRequest({
@@ -1833,21 +1853,13 @@ export default function App() {
     [configPath, hasChanges, skipSaveConfirmation, performSave],
   )
 
-  // Handle per-step terminal output (for parallel execution)
-  // Processes carriage returns (\r) to simulate terminal overwrite behavior (for tqdm etc.)
+  // Accumulate raw per-step terminal output (for parallel execution).
+  // Rendering (carriage-return handling, ANSI colors) happens in TerminalPanel
+  // so the raw stream is never lossily rewritten between chunks.
   const handleStepOutput = useCallback((stepName: string, output: string) => {
     setStepTerminalOutputs((prev) => {
       const next = new Map(prev)
-      const existing = next.get(stepName) || ''
-      const combined = existing + output
-
-      // Process carriage returns: for each line, keep only content after last \r
-      const processedLines = combined.split('\n').map((line) => {
-        const lastCR = line.lastIndexOf('\r')
-        return lastCR >= 0 ? line.slice(lastCR + 1) : line
-      })
-
-      next.set(stepName, processedLines.join('\n'))
+      next.set(stepName, appendTerminalOutput(next.get(stepName) ?? [], output))
       return next
     })
   }, [])
@@ -1876,12 +1888,7 @@ export default function App() {
       }
       setActiveTerminalStep(stepName)
       setTerminalVisible(true)
-      // Clear this step's previous output before re-running
-      setStepTerminalOutputs((prev) => {
-        const next = new Map(prev)
-        next.delete(stepName)
-        return next
-      })
+      // Previous runs are kept; the new run gets its own separator-delimited block.
       runStepIndependent(stepName)
     },
     [configPath, hasChanges, skipSaveConfirmation, performSave, runStepIndependent],

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, Fragment } from 'react'
 import type { ExecutionStatus, RunRequest, StepExecutionState } from '../types/pipeline'
 import { useTerminal } from '../hooks/useTerminal'
+import { renderTerminalOutput, type TerminalBuffer } from '../utils/terminalOutput'
 
 const ansiColors: Record<string, string> = {
   '30': 'text-slate-900',
@@ -70,6 +71,18 @@ function renderAnsiText(text: string): React.ReactNode[] {
   return parts.length > 0 ? parts : [text]
 }
 
+function RunSeparator({ startedAt }: { startedAt: number }) {
+  return (
+    <div className="flex items-center gap-2 my-1 select-none">
+      <span className="h-px flex-1 bg-slate-300 dark:bg-slate-700" />
+      <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">
+        Run &middot; {new Date(startedAt).toLocaleTimeString()}
+      </span>
+      <span className="h-px flex-1 bg-slate-300 dark:bg-slate-700" />
+    </div>
+  )
+}
+
 interface TerminalPanelProps {
   visible: boolean
   onToggle: () => void
@@ -79,7 +92,7 @@ interface TerminalPanelProps {
   onPipelineMessage?: (message: string) => void
   runRequest: RunRequest | null
   activeTerminalStep?: string | null
-  stepOutputs?: Map<string, string>
+  stepOutputs?: Map<string, TerminalBuffer>
   stepStatuses?: Map<string, StepExecutionState>
   // Steps currently running outside of useTerminal (independent step WS hook).
   externalRunningSteps?: Set<string>
@@ -155,7 +168,7 @@ export default function TerminalPanel({
   // While running: the locked step (canvas selection cannot override).
   // While idle: whatever step the user has selected on the canvas.
   const viewedStep = anyRunning ? lockedStep : (activeTerminalStep ?? null)
-  const viewedOutput = viewedStep ? stepOutputs?.get(viewedStep) : undefined
+  const viewedRuns = viewedStep ? stepOutputs?.get(viewedStep) : undefined
   const viewedStatus: StepExecutionState | undefined = viewedStep
     ? allRunningSteps.has(viewedStep)
       ? 'running'
@@ -166,7 +179,7 @@ export default function TerminalPanel({
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
-  }, [viewedOutput, viewedStep])
+  }, [viewedRuns, viewedStep])
 
   useEffect(() => {
     if (runRequest && visible && runRequest !== lastRequestRef.current) {
@@ -355,8 +368,13 @@ export default function TerminalPanel({
           style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
         >
           {viewedStep ? (
-            viewedOutput ? (
-              renderAnsiText(viewedOutput)
+            viewedRuns && viewedRuns.length > 0 ? (
+              viewedRuns.map((run, i) => (
+                <Fragment key={i}>
+                  {i > 0 && <RunSeparator startedAt={run.startedAt} />}
+                  {renderAnsiText(renderTerminalOutput(run.raw))}
+                </Fragment>
+              ))
             ) : (
               <span className="text-slate-400 dark:text-slate-500">Waiting for output...</span>
             )
