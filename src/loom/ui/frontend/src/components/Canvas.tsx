@@ -44,6 +44,7 @@ import type {
   FeedbackEdgeData,
 } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
+import { estimateParamWidth, estimateStepHeight } from '../utils/layout'
 import { HighlightContext } from '../contexts/HighlightContext'
 
 const nodeTypes = {
@@ -79,6 +80,50 @@ function deepCloneNode(node: PipelineNode): PipelineNode {
   } catch {
     // Fallback for environments without structuredClone
     return JSON.parse(JSON.stringify(node))
+  }
+}
+
+/**
+ * Fallback dimensions used before React Flow has measured a node. These are only
+ * needed for the very first render; once measured, the real rendered size is used.
+ */
+const FALLBACK_NODE_WIDTH = 250
+const FALLBACK_NODE_HEIGHT = 150
+const FALLBACK_PARAM_WIDTH = 160
+const FALLBACK_PARAM_HEIGHT = 70
+const FALLBACK_DATA_WIDTH = 180
+const FALLBACK_DATA_HEIGHT = 90
+
+/**
+ * Resolve the rendered size of a node for group bounding-box math. React Flow
+ * writes the measured size back onto each node after the first layout pass, so
+ * prefer that; fall back to per-type estimates only until measurement lands.
+ * Using a fixed 250x150 for every node is what made group rectangles clip tall
+ * step nodes and parameters.
+ */
+function getNodeDimensions(node: PipelineNode): { width: number; height: number } {
+  const measuredWidth = node.measured?.width
+  const measuredHeight = node.measured?.height
+  if (measuredWidth != null && measuredHeight != null) {
+    return { width: measuredWidth, height: measuredHeight }
+  }
+  if (node.width != null && node.height != null) {
+    return { width: node.width, height: node.height }
+  }
+  if (node.type === 'parameter') {
+    const data = node.data as Record<string, unknown>
+    return {
+      width: Math.max(FALLBACK_PARAM_WIDTH, estimateParamWidth(data)),
+      height: FALLBACK_PARAM_HEIGHT,
+    }
+  }
+  if (node.type === 'data') {
+    return { width: FALLBACK_DATA_WIDTH, height: FALLBACK_DATA_HEIGHT }
+  }
+  const data = node.data as Record<string, unknown>
+  return {
+    width: FALLBACK_NODE_WIDTH,
+    height: Math.max(FALLBACK_NODE_HEIGHT, estimateStepHeight(data)),
   }
 }
 
@@ -920,8 +965,6 @@ export default function Canvas({
 
   // Build display nodes: regular nodes + computed group rectangle nodes
   const displayNodes = useMemo(() => {
-    const NODE_WIDTH = 250
-    const NODE_HEIGHT = 150
     const MARGIN = 48
     const TOP_MARGIN = 60 // extra space at the top for the group label
 
@@ -1000,10 +1043,11 @@ export default function Canvas({
       for (const node of members) {
         const x = node.position.x,
           y = node.position.y
+        const { width: nodeWidth, height: nodeHeight } = getNodeDimensions(node)
         minX = Math.min(minX, x)
-        maxX = Math.max(maxX, x + NODE_WIDTH)
+        maxX = Math.max(maxX, x + nodeWidth)
         minY = Math.min(minY, y)
-        maxY = Math.max(maxY, y + NODE_HEIGHT)
+        maxY = Math.max(maxY, y + nodeHeight)
         sumX += x
       }
       groupBounds.set(groupName, { minX, maxX, minY, maxY, avgX: sumX / members.length })

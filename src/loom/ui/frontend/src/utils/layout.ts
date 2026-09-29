@@ -11,7 +11,7 @@ const PARAM_STEP_GAP = 200 // horizontal gap between parameter column and step
  * Accounts for: padding (24px), $ prefix (12px), name text (~8px/char),
  * type badge (40px), handle (15px).
  */
-function estimateParamWidth(data: Record<string, unknown>): number {
+export function estimateParamWidth(data: Record<string, unknown>): number {
   const name = (data.name as string) || ''
   return Math.max(120, 90 + name.length * 8)
 }
@@ -20,7 +20,7 @@ function estimateParamWidth(data: Record<string, unknown>): number {
  * Estimate the rendered height of a step node based on its I/O handle count.
  * Matches the StepNode component structure: header + per-handle rows + optional loop.
  */
-function estimateStepHeight(data: Record<string, unknown>): number {
+export function estimateStepHeight(data: Record<string, unknown>): number {
   const inputs = data.inputs as Record<string, string> | undefined
   const outputs = data.outputs as Record<string, string> | undefined
   const args = data.args as Record<string, unknown> | undefined

@@ -66,6 +66,9 @@ Thumbs.db
 *.local
 .env
 
+# Playwright MCP (browser automation temp files)
+.playwright-mcp/
+
 # Example data
 examples/*/data/**
 # Keep static input fixtures for the loop example
