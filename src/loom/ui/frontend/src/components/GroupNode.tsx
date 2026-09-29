@@ -1,6 +1,7 @@
 import { memo, useCallback, useRef } from 'react'
 import { useViewport, type NodeProps } from '@xyflow/react'
 import type { GroupNode as GroupNodeType } from '../types/pipeline'
+import { computeCenteredGroupLabel, INNER_RATIO, LINE_HEIGHT_RATIO } from '../utils/groupLabel'
 
 function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<GroupNodeType>) {
   const { zoom } = useViewport()
@@ -10,17 +11,13 @@ function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<Group
   const bgAlpha = zoomed ? '30' : '18'
   const borderAlpha = zoomed ? '60' : '30'
 
-  // When zoomed out, scale label to fill the group box; otherwise keep it in the corner.
-  // We estimate character width as ~0.6em and pick the font size that fits the box,
-  // clamped so it doesn't get absurdly large for short names or tiny groups.
-  const charCount = data.groupName.length || 1
-  const fitByWidth = (width * 0.8) / (charCount * 0.6) // 80% of box width
-  const fitByHeight = height * 0.35 // at most 35% of box height
-  const centeredFontSize = Math.max(16, Math.min(fitByWidth, fitByHeight))
-
-  const cornerFontSize = Math.min(13 / zoom, 28)
-
-  const fontSize = zoomed ? centeredFontSize : cornerFontSize
+  // When zoomed out, the label is centered and wrapped to the largest font that
+  // still fits the rectangle (computed in screen px so it stays readable as the
+  // user zooms out). Otherwise it sits in the corner at a constant screen size.
+  const centeredLabel = zoomed
+    ? computeCenteredGroupLabel(data.groupName, width, height, zoom)
+    : null
+  const fontSize = centeredLabel ? centeredLabel.fontSize / zoom : Math.min(13 / zoom, 28)
 
   // Selection visual state
   const { anyGroupSelected, isSelected } = data
@@ -84,13 +81,16 @@ function GroupNodeComponent({ data, width = 200, height = 100 }: NodeProps<Group
           top: zoomed ? '50%' : '8px',
           left: zoomed ? '50%' : '12px',
           transform: zoomed ? 'translate(-50%, -50%)' : 'none',
+          width: zoomed ? `${width * INNER_RATIO}px` : 'auto',
+          textAlign: zoomed ? 'center' : 'left',
           fontSize: `${fontSize}px`,
-          lineHeight: 1,
+          lineHeight: zoomed ? LINE_HEIGHT_RATIO : 1,
           color: data.color,
           fontWeight: 600,
           pointerEvents: 'none',
           userSelect: 'none',
-          whiteSpace: 'nowrap',
+          whiteSpace: zoomed ? 'normal' : 'nowrap',
+          visibility: centeredLabel?.hidden ? 'hidden' : 'visible',
           transition: 'top 0.4s ease, left 0.4s ease, transform 0.4s ease, font-size 0.4s ease',
         }}
       >
