@@ -96,6 +96,47 @@ function enrichStepNodesWithTypes(nodes: PipelineNode[], tasks: TaskInfo[]): Pip
   })
 }
 
+// Drag-resize a panel by mutating its DOM width directly (rAF-coalesced) and
+// committing to React state only on mouseup. Driving the width through React
+// state on every mousemove re-renders the whole app and fights the CSS width
+// transition, which makes the drag feel laggy.
+function beginPanelResize(
+  panel: HTMLElement | null,
+  startClientX: number,
+  startWidth: number,
+  opts: { reverse?: boolean; min: number; max: number; onCommit: (width: number) => void },
+): void {
+  if (!panel) return
+
+  const previousTransition = panel.style.transition
+  panel.style.transition = 'none'
+
+  let frame = 0
+  let width = startWidth
+
+  const onMouseMove = (event: MouseEvent) => {
+    const delta = opts.reverse ? startClientX - event.clientX : event.clientX - startClientX
+    width = Math.max(opts.min, Math.min(opts.max, startWidth + delta))
+    if (frame) return
+    frame = requestAnimationFrame(() => {
+      frame = 0
+      panel.style.width = `${width}px`
+    })
+  }
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    if (frame) cancelAnimationFrame(frame)
+    frame = 0
+    panel.style.transition = previousTransition
+    opts.onCommit(width)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
 export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<PipelineNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -119,6 +160,8 @@ export default function App() {
   // Resizable sidebar widths
   const [sidebarWidth, setSidebarWidth] = useState(256) // Default w-64
   const [propertiesWidth, setPropertiesWidth] = useState(320) // Default w-80
+  const leftPanelRef = useRef<HTMLDivElement | null>(null)
+  const rightPanelRef = useRef<HTMLDivElement | null>(null)
 
   // Collapsible sidebar state
   const [leftCollapsed, setLeftCollapsed] = useState(
@@ -1974,21 +2017,11 @@ export default function App() {
   const handleSidebarResize = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
-      const startX = e.clientX
-      const startWidth = sidebarWidth
-
-      const onMouseMove = (e: MouseEvent) => {
-        const delta = e.clientX - startX
-        setSidebarWidth(Math.max(200, Math.min(500, startWidth + delta)))
-      }
-
-      const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove)
-        document.removeEventListener('mouseup', onMouseUp)
-      }
-
-      document.addEventListener('mousemove', onMouseMove)
-      document.addEventListener('mouseup', onMouseUp)
+      beginPanelResize(leftPanelRef.current, e.clientX, sidebarWidth, {
+        min: 200,
+        max: 500,
+        onCommit: setSidebarWidth,
+      })
     },
     [sidebarWidth],
   )
@@ -1996,21 +2029,12 @@ export default function App() {
   const handlePropertiesResize = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
-      const startX = e.clientX
-      const startWidth = propertiesWidth
-
-      const onMouseMove = (e: MouseEvent) => {
-        const delta = startX - e.clientX // Reversed because dragging left increases width
-        setPropertiesWidth(Math.max(250, Math.min(600, startWidth + delta)))
-      }
-
-      const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove)
-        document.removeEventListener('mouseup', onMouseUp)
-      }
-
-      document.addEventListener('mousemove', onMouseMove)
-      document.addEventListener('mouseup', onMouseUp)
+      beginPanelResize(rightPanelRef.current, e.clientX, propertiesWidth, {
+        reverse: true, // Dragging left increases width
+        min: 250,
+        max: 600,
+        onCommit: setPropertiesWidth,
+      })
     },
     [propertiesWidth],
   )
@@ -2142,6 +2166,7 @@ export default function App() {
         <div className="flex-1 flex overflow-hidden">
           {/* Left sidebar with collapsible toggle strip */}
           <div
+            ref={leftPanelRef}
             style={{ width: leftCollapsed ? 0 : sidebarWidth }}
             className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full flex flex-col"
           >
@@ -2235,6 +2260,7 @@ export default function App() {
 
           {/* Right sidebar with collapsible toggle */}
           <div
+            ref={rightPanelRef}
             style={{ width: rightCollapsed ? 0 : propertiesWidth }}
             className="flex-shrink-0 overflow-hidden transition-[width] duration-150 h-full flex flex-col"
           >
