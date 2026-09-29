@@ -28,6 +28,7 @@ import {
 } from './hooks/useRunEligibility'
 import { useFreshness } from './hooks/useFreshness'
 import { applyDagreLayout } from './utils/layout'
+import { collapseParameterRefs, splitParameterRefNodes } from './utils/parameterRefs'
 import type {
   PipelineGraph,
   PipelineNode,
@@ -191,8 +192,12 @@ export default function App() {
   const handleHistoryRestore = useCallback(
     (state: HistoryState) => {
       skipNextChangeTrackingRef.current = true
-      setNodes(state.nodes as PipelineNode[])
-      setEdges(state.edges)
+      const { nodes: restoredNodes, edges: restoredEdges } = splitParameterRefNodes(
+        state.nodes as PipelineNode[],
+        state.edges,
+      )
+      setNodes(restoredNodes)
+      setEdges(restoredEdges)
       setParameters(state.parameters)
       setHasChanges(true)
     },
@@ -558,14 +563,19 @@ export default function App() {
         setConfigPath(state.configPath)
         const graph = await loadConfig(state.configPath)
         if (graph) {
+          // Split parameter nodes with multiple consumers into reference nodes
+          const { nodes: splitNodes, edges: splitEdges } = splitParameterRefNodes(
+            graph.nodes as PipelineNode[],
+            graph.edges,
+          )
           // Apply Dagre layout if no saved layout, otherwise use saved positions
           let layoutedNodes = graph.hasLayout
-            ? graph.nodes
-            : (applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[])
+            ? splitNodes
+            : (applyDagreLayout(splitNodes as Node[], splitEdges) as PipelineNode[])
           // Enrich step nodes with type information from task schemas
           layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
           setNodes(layoutedNodes)
-          setEdges(graph.edges)
+          setEdges(splitEdges)
           setParameters(graph.parameters)
           if (graph.multiPassGroups) {
             setMultiPassGroups(graph.multiPassGroups)
@@ -689,6 +699,16 @@ export default function App() {
     setHasChanges(true)
   }, [nodes, edges])
 
+  // Auto-split parameter nodes that feed multiple step inputs into reference
+  // nodes. Idempotent: once split, no parameter has more than one outgoing edge,
+  // so splitParameterRefNodes returns the same references and this is a no-op.
+  useEffect(() => {
+    const normalized = splitParameterRefNodes(nodes, edges)
+    if (normalized.nodes === nodes && normalized.edges === edges) return
+    setNodes(normalized.nodes)
+    setEdges(normalized.edges)
+  }, [nodes, edges, setNodes, setEdges])
+
   // Track execution settings changes
   const prevParallelRef = useRef(parallelEnabled)
   const prevMaxWorkersRef = useRef(maxWorkers)
@@ -733,9 +753,13 @@ export default function App() {
   const performSave = useCallback(async () => {
     if (!configPath) return
 
+    // Collapse auto-generated parameter reference nodes so the saved YAML keeps
+    // a single parameter node referenced many times.
+    const { nodes: saveNodes, edges: saveEdges } = collapseParameterRefs(nodes, edges)
+
     // Build data entries from data nodes
     const data: Record<string, DataEntry> = {}
-    nodes.forEach((node) => {
+    saveNodes.forEach((node) => {
       if (node.type === 'data') {
         const dataNode = node.data as DataNodeData
         data[dataNode.key] = {
@@ -752,8 +776,8 @@ export default function App() {
       variables: {}, // Deprecated - kept for compatibility
       parameters,
       data,
-      nodes: nodes as PipelineGraph['nodes'],
-      edges,
+      nodes: saveNodes as PipelineGraph['nodes'],
+      edges: saveEdges,
       hasLayout: !clearLayoutOnSave.current,
       editor: {
         autoSave: skipSaveConfirmation,
@@ -1524,14 +1548,19 @@ export default function App() {
       if (result.configPath) {
         const graph = await loadConfig(result.configPath)
         if (graph) {
+          // Split parameter nodes with multiple consumers into reference nodes
+          const { nodes: splitNodes, edges: splitEdges } = splitParameterRefNodes(
+            graph.nodes as PipelineNode[],
+            graph.edges,
+          )
           // Apply Dagre layout if no saved layout
           let layoutedNodes = graph.hasLayout
-            ? graph.nodes
-            : (applyDagreLayout(graph.nodes as Node[], graph.edges) as PipelineNode[])
+            ? splitNodes
+            : (applyDagreLayout(splitNodes as Node[], splitEdges) as PipelineNode[])
           // Enrich step nodes with type information
           layoutedNodes = enrichStepNodesWithTypes(layoutedNodes, loadedTasks)
           setNodes(layoutedNodes)
-          setEdges(graph.edges)
+          setEdges(splitEdges)
           setParameters(graph.parameters)
           if (graph.multiPassGroups) {
             setMultiPassGroups(graph.multiPassGroups)

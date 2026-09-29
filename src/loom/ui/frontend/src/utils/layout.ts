@@ -144,13 +144,18 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
     } else {
       // Step node: estimate rendered height from I/O count
       const data = node.data as Record<string, unknown>
-      height = estimateStepHeight(data)
+      const stepHeight = estimateStepHeight(data)
 
-      // If this step has parameter inputs, widen the dagre node to reserve
-      // horizontal space for the parameter column to the left of the step
+      // If this step has parameter inputs, reserve space for the parameter
+      // column: widen the dagre node horizontally and, crucially, grow its
+      // vertical extent so neighbours in the same rank leave enough room for
+      // the whole parameter stack (params are positioned outside dagre).
       const paramCount = stepParamCount.get(node.id) || 0
       const maxParamW = stepMaxParamWidth.get(node.id) || 0
+      const paramStackHeight =
+        paramCount > 0 ? paramCount * (PARAM_NODE_HEIGHT + PARAM_GAP) - PARAM_GAP : 0
       width = 250 + (paramCount > 0 ? maxParamW + PARAM_STEP_GAP : 0)
+      height = Math.max(stepHeight, paramStackHeight)
     }
     g.setNode(node.id, { width, height })
 
@@ -185,13 +190,18 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
     const paramCount = stepParamCount.get(node.id) || 0
     const maxParamW = stepMaxParamWidth.get(node.id) || 0
     const paramOffset = paramCount > 0 ? maxParamW + PARAM_STEP_GAP : 0
+    // Use the node's real rendered height (not the possibly-inflated dagre
+    // height that reserves room for parameter stacks) so the node stays
+    // centered on the dagre-assigned center, concentric with its parameters.
+    const actualHeight =
+      node.type === 'data' ? 70 : estimateStepHeight(node.data as Record<string, unknown>)
     return {
       ...node,
       position: {
         // Dagre returns center position, adjust to top-left
         // For steps with params, shift right to leave room for param column
         x: layoutNode.x - (layoutNode.width ?? 0) / 2 + paramOffset,
-        y: layoutNode.y - (layoutNode.height ?? 0) / 2,
+        y: layoutNode.y - actualHeight / 2,
       },
     }
   })

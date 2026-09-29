@@ -57,6 +57,7 @@ export interface GroupNodeData {
 export interface ParameterData {
   name: string
   value: unknown // string | number | boolean
+  isAutoParamRef?: boolean // Marker on auto-generated parameter reference nodes
   // Index signature for React Flow compatibility
   [key: string]: unknown
 }

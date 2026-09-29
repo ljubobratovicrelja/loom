@@ -279,6 +279,44 @@ describe('applyDagreLayout', () => {
       expect(Number.isFinite(orphan.position.x)).toBe(true)
       expect(Number.isFinite(orphan.position.y)).toBe(true)
     })
+
+    it('should space same-rank steps so their parameter stacks do not overlap', () => {
+      const paramCount = 6
+      const mkParams = (step: string): Node[] =>
+        Array.from({ length: paramCount }, (_, i) => createParameterNode(`${step}_p${i}`, i))
+
+      // stepA and stepB share an upstream data node, so dagre places them in the
+      // same rank (vertically adjacent) with a tall parameter stack each.
+      const nodes: Node[] = [
+        createDataNode('src'),
+        createStepNode('stepA'),
+        createStepNode('stepB'),
+        ...mkParams('stepA'),
+        ...mkParams('stepB'),
+      ]
+      const edges: Edge[] = [
+        createEdge('src', 'stepA'),
+        createEdge('src', 'stepB'),
+        ...mkParams('stepA').map((p) => createEdge(p.id, 'stepA')),
+        ...mkParams('stepB').map((p) => createEdge(p.id, 'stepB')),
+      ]
+
+      const result = applyDagreLayout(nodes, edges)
+
+      const stackRange = (step: string) => {
+        const ys = result
+          .filter((n) => n.type === 'parameter' && n.id.startsWith(`${step}_p`))
+          .map((n) => n.position.y)
+        return { min: Math.min(...ys), max: Math.max(...ys) }
+      }
+
+      const a = stackRange('stepA')
+      const b = stackRange('stepB')
+
+      // Each parameter column is taller than a step, so dagre must reserve the
+      // stack height as vertical separation or the two columns would overlap.
+      expect(a.max < b.min || b.max < a.min).toBe(true)
+    })
   })
 
   describe('grouped nodes', () => {
