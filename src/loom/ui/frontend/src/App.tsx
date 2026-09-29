@@ -29,6 +29,7 @@ import {
 import { useFreshness } from './hooks/useFreshness'
 import { applyDagreLayout } from './utils/layout'
 import { collapseParameterRefs, splitParameterRefNodes } from './utils/parameterRefs'
+import { documentSignature } from './utils/documentSignature'
 import type {
   PipelineGraph,
   PipelineNode,
@@ -198,9 +199,11 @@ export default function App() {
   const isInitialMount = useRef(true)
   // Flag to skip change tracking during initial load (stays true until init completes)
   const isLoadingRef = useRef(true)
-  // Flag to skip change tracking after restore/save operations
-  // Using a boolean flag ensures we skip exactly once regardless of React's batching behavior
-  const skipNextChangeTrackingRef = useRef(false)
+
+  // Signature of the last committed document content, used to detect real edits
+  // while ignoring React Flow's selection/dimension changes and runtime status
+  // refreshes that rewrite node objects without changing the document.
+  const documentSignatureRef = useRef<string | null>(null)
 
   // History for undo/redo - refs to access current state in callbacks
   const nodesRef = useRef(nodes)
@@ -234,7 +237,6 @@ export default function App() {
   // History hook with restore callback
   const handleHistoryRestore = useCallback(
     (state: HistoryState) => {
-      skipNextChangeTrackingRef.current = true
       const { nodes: restoredNodes, edges: restoredEdges } = splitParameterRefNodes(
         state.nodes as PipelineNode[],
         state.edges,
@@ -337,8 +339,6 @@ export default function App() {
       }
       pathCheckTimerRef.current = setTimeout(async () => {
         const result = await checkPath(path)
-        // Runtime-only change - don't mark as dirty
-        skipNextChangeTrackingRef.current = true
         setNodes((nds) =>
           nds.map((n) =>
             n.id === nodeId && n.type === 'data'
@@ -410,8 +410,6 @@ export default function App() {
   useEffect(() => {
     if (freshness.size === 0) return
 
-    // Runtime-only change - don't mark document as dirty
-    skipNextChangeTrackingRef.current = true
     setNodes((nds) => {
       // First pass: check if any nodes need updating
       let hasChanges = false
@@ -528,8 +526,7 @@ export default function App() {
     const status = await loadDataStatus()
     if (Object.keys(status).length === 0) return
 
-    // Runtime-only change - don't mark document as dirty
-    skipNextChangeTrackingRef.current = true
+    // Update data node existence status and step completion state
     setNodes((nds) =>
       nds.map((node) => {
         // Update data nodes - use key for lookup (not display name)
@@ -723,24 +720,31 @@ export default function App() {
   // Flag to skip hashchange events triggered by our own programmatic hash updates
   const programmaticHashChangeRef = useRef(false)
 
-  // Track changes - skip initial mount and handle save properly
+  // Track changes - mark dirty only when the document content actually changes.
+  // React Flow emits selection/dimension changes on load and during interaction,
+  // and background status refreshes rewrite node objects. Comparing a signature
+  // of the document-relevant content ignores all of those while still catching
+  // real edits (positions, connections, task args, data/parameter values, ...).
   useEffect(() => {
-    // Skip initial mount - don't mark as changed when first loading
+    const signature = documentSignature(nodes, edges, parameters)
+
+    // Skip initial mount and the initial load phase, but keep the baseline fresh
+    // so the first change after loading is compared against what was loaded.
     if (isInitialMount.current) {
       isInitialMount.current = false
+      documentSignatureRef.current = signature
       return
     }
-    // Skip during initial load phase
     if (isLoadingRef.current) {
+      documentSignatureRef.current = signature
       return
     }
-    // Skip if flagged (after restore/save) - reset flag for next change
-    if (skipNextChangeTrackingRef.current) {
-      skipNextChangeTrackingRef.current = false
-      return
+
+    if (signature !== documentSignatureRef.current) {
+      documentSignatureRef.current = signature
+      setHasChanges(true)
     }
-    setHasChanges(true)
-  }, [nodes, edges])
+  }, [nodes, edges, parameters])
 
   // Auto-split parameter nodes that feed multiple step inputs into reference
   // nodes. Idempotent: once split, no parameter has more than one outgoing edge,
@@ -792,73 +796,83 @@ export default function App() {
     prevExecutionStatusRef.current = executionStatus
   }, [executionStatus, refreshVariableStatus, refreshFreshness])
 
-  // Perform the actual save without confirmation
-  const performSave = useCallback(async () => {
-    if (!configPath) return
+  // Perform the actual save without confirmation. Returns whether it succeeded.
+  // Optional overrides let callers save the result of a pending state update
+  // (e.g. auto-layout) before React has re-rendered.
+  const performSave = useCallback(
+    async (overrides?: { nodes: PipelineNode[]; edges: Edge[] }): Promise<boolean> => {
+      if (!configPath) return false
 
-    // Collapse auto-generated parameter reference nodes so the saved YAML keeps
-    // a single parameter node referenced many times.
-    const { nodes: saveNodes, edges: saveEdges } = collapseParameterRefs(nodes, edges)
+      const stateNodes = overrides?.nodes ?? nodes
+      const stateEdges = overrides?.edges ?? edges
 
-    // Build data entries from data nodes
-    const data: Record<string, DataEntry> = {}
-    saveNodes.forEach((node) => {
-      if (node.type === 'data') {
-        const dataNode = node.data as DataNodeData
-        data[dataNode.key] = {
-          type: dataNode.type,
-          path: dataNode.path,
-          name: dataNode.name,
-          description: dataNode.description,
-          pattern: dataNode.pattern,
+      // Collapse auto-generated parameter reference nodes so the saved YAML keeps
+      // a single parameter node referenced many times.
+      const { nodes: saveNodes, edges: saveEdges } = collapseParameterRefs(stateNodes, stateEdges)
+
+      // Build data entries from data nodes
+      const data: Record<string, DataEntry> = {}
+      saveNodes.forEach((node) => {
+        if (node.type === 'data') {
+          const dataNode = node.data as DataNodeData
+          data[dataNode.key] = {
+            type: dataNode.type,
+            path: dataNode.path,
+            name: dataNode.name,
+            description: dataNode.description,
+            pattern: dataNode.pattern,
+          }
         }
+      })
+
+      const graph: PipelineGraph = {
+        variables: {}, // Deprecated - kept for compatibility
+        parameters,
+        data,
+        nodes: saveNodes as PipelineGraph['nodes'],
+        edges: saveEdges,
+        hasLayout: !clearLayoutOnSave.current,
+        editor: {
+          autoSave: skipSaveConfirmation,
+        },
+        execution: {
+          parallel: parallelEnabled,
+          maxWorkers: maxWorkers,
+        },
+        multiPassGroups,
       }
-    })
 
-    const graph: PipelineGraph = {
-      variables: {}, // Deprecated - kept for compatibility
+      const success = await saveConfig(graph, configPath)
+      if (success) {
+        // Reset the clear-layout flag after a successful save
+        clearLayoutOnSave.current = false
+        // Clear undo history on save - saved state is now baseline
+        clearHistory()
+        // Saved state is now the clean baseline for change detection
+        documentSignatureRef.current = documentSignature(stateNodes, stateEdges, parameters)
+        setHasChanges(false)
+        return true
+      } else {
+        // Show error to user - save failed
+        const errorMessage = apiError || 'Failed to save changes. Please try again.'
+        alert(`Save failed: ${errorMessage}`)
+        return false
+      }
+    },
+    [
+      configPath,
+      nodes,
+      edges,
       parameters,
-      data,
-      nodes: saveNodes as PipelineGraph['nodes'],
-      edges: saveEdges,
-      hasLayout: !clearLayoutOnSave.current,
-      editor: {
-        autoSave: skipSaveConfirmation,
-      },
-      execution: {
-        parallel: parallelEnabled,
-        maxWorkers: maxWorkers,
-      },
+      skipSaveConfirmation,
+      parallelEnabled,
+      maxWorkers,
       multiPassGroups,
-    }
-
-    const success = await saveConfig(graph, configPath)
-    if (success) {
-      // Reset the clear-layout flag after a successful save
-      clearLayoutOnSave.current = false
-      // Clear undo history on save - saved state is now baseline
-      clearHistory()
-      // Skip next change tracking trigger - save doesn't change the document
-      skipNextChangeTrackingRef.current = true
-      setHasChanges(false)
-    } else {
-      // Show error to user - save failed
-      const errorMessage = apiError || 'Failed to save changes. Please try again.'
-      alert(`Save failed: ${errorMessage}`)
-    }
-  }, [
-    configPath,
-    nodes,
-    edges,
-    parameters,
-    skipSaveConfirmation,
-    parallelEnabled,
-    maxWorkers,
-    multiPassGroups,
-    saveConfig,
-    clearHistory,
-    apiError,
-  ])
+      saveConfig,
+      clearHistory,
+      apiError,
+    ],
+  )
 
   // Request save - shows confirmation dialog unless skipped
   const handleSave = useCallback(() => {
@@ -874,17 +888,16 @@ export default function App() {
   const performAutoLayoutAndSave = useCallback(async () => {
     snapshot(getCurrentState())
     const layoutedNodes = applyDagreLayout(nodes as Node[], edges) as PipelineNode[]
-    setNodes(layoutedNodes)
     // Reset dragged feedback edge label positions so they recompute from new node positions
-    setEdges((eds) =>
-      eds.map((e) =>
-        e.type === 'feedback' && e.data && ('labelOffsetX' in e.data || 'labelOffsetY' in e.data)
-          ? { ...e, data: { ...e.data, labelOffsetX: undefined, labelOffsetY: undefined } }
-          : e,
-      ),
+    const cleanedEdges = edges.map((e) =>
+      e.type === 'feedback' && e.data && ('labelOffsetX' in e.data || 'labelOffsetY' in e.data)
+        ? { ...e, data: { ...e.data, labelOffsetX: undefined, labelOffsetY: undefined } }
+        : e,
     )
+    setNodes(layoutedNodes)
+    setEdges(cleanedEdges)
     clearLayoutOnSave.current = true
-    await performSave()
+    await performSave({ nodes: layoutedNodes, edges: cleanedEdges })
   }, [snapshot, getCurrentState, nodes, edges, setNodes, setEdges, performSave])
 
   // Entry point for auto-layout: confirm when autosave is off
@@ -1570,7 +1583,6 @@ export default function App() {
       isLoadingRef.current = true
 
       // Clear current state
-      skipNextChangeTrackingRef.current = true
       setNodes([])
       setEdges([])
       setParameters({})
@@ -1718,29 +1730,37 @@ export default function App() {
 
   // Handle pipeline selection from browser (checks for unsaved changes)
   const handleSelectPipeline = useCallback(
-    (pipelinePath: string) => {
+    async (pipelinePath: string) => {
       // Find the pipeline info for the dialog
       const pipeline = pipelines.find((p) => p.path === pipelinePath)
       if (!pipeline) return
 
-      // If current pipeline has unsaved changes, show dialog
-      if (hasChanges) {
-        setPendingPipeline(pipeline)
-        setShowUnsavedDialog(true)
-      } else {
+      if (!hasChanges) {
         // No unsaved changes, switch directly
         performOpenPipeline(pipelinePath)
+        return
       }
+
+      // Auto-save is on: save silently instead of prompting
+      if (skipSaveConfirmation) {
+        const saved = await performSave()
+        if (saved) performOpenPipeline(pipelinePath)
+        return
+      }
+
+      // Otherwise ask what to do with the unsaved changes
+      setPendingPipeline(pipeline)
+      setShowUnsavedDialog(true)
     },
-    [pipelines, hasChanges, performOpenPipeline],
+    [pipelines, hasChanges, skipSaveConfirmation, performSave, performOpenPipeline],
   )
 
   // Handle unsaved changes dialog actions
   const handleUnsavedSave = useCallback(async () => {
     setShowUnsavedDialog(false)
     if (pendingPipeline) {
-      await performSave()
-      performOpenPipeline(pendingPipeline.path)
+      const saved = await performSave()
+      if (saved) performOpenPipeline(pendingPipeline.path)
       setPendingPipeline(null)
     }
   }, [pendingPipeline, performSave, performOpenPipeline])
@@ -1761,8 +1781,6 @@ export default function App() {
   // Handle step execution state changes
   const handleStepStatusChange = useCallback(
     (stepName: string, state: StepExecutionState) => {
-      // Runtime-only change - don't mark document as dirty
-      skipNextChangeTrackingRef.current = true
       setNodes((nds) =>
         nds.map((node) => {
           if (node.type === 'step' && (node.data as StepData).name === stepName) {
@@ -1930,8 +1948,6 @@ export default function App() {
         if (dataNode.path) {
           // If file doesn't exist, show pulse error animation
           if (dataNode.exists === false) {
-            // Runtime-only change - don't mark document as dirty
-            skipNextChangeTrackingRef.current = true
             setNodes(
               (nds) =>
                 nds.map((n) =>
@@ -1940,8 +1956,6 @@ export default function App() {
             )
             // Clear the pulse after animation completes (0.4s * 3 = 1.2s)
             setTimeout(() => {
-              // Runtime-only change - don't mark document as dirty
-              skipNextChangeTrackingRef.current = true
               setNodes(
                 (nds) =>
                   nds.map((n) =>
