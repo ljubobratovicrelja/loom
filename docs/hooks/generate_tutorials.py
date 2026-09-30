@@ -93,9 +93,9 @@ def transform_content(content: str, example_name: str) -> str:
         content,
     )
 
-    # Transform cat/ls commands with relative data/ paths
+    # Transform cat/ls commands with relative data/ or output/ paths
     content = re.sub(
-        r"(cat|ls)\s+(data/[^\s]+)",
+        r"(cat|ls)\s+((?:data|output)/[^\s]+)",
         f"\\1 examples/{example_name}/\\2",
         content,
     )

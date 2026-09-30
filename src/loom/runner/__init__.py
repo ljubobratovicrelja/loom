@@ -1,6 +1,12 @@
 """Pipeline runner for task execution."""
 
-from .clean import CleanResult, clean_pipeline_data, get_cleanable_paths
+from .clean import (
+    CleanResult,
+    clean_pipeline_data,
+    describe_path,
+    get_cleanable_paths,
+    get_output_root,
+)
 from .cli import main
 from .config import PipelineConfig, StepConfig
 from .env import EnvVarError, expand_env
@@ -30,6 +36,8 @@ __all__ = [
     "CleanResult",
     "clean_pipeline_data",
     "get_cleanable_paths",
+    "describe_path",
+    "get_output_root",
     "is_url",
     "check_url_exists",
     "download_url",

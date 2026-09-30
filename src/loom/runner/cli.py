@@ -5,7 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .clean import clean_pipeline_data, get_cleanable_paths
+from .clean import clean_pipeline_data, describe_path, get_cleanable_paths, get_output_root
 from .config import PipelineConfig, StepConfig
 from .executor import PipelineExecutor, parse_key_value_args
 
@@ -176,6 +176,19 @@ Examples:
     extra_args = {}
     if args.extra and steps_to_run and len(steps_to_run) == 1:
         extra_args[steps_to_run[0]] = args.extra
+
+    # Enforce output containment: produced data must live under the pipeline's
+    # owned output tree so `--clean` can never delete unrelated files.
+    containment = config.containment_issues()
+    for level, message in containment:
+        stream = sys.stderr if level == "error" else sys.stdout
+        print(f"{level.upper()}: {message}", file=stream)
+    if any(level == "error" for level, _ in containment):
+        print(
+            "Refusing to run: produced data escapes the pipeline directory.",
+            file=sys.stderr,
+        )
+        return 1
 
     # Run pipeline
     executor = PipelineExecutor(config, dry_run=args.dry_run)
@@ -408,16 +421,34 @@ def _handle_clean_list(config: PipelineConfig) -> int:
         Exit code (0 for success).
     """
     paths = get_cleanable_paths(config)
+    output_root = get_output_root(config)
 
     # Separate existing and non-existing paths
     existing = [(name, path) for name, path, exists in paths if exists]
     missing = [(name, path) for name, path, exists in paths if not exists]
 
-    if existing:
-        print("Data files that would be cleaned:\n")
+    def _describe(path: Path) -> str:
+        info = describe_path(path, config.base_dir)
+        if info["is_dir"]:
+            label = f"dir, {info['entry_count']} file(s)"
+        else:
+            label = "file"
+        if not info["inside_pipeline"]:
+            label += ", OUTSIDE PIPELINE"
+        return label
+
+    if existing or output_root is not None:
+        print("Data that would be cleaned:\n")
         for name, path in existing:
-            print(f"  {name}: {path}")
-        print(f"\nTotal: {len(existing)} file(s) exist")
+            print(f"  {name}: {path}  [{_describe(path)}]")
+        if output_root is not None:
+            info = describe_path(output_root, config.base_dir)
+            print(
+                f"  {config.output_dir}/ (owned output tree): {output_root}"
+                f"  [{info['entry_count']} file(s)]"
+            )
+        total = len(existing) + (1 if output_root is not None else 0)
+        print(f"\nTotal: {total} path(s) exist")
     else:
         print("No data files to clean (all paths are missing).")
 
@@ -440,19 +471,28 @@ def _handle_clean(config: PipelineConfig, permanent: bool, skip_confirm: bool) -
     """
     # Get list of paths that would be cleaned
     paths = get_cleanable_paths(config)
+    output_root = get_output_root(config)
 
     # Filter to only existing paths for display
     existing_paths = [(name, path) for name, path, exists in paths if exists]
 
-    if not existing_paths:
+    if not existing_paths and output_root is None:
         print("No data files to clean.")
         return 0
 
     # Display files that will be cleaned
     action = "permanently deleted" if permanent else "moved to trash"
-    print(f"\nThe following files will be {action}:\n")
+    print(f"\nThe following will be {action}:\n")
     for name, path in existing_paths:
-        print(f"  {name}: {path}")
+        info = describe_path(path, config.base_dir)
+        kind = f"dir, {info['entry_count']} file(s)" if info["is_dir"] else "file"
+        print(f"  {name}: {path}  [{kind}]")
+    if output_root is not None:
+        info = describe_path(output_root, config.base_dir)
+        print(
+            f"  {config.output_dir}/ (owned output tree): {output_root}"
+            f"  [{info['entry_count']} file(s)]"
+        )
     print()
 
     # Prompt for confirmation unless skipped

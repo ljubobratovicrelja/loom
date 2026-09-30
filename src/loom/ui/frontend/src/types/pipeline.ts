@@ -254,10 +254,16 @@ export interface CleanPreviewPath {
   name: string
   path: string
   exists: boolean
+  is_dir?: boolean
+  entry_count?: number
+  sample?: string[]
+  inside_pipeline?: boolean
 }
 
 export interface CleanPreview {
   paths: CleanPreviewPath[]
+  skipped_source?: CleanPreviewPath[]
+  output_root?: CleanPreviewPath | null
 }
 
 export interface CleanResultItem {

@@ -2,9 +2,11 @@ data:
   signal_csv:
     type: csv
     path: ${DATA_ROOT}/raw/signal.csv
+    allow_outside_pipeline: true
   stats_json:
     type: json
     path: ${SCRATCH}/loom-out/${RUN_ID}/stats.json
+    allow_outside_pipeline: true
 
 parameters:
   num_samples: 100

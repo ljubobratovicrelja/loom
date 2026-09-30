@@ -3,7 +3,7 @@
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from send2trash import send2trash  # type: ignore[import-untyped]
 
@@ -14,6 +14,69 @@ if TYPE_CHECKING:
 
 # Thumbnail cache directory name
 THUMBNAIL_DIR_NAME = ".loom-thumbnails"
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    """Return True if ``path`` is inside ``parent`` (both resolved)."""
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def describe_path(path: Path, base_dir: Path, max_sample: int = 10) -> dict[str, Any]:
+    """Summarise a cleanable path for previews.
+
+    Directories are the dangerous case: cleaning removes the whole tree, so the
+    preview reports how many files it holds and a small sample of their names.
+    ``inside_pipeline`` flags paths that resolve outside the pipeline directory,
+    where deletion can affect files unrelated to the pipeline.
+    """
+    is_dir = path.is_dir()
+    entry_count = 0
+    sample: list[str] = []
+    if is_dir:
+        try:
+            for entry in path.rglob("*"):
+                if entry.is_file():
+                    entry_count += 1
+                    if len(sample) < max_sample:
+                        try:
+                            sample.append(str(entry.relative_to(path)))
+                        except ValueError:
+                            sample.append(str(entry))
+        except OSError:
+            pass
+    return {
+        "is_dir": is_dir,
+        "entry_count": entry_count,
+        "sample": sample,
+        "inside_pipeline": _is_relative_to(path, base_dir),
+    }
+
+
+def get_output_root(config: "PipelineConfig") -> Path | None:
+    """Return the owned output root if it exists and holds produced data.
+
+    ``--clean`` purges this whole tree after removing individual data nodes,
+    which also removes empty directory shells left behind by failed runs.
+    Returns ``None`` when the root does not exist or no produced node lives
+    under it (so pipelines that keep using ``data/`` are unaffected).
+    """
+    root = config.output_root
+    if not root.exists() or not root.is_dir():
+        return None
+    for name in config.variables:
+        if config.is_source_data(name):
+            continue
+        try:
+            resolved = config.resolve_path(f"${name}").resolve()
+        except (ValueError, OSError):
+            continue
+        if resolved == root or resolved.is_relative_to(root):
+            return root
+    return None
 
 
 @dataclass
@@ -132,6 +195,21 @@ def clean_pipeline_data(
                 results.append(CleanResult(path=path, success=True, action="trashed"))
         except Exception as e:
             results.append(CleanResult(path=path, success=False, error=str(e)))
+
+    # Finally purge the owned output tree. Removing it (not just its contents)
+    # means a directory shell left by a failed run no longer exists, so the
+    # editor stops treating it as produced data.
+    output_root = get_output_root(config)
+    if output_root is not None and output_root.exists():
+        try:
+            if permanent:
+                _delete_path(output_root)
+                results.append(CleanResult(path=output_root, success=True, action="deleted"))
+            else:
+                send2trash(str(output_root))
+                results.append(CleanResult(path=output_root, success=True, action="trashed"))
+        except Exception as e:
+            results.append(CleanResult(path=output_root, success=False, error=str(e)))
 
     return results
 

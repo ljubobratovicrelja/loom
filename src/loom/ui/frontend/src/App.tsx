@@ -2303,10 +2303,10 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-slate-700 dark:text-slate-200 text-sm font-medium">
-                  Type Suggestions ({validationWarnings.length})
+                  Pipeline Warnings ({validationWarnings.length})
                 </span>
                 <span className="text-slate-500 dark:text-slate-400 text-xs">
-                  - Consider using typed data nodes for better validation
+                  - fix errors before running; warnings are suggestions
                 </span>
                 {validationWarnings.length > 3 && (
                   <button

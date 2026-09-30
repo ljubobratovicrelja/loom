@@ -1779,3 +1779,56 @@ pipeline:
         data = client.get("/api/logic/status").json()
         assert data["conditions"]["is_txt"] is False
         assert data["branches"]["gate"] == "else"
+
+
+# =============================================================================
+# Tests for /api/clean/preview and output-containment warnings
+# =============================================================================
+
+
+class TestCleanPreviewContainment:
+    """Clean preview reports directories, counts, and the owned output tree."""
+
+    PIPELINE = """
+output_dir: output
+data:
+  report:
+    type: json
+    path: output/report.json
+  legacy:
+    type: json
+    path: data/legacy.json
+pipeline:
+  - name: make_report
+    task: tasks/step.py
+    outputs:
+      --report: $report
+  - name: make_legacy
+    task: tasks/step.py
+    outputs:
+      --legacy: $legacy
+"""
+
+    def _client(self, tmp_path: Path) -> TestClient:
+        config = tmp_path / "pipeline.yml"
+        config.write_text(self.PIPELINE)
+        (tmp_path / "output" / "nested").mkdir(parents=True)
+        (tmp_path / "output" / "report.json").write_text("{}")
+        configure(config_path=config)
+        return TestClient(app)
+
+    def test_preview_includes_output_root_and_dir_metadata(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        data = client.get("/api/clean/preview").json()
+
+        output_root = data["output_root"]
+        assert output_root is not None
+        assert output_root["is_dir"] is True
+        assert output_root["entry_count"] >= 1
+        assert output_root["inside_pipeline"] is True
+
+    def test_validate_warns_for_output_outside_output_tree(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        warnings = client.get("/api/config/validate").json()["warnings"]
+        assert any("'legacy'" in w["message"] and w["level"] == "warning" for w in warnings)
+        assert not any("'report'" in w["message"] for w in warnings)

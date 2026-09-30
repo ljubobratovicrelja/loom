@@ -58,6 +58,44 @@ data:
 
 Types enable connection validation in the visual editor.
 
+### Output Containment
+
+Data written by a step (any data node used as a step output) is **produced**
+data and must live under the pipeline-owned output tree, `output/` by default:
+
+```yaml
+output_dir: output   # pipeline-owned tree for produced data (default: output)
+
+data:
+  report:
+    type: json
+    path: output/report.json
+```
+
+This matters for `--clean`: it removes produced paths **entirely**, including
+directory shells, so an interrupted run cannot leave an empty directory that the
+editor would read as produced data. Keeping outputs inside one owned tree means
+cleaning can never delete unrelated files.
+
+- A produced path that resolves **outside the pipeline directory** is a hard
+  error: `loom` refuses to run, because cleaning it could destroy unrelated
+  files.
+- A produced path inside the project but **outside `output_dir`** is a warning;
+  move it under `output_dir`.
+- To intentionally write elsewhere (shared model dirs, absolute mounts), opt out
+  per node:
+
+```yaml
+data:
+  shared_model:
+    type: data_folder
+    path: /mnt/models/shared
+    allow_outside_pipeline: true
+```
+
+Inputs you place yourself (source data, not produced by any step) are protected
+from cleaning by default and may live anywhere.
+
 ### URL Data Sources
 
 You can use HTTP/HTTPS URLs instead of local paths. URLs are automatically downloaded and cached locally.
@@ -374,29 +412,31 @@ Loom determines execution order from dependencies:
 ## Complete Example
 
 ```yaml
+output_dir: output
+
 data:
-  # Inputs
+  # Inputs (source data you provide)
   source_video:
     type: video
     path: data/raw/video.mp4
 
-  # Intermediates
+  # Intermediates (produced)
   gaze_csv:
     type: csv
-    path: data/processed/gaze.csv
+    path: output/gaze.csv
 
   fixations_csv:
     type: csv
-    path: data/processed/fixations.csv
+    path: output/fixations.csv
 
-  # Outputs
+  # Outputs (produced)
   final_report:
     type: json
-    path: data/output/report.json
+    path: output/report.json
 
   debug_video:
     type: video
-    path: data/output/debug.mp4
+    path: output/debug.mp4
 
 parameters:
   threshold: 50.0

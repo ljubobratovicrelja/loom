@@ -18,7 +18,13 @@ from loom.runner.url import check_url_exists, download_url, is_url
 
 from . import state
 from .graph import update_yaml_from_graph, yaml_to_graph
-from .models import ExecutionStatus, PipelineGraph, PipelineInfo, ValidationResult
+from .models import (
+    ExecutionStatus,
+    PipelineGraph,
+    PipelineInfo,
+    ValidationResult,
+    ValidationWarning,
+)
 from .validation import validate_pipeline
 
 # Matches bare ``{name}`` placeholders inside a path. These are user-defined
@@ -64,6 +70,7 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 @router.get("/api/config/validate")
 def validate_config(path: str = Query(None)) -> ValidationResult:
     """Validate pipeline configuration and return warnings."""
+    from loom.runner import PipelineConfig
     from loom.runner.task_schema import list_task_schemas
 
     config_path = Path(path) if path else state.config_path
@@ -78,6 +85,22 @@ def validate_config(path: str = Query(None)) -> ValidationResult:
     task_schemas = {schema.path: schema.to_dict() for schema in schemas}
 
     warnings = validate_pipeline(dict(data), task_schemas)
+
+    # Output-containment checks: produced data must live under the owned
+    # output tree so `--clean` cannot delete unrelated files.
+    try:
+        config = PipelineConfig.from_yaml(config_path)
+    except Exception:
+        config = None
+    if config is not None:
+        for level, message in config.containment_issues():
+            warnings.append(
+                ValidationWarning(
+                    level=level,  # type: ignore[arg-type]
+                    message=message,
+                )
+            )
+
     return ValidationResult(warnings=warnings)
 
 
@@ -615,7 +638,7 @@ def preview_clean(
     Source data (input files not produced by any step) is excluded by default
     and shown separately in the skipped_source list.
     """
-    from loom.runner import PipelineConfig, get_cleanable_paths
+    from loom.runner import PipelineConfig, describe_path, get_cleanable_paths, get_output_root
 
     if not state.config_path or not state.config_path.exists():
         raise HTTPException(status_code=400, detail="No config loaded")
@@ -626,6 +649,7 @@ def preview_clean(
         raise HTTPException(status_code=400, detail=f"Failed to load config: {e}")
 
     paths = get_cleanable_paths(config, include_source=include_source)
+    base_dir = config.base_dir
 
     # Also collect the source data that would be skipped
     skipped_source: list[dict[str, Any]] = []
@@ -635,16 +659,33 @@ def preview_clean(
                 try:
                     path = config.resolve_path(f"${name}")
                     skipped_source.append(
-                        {"name": name, "path": str(path), "exists": path.exists()}
+                        {
+                            "name": name,
+                            "path": str(path),
+                            "exists": path.exists(),
+                            **describe_path(path, base_dir),
+                        }
                     )
                 except (ValueError, OSError):
                     pass
 
+    output_root = get_output_root(config)
     return {
         "paths": [
-            {"name": name, "path": str(path), "exists": exists} for name, path, exists in paths
+            {"name": name, "path": str(path), "exists": exists, **describe_path(path, base_dir)}
+            for name, path, exists in paths
         ],
         "skipped_source": skipped_source,
+        "output_root": (
+            {
+                "name": config.output_dir,
+                "path": str(output_root),
+                "exists": True,
+                **describe_path(output_root, base_dir),
+            }
+            if output_root is not None
+            else None
+        ),
     }
 
 

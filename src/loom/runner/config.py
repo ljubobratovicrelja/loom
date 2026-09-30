@@ -245,9 +245,11 @@ class PipelineConfig:
     steps: list[StepConfig]
     base_dir: Path = field(default_factory=Path.cwd)
     data_types: dict[str, str] = field(default_factory=dict)
+    output_dir: str = "output"
     parallel: bool = False
     max_workers: int | None = None
     multi_pass_groups: dict[str, MultiPassGroupConfig] = field(default_factory=dict)
+    external_data: set[str] = field(default_factory=set, repr=False)
     _output_producers: dict[str, str] = field(default_factory=dict, repr=False)
     _condition_names: set[str] = field(default_factory=set, repr=False)
     _switch_names: set[str] = field(default_factory=set, repr=False)
@@ -335,6 +337,7 @@ class PipelineConfig:
         # Data nodes provide typed file/dir references
         variables: dict[str, str] = {}
         data_types: dict[str, str] = {}
+        external_data: set[str] = set()
 
         # Extract path and type from each data entry
         for name, entry in data_section.items():
@@ -342,6 +345,8 @@ class PipelineConfig:
                 # New format: {type: ..., path: ..., ...}
                 variables[name] = entry.get("path", "")
                 data_types[name] = entry.get("type", "")
+                if entry.get("allow_outside_pipeline"):
+                    external_data.add(name)
             else:
                 # Fallback: treat as path string
                 variables[name] = str(entry)
@@ -361,9 +366,11 @@ class PipelineConfig:
             steps=steps,
             base_dir=base_dir,
             data_types=data_types,
+            output_dir=data.get("output_dir", "output"),
             parallel=parallel,
             max_workers=max_workers,
             multi_pass_groups=result.multi_pass_configs,
+            external_data=external_data,
         )
 
         return config
@@ -553,6 +560,70 @@ class PipelineConfig:
             True if the data is source (not produced by any step), False otherwise.
         """
         return name not in self._output_producers
+
+    @property
+    def output_root(self) -> Path:
+        """Absolute path to the pipeline's owned output tree.
+
+        Produced data (anything written by a step) is expected to live under
+        this directory so that ``--clean`` can safely purge it without touching
+        user-owned input data.
+        """
+        root = Path(self.output_dir)
+        if not root.is_absolute():
+            root = self.base_dir / root
+        return root.resolve()
+
+    def is_external_data(self, name: str) -> bool:
+        """Check if a data node opted out of output containment."""
+        return name in self.external_data
+
+    def containment_issues(self) -> list[tuple[str, str]]:
+        """Report output-containment violations for produced data nodes.
+
+        Produced data is expected to live under ``output_dir`` (default
+        ``output/``). Data nodes may opt out with ``allow_outside_pipeline:
+        true``.
+
+        Returns:
+            A list of ``(level, message)`` tuples. ``level`` is ``"error"``
+            when a produced path resolves outside the pipeline directory
+            (where ``--clean`` could endanger unrelated files) and
+            ``"warning"`` when it is inside the pipeline but outside the owned
+            output tree.
+        """
+        issues: list[tuple[str, str]] = []
+        base = self.base_dir.resolve()
+        root = self.output_root
+
+        for name in self.variables:
+            if self.is_source_data(name) or self.is_external_data(name):
+                continue
+            try:
+                resolved = self.resolve_path(f"${name}").resolve()
+            except (ValueError, OSError):
+                continue
+
+            if not resolved.is_relative_to(base):
+                issues.append(
+                    (
+                        "error",
+                        f"Output data node '{name}' resolves outside the pipeline "
+                        f"directory ({resolved}). Move it under '{self.output_dir}/' "
+                        "or set 'allow_outside_pipeline: true'.",
+                    )
+                )
+            elif not resolved.is_relative_to(root):
+                issues.append(
+                    (
+                        "warning",
+                        f"Output data node '{name}' is outside the "
+                        f"'{self.output_dir}/' tree ({resolved}). Store generated "
+                        f"data under '{self.output_dir}/' so cleaning is safe.",
+                    )
+                )
+
+        return issues
 
     def override_variables(self, overrides: dict[str, str]) -> None:
         """Override variable values."""

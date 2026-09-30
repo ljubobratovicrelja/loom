@@ -1,14 +1,18 @@
+# Generated data lives under the pipeline-owned `output/` tree so `--clean`
+# can safely purge it (including directory shells) without touching inputs.
+output_dir: output
+
 data:
   input_dir:
     type: data_folder
-    path: data/input
+    path: output/input
     description: Folder of text files to count (generated)
   word_report:
     type: json
-    path: data/word_report.json
+    path: output/word_report.json
   empty_report:
     type: json
-    path: data/empty_report.json
+    path: output/empty_report.json
 
 parameters:
   min_files: 1
@@ -22,7 +26,7 @@ pipeline:
     outputs:
       -o: $input_dir
 
-  # A condition turns data into a boolean: "does data/input hold at least
+  # A condition turns data into a boolean: "does output/input hold at least
   # min_files .txt file(s)?".  Every built-in predicate takes a `data` input.
   - name: has_input
     kind: condition
