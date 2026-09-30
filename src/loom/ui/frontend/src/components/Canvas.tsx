@@ -1381,6 +1381,13 @@ export default function Canvas({
           onSelectionChange={onSelectionChange}
           onNodeDoubleClick={(_event, node) => onNodeDoubleClick?.(node)}
           onEdgeClick={onEdgeClick}
+          onBeforeDelete={async ({ nodes: nodesToDelete, edges: edgesToDelete }) => {
+            // Snapshot once, before any node/edge deletion, so Del is undoable.
+            // React Flow calls this even with nothing selected, so skip empties.
+            if (nodesToDelete.length === 0 && edgesToDelete.length === 0) return true
+            onSnapshot?.()
+            return true
+          }}
           onInit={(instance) => {
             reactFlowInstance.current = instance
             onCanvasInit?.({
@@ -1396,6 +1403,7 @@ export default function Canvas({
           onViewportChange={onViewportChange}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          deleteKeyCode={['Delete', 'Backspace']}
           fitView
           minZoom={0.05}
           panOnDrag={[1, 2]}

@@ -1460,17 +1460,12 @@ export default function App() {
 
   // Handle deletion of edges — sync multiPassGroups when feedback edges are
   // removed, and clear step references carried by deleted data edges.
+  // The undo snapshot is taken once in Canvas's onBeforeDelete.
   const handleEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       const feedbackEdges = deleted.filter((e) => e.type === 'feedback')
       const dataEdges = deleted.filter((e) => e.type !== 'feedback')
       if (feedbackEdges.length === 0 && dataEdges.length === 0) return
-
-      snapshot({
-        nodes: nodesRef.current,
-        edges: edgesRef.current,
-        parameters: parametersRef.current,
-      })
 
       if (dataEdges.length > 0) {
         setNodes((nds) => clearDataRefsForEdges(nds, dataEdges))
@@ -1526,7 +1521,7 @@ export default function App() {
 
       setHasChanges(true)
     },
-    [snapshot, setNodes],
+    [setNodes],
   )
 
   // Handle trashing variable data
