@@ -1702,3 +1702,80 @@ pipeline:
 
         assert response.status_code == 200
         assert response.json()["freshness"]["process"]["status"] == "missing"
+
+
+# =============================================================================
+# Tests for /api/logic/status
+# =============================================================================
+
+
+class TestGetLogicStatus:
+    """Tests for the condition/switch preview endpoint."""
+
+    PIPELINE = """
+data:
+  in_file:
+    type: txt
+    path: in.txt
+  payload:
+    type: txt
+    path: payload.txt
+  then_out:
+    type: txt
+    path: then.txt
+  else_out:
+    type: txt
+    path: else.txt
+
+pipeline:
+  - name: is_txt
+    kind: condition
+    predicate: is_file
+    inputs:
+      data: $in_file
+  - name: gate
+    kind: switch
+    condition: $is_txt
+    data: $payload
+  - name: then_step
+    task: tasks/step.py
+    inputs:
+      x: $gate.then
+    outputs:
+      -o: $then_out
+  - name: else_step
+    task: tasks/step.py
+    inputs:
+      x: $gate.else
+    outputs:
+      -o: $else_out
+"""
+
+    def _client(self, tmp_path: Path, present: bool) -> TestClient:
+        config = tmp_path / "pipeline.yml"
+        config.write_text(self.PIPELINE)
+        # Payload always exists so the switch can decide.
+        (tmp_path / "payload.txt").write_text("payload")
+        if present:
+            (tmp_path / "in.txt").write_text("x")
+        configure(config_path=config)
+        return TestClient(app)
+
+    def test_no_config_returns_empty(self) -> None:
+        configure(config_path=None)
+        client = TestClient(app)
+        response = client.get("/api/logic/status")
+        assert response.status_code == 200
+        assert response.json() == {"conditions": {}, "branches": {}, "errors": {}}
+
+    def test_then_branch(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, present=True)
+        data = client.get("/api/logic/status").json()
+        assert data["conditions"]["is_txt"] is True
+        assert data["branches"]["gate"] == "then"
+
+    def test_else_branch(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path, present=False)
+        data = client.get("/api/logic/status").json()
+        assert data["conditions"]["is_txt"] is False
+        assert data["branches"]["gate"] == "else"

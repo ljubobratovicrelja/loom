@@ -44,6 +44,7 @@ class OrchestratorEvent:
     step_name: str | None = None
     step: StepConfig | None = None
     failed_deps: list[str] | None = None
+    reason: str | None = None  # human-readable skip reason (e.g. condition not met)
 
 
 @dataclass
@@ -122,6 +123,7 @@ class PipelineOrchestrator:
         self.parallel = parallel
         self.max_workers = max_workers or os.cpu_count() or 4
         self._results: dict[str, bool] = {}
+        self._skipped: set[str] = set()
 
     def build_dependency_graph(
         self, steps: list[StepConfig]
@@ -254,12 +256,15 @@ class PipelineOrchestrator:
             if not self._can_run_step(step):
                 deps = self.config.get_step_dependencies(step)
                 failed_deps = [d for d in deps if self._results.get(d) is False]
+                gated = self.is_gated_off(step)
                 self._results[step.name] = False
+                self._skipped.add(step.name)
                 yield OrchestratorEvent(
                     type=EventType.STEP_SKIPPED,
                     step_name=step.name,
                     step=step,
                     failed_deps=failed_deps,
+                    reason=None if failed_deps else ("condition not met" if gated else None),
                 )
                 continue
 
@@ -308,6 +313,9 @@ class PipelineOrchestrator:
                 # Check if any dependency failed or was skipped
                 if deps & (failed | skipped):
                     to_skip.append(name)
+                elif self.is_gated_off(step_map[name]):
+                    # A switch branch this step depends on was not taken
+                    to_skip.append(name)
                 elif deps <= completed:
                     # Check max_workers limit (account for both running and already-ready steps)
                     if len(running) + len(ready) < self.max_workers:
@@ -318,13 +326,20 @@ class PipelineOrchestrator:
                 pending.remove(name)
                 skipped.add(name)
                 self._results[name] = False
+                self._skipped.add(name)
                 deps = dependencies[name]
                 failed_deps = list(deps & (failed | skipped))
+                reason = (
+                    "condition not met"
+                    if not failed_deps and self.is_gated_off(step_map[name])
+                    else None
+                )
                 yield OrchestratorEvent(
                     type=EventType.STEP_SKIPPED,
                     step_name=name,
                     step=step_map[name],
                     failed_deps=failed_deps,
+                    reason=reason,
                 )
 
             # Yield ready steps
@@ -354,6 +369,31 @@ class PipelineOrchestrator:
 
         yield OrchestratorEvent(type=EventType.PIPELINE_COMPLETE)
 
+    @staticmethod
+    def _step_refs(step: StepConfig) -> list[str]:
+        """Refs consumed by a step (inputs + string args)."""
+        refs = [r for r in step.inputs.values() if isinstance(r, str)]
+        refs += [v for v in step.args.values() if isinstance(v, str)]
+        return refs
+
+    def is_gated_off(self, step: StepConfig) -> bool:
+        """True if a switch-branch alias this step consumes was not taken.
+
+        Only decisive once the owning switch has run; before that the step simply
+        waits (returns False).
+        """
+        for ref in self._step_refs(step):
+            parsed = self.config.parse_branch_ref(ref)
+            if parsed is None:
+                continue
+            switch_name, branch = parsed
+            if switch_name not in self.config._switch_names:
+                continue
+            active = self.config.active_branches.get(switch_name)
+            if active is not None and active != branch:
+                return True
+        return False
+
     def _can_run_step(self, step: StepConfig) -> bool:
         """Check if step can run based on dependency results.
 
@@ -361,7 +401,8 @@ class PipelineOrchestrator:
             step: Step to check.
 
         Returns:
-            True if all dependencies succeeded or weren't run.
+            True if all dependencies succeeded (and no consumed branch was
+            gated off), False otherwise.
         """
         dependencies = self.config.get_step_dependencies(step)
 
@@ -369,6 +410,9 @@ class PipelineOrchestrator:
             # If dependency was run and failed, we can't run this step
             if dep_name in self._results and not self._results[dep_name]:
                 return False
+
+        if self.is_gated_off(step):
+            return False
 
         return True
 
@@ -380,3 +424,12 @@ class PipelineOrchestrator:
             Dict mapping step names to success status.
         """
         return self._results.copy()
+
+    @property
+    def skipped(self) -> set[str]:
+        """Get names of steps that were skipped (dependency failure or gating).
+
+        Skipped steps appear as ``False`` in :attr:`results` but did not run, so
+        they do not represent execution failures.
+        """
+        return set(self._skipped)

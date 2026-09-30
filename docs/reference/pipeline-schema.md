@@ -223,6 +223,95 @@ parallelism. In loom-ui, each group is drawn as a colored rectangle behind its m
 
 Grouped and ungrouped steps can be mixed freely in the same pipeline.
 
+### Logic Nodes: Conditions and Switches
+
+Step entries default to `kind: task` (a subprocess). Two additional kinds make
+up loom's small **logic board** and let you branch without writing a control-flow
+script:
+
+- **`condition`** turns data (or a parameter) into a **boolean**.
+- **`switch`** routes a data payload by a boolean.
+
+```yaml
+pipeline:
+  - name: has_input
+    kind: condition
+    predicate: count          # built-in predicate (see below)
+    inputs:
+      data: $input_dir        # the value the predicate receives
+    args:
+      pattern: "*.txt"
+      op: ">="
+      n: $min_files
+
+  - name: input_gate
+    kind: switch
+    condition: $has_input      # boolean ref: a condition node or a bool parameter
+    data: $input_dir           # payload passed through
+
+  - name: count_words
+    task: tasks/count_words.py
+    inputs:
+      folder: $input_gate.then # runs only if the "then" branch is taken
+    outputs:
+      -o: $word_report
+
+  - name: empty_report
+    task: tasks/empty_report.py
+    inputs:
+      folder: $input_gate.else # runs only if the "else" branch is taken
+    outputs:
+      -o: $empty_report
+```
+
+Key points:
+
+- A condition's output ref is the node's `name`; a switch's branch aliases are
+  `$<switch>.then` and `$<switch>.else`.
+- The branch that is not taken is **skipped**, not failed (it does not make the
+  run fail).
+- `else` is optional — omit the else-branch steps for an `if` without `else`.
+- The switch's `condition` may reference a **boolean parameter** instead of a
+  condition node, giving you a manual feature flag overridable with `--set`.
+- There are no joins yet: if/else branches are disjoint.
+
+#### Built-in Condition Predicates
+
+| Predicate | True when |
+|-----------|-----------|
+| `exists` | the path exists |
+| `is_file` / `is_dir` | the path is a file / directory |
+| `non_empty` | a file has size, or a directory has at least one entry |
+| `count` | files matching `pattern` satisfy `op` `n` (e.g. `>="`, `3`) |
+| `param` | the input value is truthy (booleans, numbers, `true/false/yes/no`) |
+
+Add `negate: true` to invert any condition.
+
+#### Custom Conditions
+
+A custom condition is a Python script authored like a task, with a `kind:
+condition` frontmatter and an `evaluate()` function:
+
+```python
+"""Pass if the metrics file clears the threshold.
+
+---
+kind: condition
+inputs:
+  data: {type: json}
+args:
+  threshold: {type: float, default: 0.5}
+---
+
+def evaluate(data, threshold=0.5):
+    import json
+    return json.load(open(data))["score"] >= threshold
+"""
+```
+
+Reference it from a condition node with `script: tasks/my_condition.py` instead
+of `predicate:`.
+
 ## Command Generation
 
 Steps become shell commands:

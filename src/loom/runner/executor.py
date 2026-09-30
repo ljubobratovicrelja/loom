@@ -10,12 +10,20 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from .config import PipelineConfig, StepConfig
+from .conditions import evaluate_condition
+from .config import KIND_CONDITION, KIND_SWITCH, PipelineConfig, StepConfig
 from .multi_pass import SAFE_BUILTINS, ConditionConfig, MultiPassGroupConfig, _suffix_path
-from .orchestrator import EventType, PipelineOrchestrator, StepResult
+from .orchestrator import EventType, OrchestratorEvent, PipelineOrchestrator, StepResult
 
 # Lock for thread-safe printing in parallel execution
 _print_lock = threading.Lock()
+
+
+def _skip_reason(event: OrchestratorEvent) -> str:
+    """Human-readable reason for a STEP_SKIPPED event."""
+    if event.reason:
+        return event.reason
+    return f"dependencies failed: {event.failed_deps}"
 
 
 def _wait_brief() -> None:
@@ -42,6 +50,8 @@ class PipelineExecutor:
         self.config = config
         self.dry_run = dry_run
         self._results: dict[str, bool] = {}
+        #: Names of steps that were skipped (not run) during the last run.
+        self._skipped: set[str] = set()
 
     def build_command(
         self,
@@ -148,6 +158,18 @@ class PipelineExecutor:
         Returns:
             CompletedProcess if executed, None if dry run.
         """
+        # Logic-board nodes: evaluated in-process (no subprocess).
+        if step.kind == KIND_CONDITION:
+            success = self.run_condition(step)
+            if self.dry_run:
+                return None
+            return subprocess.CompletedProcess(args=[], returncode=0 if success else 1)
+        if step.kind == KIND_SWITCH:
+            success = self.run_switch(step)
+            if self.dry_run:
+                return None
+            return subprocess.CompletedProcess(args=[], returncode=0 if success else 1)
+
         # Multi-pass group detection
         if step.name in self.config.multi_pass_groups:
             success = self.run_multi_pass_group(step.name)
@@ -183,6 +205,84 @@ class PipelineExecutor:
             print(f"[FAILED] {step.name} (exit code {result.returncode})")
 
         return result
+
+    # --- Logic board: conditions and switches ---
+
+    def _resolve_condition_values(self, step: StepConfig) -> dict[str, Any]:
+        """Resolve a condition node's inputs to paths (data) or raw values (params).
+
+        Raises:
+            ValueError: If a declared input is not connected (empty ref), so the
+                condition is treated as unevaluable rather than silently false.
+        """
+        resolved: dict[str, Any] = {}
+        for name, ref in step.inputs.items():
+            if ref is None or (isinstance(ref, str) and ref.strip() == ""):
+                raise ValueError(f"condition input '{name}' is not connected")
+            if isinstance(ref, str) and ref.startswith("$") and not ref.startswith("${"):
+                ref_name = ref[1:]
+                if ref_name in self.config.variables:
+                    resolved[name] = str(self.config.resolve_path(ref))
+                else:
+                    resolved[name] = self.config.resolve_value(ref)
+            else:
+                resolved[name] = ref
+        return resolved
+
+    def run_condition(self, step: StepConfig) -> bool:
+        """Evaluate a condition node in-process, storing its boolean result.
+
+        Returns True when evaluation succeeded (regardless of the boolean value);
+        the boolean is stored on ``config.condition_results``. If the condition
+        cannot be evaluated (unconnected input, unknown ref, script error) no
+        result is stored, so downstream switches report an unknown branch.
+        """
+        label = step.predicate or step.script
+        try:
+            inputs = self._resolve_condition_values(step)
+            args = {k: self.config.resolve_value(v) for k, v in step.args.items()}
+            script_path = None
+            if step.predicate is None:
+                script_path = self.config.resolve_script_path(step.script)
+            result = evaluate_condition(
+                predicate=step.predicate,
+                script_path=script_path,
+                inputs=inputs,
+                args=args,
+                negate=step.negate,
+            )
+        except Exception as e:  # noqa: BLE001 - surface any condition error to the user
+            print(f"[FAILED] {step.name}: condition error: {e}")
+            return False
+
+        self.config.condition_results[step.name] = result
+        prefix = "[DRY RUN]" if self.dry_run else "[RUNNING]"
+        print(f"{prefix} {step.name} (condition: {label})")
+        print(f"[SUCCESS] {step.name} -> {'true' if result else 'false'}")
+        return True
+
+    def run_switch(self, step: StepConfig) -> bool:
+        """Resolve a switch node's boolean condition and record the taken branch.
+
+        Returns True when the branch was decided (regardless of which branch).
+        """
+        cond_ref = step.condition or ""
+        cond_name = cond_ref[1:] if cond_ref.startswith("$") else cond_ref
+
+        if cond_name in self.config.condition_results:
+            result = bool(self.config.condition_results[cond_name])
+        elif cond_name in self.config.parameters or cond_name in self.config.variables:
+            result = bool(self.config.resolve_value(cond_ref))
+        else:
+            print(f"[FAILED] {step.name}: unknown condition reference '{cond_ref}'")
+            return False
+
+        branch = "then" if result else "else"
+        self.config.active_branches[step.name] = branch
+        prefix = "[DRY RUN]" if self.dry_run else "[RUNNING]"
+        print(f"{prefix} {step.name} (switch)")
+        print(f"[SUCCESS] {step.name} -> {branch}")
+        return True
 
     # --- Multi-pass iteration loop ---
 
@@ -692,6 +792,13 @@ class PipelineExecutor:
         Returns:
             Tuple of (step_name, success, output_text).
         """
+        if step.kind == KIND_CONDITION:
+            success = self.run_condition(step)
+            return step.name, success, f"[CONDITION] {step.name}"
+        if step.kind == KIND_SWITCH:
+            success = self.run_switch(step)
+            return step.name, success, f"[SWITCH] {step.name}"
+
         if step.loop is not None:
             if self.dry_run:
                 return step.name, True, f"[DRY RUN] {step.name} (loop)"
@@ -855,13 +962,24 @@ class PipelineExecutor:
 
         # Copy results from orchestrator
         self._results = orch.results
+        self._skipped = orch.skipped
 
         # Print summary
         print("-" * 40)
-        success_count = sum(1 for v in self._results.values() if v)
-        print(f"Completed: {success_count}/{len(self._results)} steps succeeded")
+        attempted = {n: v for n, v in self._results.items() if n not in self._skipped}
+        success_count = sum(1 for v in attempted.values() if v)
+        skipped_count = len(self._skipped)
+        summary = f"Completed: {success_count}/{len(attempted)} steps succeeded"
+        if skipped_count:
+            summary += f" ({skipped_count} skipped)"
+        print(summary)
 
         return self._results
+
+    @property
+    def skipped(self) -> set[str]:
+        """Names of steps that were skipped (did not run) in the last run."""
+        return set(self._skipped)
 
     def _run_with_orchestrator_sequential(
         self,
@@ -901,7 +1019,7 @@ class PipelineExecutor:
                 event = gen.send(StepResult(step_name, success))
 
             elif event.type == EventType.STEP_SKIPPED:
-                print(f"[SKIPPED] {event.step_name} (dependencies failed: {event.failed_deps})")
+                print(f"[SKIPPED] {event.step_name} ({_skip_reason(event)})")
                 event = next(gen)
 
             else:
@@ -948,9 +1066,7 @@ class PipelineExecutor:
 
                 elif event.type == EventType.STEP_SKIPPED:
                     with _print_lock:
-                        print(
-                            f"[SKIPPED] {event.step_name} (dependencies failed: {event.failed_deps})"
-                        )
+                        print(f"[SKIPPED] {event.step_name} ({_skip_reason(event)})")
                     event = next(gen)
 
                 elif event.type == EventType.WAITING:

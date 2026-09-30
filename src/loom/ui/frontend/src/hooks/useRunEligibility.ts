@@ -10,6 +10,7 @@ export type BlockReason =
   | 'output_conflict'
   | 'disabled'
   | 'incomplete'
+  | 'inactive_branch'
 
 export interface RunEligibility {
   canRun: boolean
@@ -170,6 +171,8 @@ export function getBlockReasonMessage(eligibility: RunEligibility): string | nul
       return 'This step is disabled'
     case 'incomplete':
       return 'This step has unconnected inputs or outputs'
+    case 'inactive_branch':
+      return 'Belongs to a branch that is not evaluated'
     default:
       return 'Cannot run at this time'
   }

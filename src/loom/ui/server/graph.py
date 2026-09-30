@@ -54,6 +54,19 @@ def _flatten_pipeline(
     return flat, multi_pass_groups
 
 
+def _parse_branch_ref(ref: Any) -> tuple[str, str] | None:
+    """Parse ``$<switch>.<then|else>`` into (switch_name, branch)."""
+    if not (isinstance(ref, str) and ref.startswith("$")):
+        return None
+    name = ref[1:]
+    if "." not in name:
+        return None
+    switch_name, branch = name.split(".", 1)
+    if branch not in ("then", "else"):
+        return None
+    return switch_name, branch
+
+
 def _resolve_param_name(edge_source: str, nodes: list[GraphNode]) -> str | None:
     """Resolve the parameter name from a parameter node ID.
 
@@ -122,6 +135,49 @@ def _build_step_dict(node: GraphNode, param_edges: dict[tuple[str, str], str]) -
     return step
 
 
+def _build_condition_dict(node: GraphNode) -> dict[str, Any]:
+    """Build a YAML condition-node dict from a graph node."""
+    cond: dict[str, Any] = {"name": node.data["name"], "kind": "condition"}
+    if node.data.get("predicate"):
+        cond["predicate"] = node.data["predicate"]
+    if node.data.get("script"):
+        cond["script"] = node.data["script"]
+    if node.data.get("inputs"):
+        cond["inputs"] = node.data["inputs"]
+    if node.data.get("args"):
+        cond["args"] = node.data["args"]
+    if node.data.get("negate"):
+        cond["negate"] = True
+    if node.data.get("optional"):
+        cond["optional"] = True
+    if node.data.get("disabled"):
+        cond["disabled"] = True
+    return cond
+
+
+def _build_switch_dict(node: GraphNode) -> dict[str, Any]:
+    """Build a YAML switch-node dict from a graph node."""
+    sw: dict[str, Any] = {"name": node.data["name"], "kind": "switch"}
+    if node.data.get("condition"):
+        sw["condition"] = node.data["condition"]
+    if node.data.get("data"):
+        sw["data"] = node.data["data"]
+    if node.data.get("optional"):
+        sw["optional"] = True
+    if node.data.get("disabled"):
+        sw["disabled"] = True
+    return sw
+
+
+def _build_node_dict(node: GraphNode, param_edges: dict[tuple[str, str], str]) -> dict[str, Any]:
+    """Dispatch YAML-dict construction by node type."""
+    if node.type == "condition":
+        return _build_condition_dict(node)
+    if node.type == "switch":
+        return _build_switch_dict(node)
+    return _build_step_dict(node, param_edges)
+
+
 def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
     """Convert YAML pipeline to React Flow graph format."""
     parameters = data.get("parameters", {})
@@ -158,6 +214,37 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
             col = i % 2
             position = {"x": 300 + col * 400, "y": 50 + row * 250}
         step_positions[step_id] = position
+        kind = step.get("kind", "task")
+
+        if kind == "condition":
+            cond_data: dict[str, Any] = {
+                "name": step["name"],
+                "predicate": step.get("predicate"),
+                "script": step.get("script"),
+                "inputs": step.get("inputs", {}),
+                "args": step.get("args", {}),
+                "negate": step.get("negate", False),
+                "optional": step.get("optional", False),
+                "disabled": step.get("disabled", False),
+            }
+            if step.get("group"):
+                cond_data["group"] = step["group"]
+            nodes.append(GraphNode(id=step_id, type="condition", position=position, data=cond_data))
+            continue
+
+        if kind == "switch":
+            switch_data: dict[str, Any] = {
+                "name": step["name"],
+                "condition": step.get("condition"),
+                "data": step.get("data"),
+                "optional": step.get("optional", False),
+                "disabled": step.get("disabled", False),
+            }
+            if step.get("group"):
+                switch_data["group"] = step["group"]
+            nodes.append(GraphNode(id=step_id, type="switch", position=position, data=switch_data))
+            continue
+
         step_data: dict[str, Any] = {
             "name": step["name"],
             "task": step["task"],
@@ -285,6 +372,71 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                             targetHandle=input_name,
                         )
                     )
+
+    # 4b2: Logic-board edges (conditions and switches)
+    condition_names = {s["name"] for s in all_steps if s.get("kind") == "condition"}
+    switch_names = {s["name"] for s in all_steps if s.get("kind") == "switch"}
+
+    for step in all_steps:
+        step_id = step["name"]
+        kind = step.get("kind", "task")
+
+        # Switch: bool condition edge + payload data edge
+        if kind == "switch":
+            cond_ref = step.get("condition") or ""
+            cond_name = cond_ref[1:] if cond_ref.startswith("$") else cond_ref
+            if cond_name in condition_names:
+                edges.append(
+                    GraphEdge(
+                        id=f"e_{cond_name}_{step_id}_condition",
+                        source=cond_name,
+                        target=step_id,
+                        sourceHandle="result",
+                        targetHandle="condition",
+                    )
+                )
+            elif cond_name in parameters:
+                edges.append(
+                    GraphEdge(
+                        id=f"e_param_{cond_name}_{step_id}_condition",
+                        source=f"param_{cond_name}",
+                        target=step_id,
+                        sourceHandle="value",
+                        targetHandle="condition",
+                    )
+                )
+
+            data_ref = step.get("data") or ""
+            if data_ref.startswith("$"):
+                dname = data_ref[1:]
+                if dname in data_names:
+                    edges.append(
+                        GraphEdge(
+                            id=f"e_data_{dname}_{step_id}_data",
+                            source=f"data_{dname}",
+                            target=step_id,
+                            sourceHandle="value",
+                            targetHandle="data",
+                        )
+                    )
+            continue
+
+        # Gated handles: inputs/args referencing $<switch>.<then|else>
+        handles: list[tuple[str, Any]] = list(step.get("inputs", {}).items())
+        handles += list(step.get("args", {}).items())
+        for handle_name, ref in handles:
+            parsed = _parse_branch_ref(ref)
+            if parsed and parsed[0] in switch_names:
+                sw, branch = parsed
+                edges.append(
+                    GraphEdge(
+                        id=f"e_{sw}_{step_id}_{handle_name}",
+                        source=sw,
+                        target=step_id,
+                        sourceHandle=branch,
+                        targetHandle=handle_name,
+                    )
+                )
 
     # 4c: Edges from parameters to steps that use them in args
     # Build lookup from "step:handle" -> clone node ID for edge routing
@@ -448,8 +600,8 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
             if param_name and edge.targetHandle:
                 param_edges[(edge.target, edge.targetHandle)] = param_name
 
-    # Build pipeline from step nodes
-    step_nodes = [n for n in graph.nodes if n.type == "step"]
+    # Build pipeline from step/condition/switch nodes
+    step_nodes = [n for n in graph.nodes if n.type in ("step", "condition", "switch")]
 
     # Sort by y,x position for consistent ordering
     step_nodes.sort(key=lambda n: (n.position.get("y", 0), n.position.get("x", 0)))
@@ -466,7 +618,7 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
         group = node.data.get("group")
 
         # Multi_pass groups: emit original block (with template steps from multiPassGroups)
-        if group and group in graph.multiPassGroups:
+        if node.type == "step" and group and group in graph.multiPassGroups:
             if group not in seen_groups:
                 seen_groups.add(group)
                 mp_info = graph.multiPassGroups[group]
@@ -480,7 +632,7 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
                 )
             continue
 
-        step_dict = _build_step_dict(node, param_edges)
+        step_dict = _build_node_dict(node, param_edges)
 
         if not group:
             pipeline.append(step_dict)
@@ -626,35 +778,56 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
             if param_name and edge.targetHandle:
                 param_edges[(edge.target, edge.targetHandle)] = param_name
 
-    # Build step lookup from graph (include "group" metadata for new step placement)
-    step_nodes = [n for n in graph.nodes if n.type == "step"]
+    # Build node lookup from graph (include "group" metadata for new node placement)
+    step_nodes = [n for n in graph.nodes if n.type in ("step", "condition", "switch")]
     graph_steps: dict[str, dict[str, Any]] = {}
     for node in step_nodes:
         step_name = node.data["name"]
-        step_data: dict[str, Any] = {
-            "name": step_name,
-            "task": node.data["task"],
-        }
-        if node.data.get("loop"):
-            step_data["loop"] = node.data["loop"]
-        if node.data.get("inputs"):
-            step_data["inputs"] = dict(node.data["inputs"])
-        if node.data.get("outputs"):
-            step_data["outputs"] = dict(node.data["outputs"])
+        kind = node.type
 
-        # Build args: merge node data args with parameter edge connections
-        args = dict(node.data.get("args", {}))
-        for (target, handle), param_name in param_edges.items():
-            if target == step_name:
-                args[handle] = f"${param_name}"
-        if args:
-            step_data["args"] = args
+        if kind == "condition":
+            step_data: dict[str, Any] = {"name": step_name, "kind": "condition"}
+            if node.data.get("predicate"):
+                step_data["predicate"] = node.data["predicate"]
+            if node.data.get("script"):
+                step_data["script"] = node.data["script"]
+            if node.data.get("inputs"):
+                step_data["inputs"] = dict(node.data["inputs"])
+            if node.data.get("args"):
+                step_data["args"] = dict(node.data["args"])
+            if node.data.get("negate"):
+                step_data["negate"] = True
+        elif kind == "switch":
+            step_data = {"name": step_name, "kind": "switch"}
+            if node.data.get("condition"):
+                step_data["condition"] = node.data["condition"]
+            if node.data.get("data"):
+                step_data["data"] = node.data["data"]
+        else:
+            step_data = {
+                "name": step_name,
+                "task": node.data["task"],
+            }
+            if node.data.get("loop"):
+                step_data["loop"] = node.data["loop"]
+            if node.data.get("inputs"):
+                step_data["inputs"] = dict(node.data["inputs"])
+            if node.data.get("outputs"):
+                step_data["outputs"] = dict(node.data["outputs"])
+
+            # Build args: merge node data args with parameter edge connections
+            args = dict(node.data.get("args", {}))
+            for (target, handle), param_name in param_edges.items():
+                if target == step_name:
+                    args[handle] = f"${param_name}"
+            if args:
+                step_data["args"] = args
 
         if node.data.get("optional"):
             step_data["optional"] = True
         if node.data.get("disabled"):
             step_data["disabled"] = True
-        # Store group for new-step placement (not written into individual step dicts)
+        # Store group for new-node placement (not written into individual step dicts)
         if node.data.get("group"):
             step_data["group"] = node.data["group"]
         graph_steps[step_name] = step_data
@@ -664,34 +837,59 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
         data["pipeline"] = []
 
     def _apply_step_update(step: dict[str, Any], graph_step: dict[str, Any]) -> None:
-        """Update a single flat step dict in-place from graph_step."""
+        """Update a single flat step/condition/switch dict in-place from graph_step."""
+        kind = graph_step.get("kind", "task")
+
+        def _set(key: str, value: Any) -> None:
+            if value:
+                step[key] = value
+            elif key in step:
+                del step[key]
+
+        if kind == "condition":
+            step["kind"] = "condition"
+            step.pop("task", None)
+            step.pop("loop", None)
+            step.pop("outputs", None)
+            _set("predicate", graph_step.get("predicate"))
+            _set("script", graph_step.get("script"))
+            _set("inputs", graph_step.get("inputs"))
+            _set("args", graph_step.get("args"))
+            _set("negate", graph_step.get("negate"))
+            _apply_optional_disabled(step, graph_step)
+            return
+
+        if kind == "switch":
+            step["kind"] = "switch"
+            step.pop("task", None)
+            step.pop("loop", None)
+            step.pop("inputs", None)
+            step.pop("outputs", None)
+            step.pop("args", None)
+            _set("condition", graph_step.get("condition"))
+            _set("data", graph_step.get("data"))
+            _apply_optional_disabled(step, graph_step)
+            return
+
+        # Task step
+        step.pop("kind", None)
+        step.pop("predicate", None)
+        step.pop("script", None)
+        step.pop("negate", None)
+        step.pop("condition", None)
+        step.pop("data", None)
         step["task"] = graph_step["task"]
-        # Update loop
-        if "loop" in graph_step:
-            step["loop"] = graph_step["loop"]
-        elif "loop" in step:
-            del step["loop"]
-        # Update inputs
-        if "inputs" in graph_step:
-            step["inputs"] = graph_step["inputs"]
-        elif "inputs" in step:
-            del step["inputs"]
-        # Update outputs
-        if "outputs" in graph_step:
-            step["outputs"] = graph_step["outputs"]
-        elif "outputs" in step:
-            del step["outputs"]
-        # Update args
-        if "args" in graph_step:
-            step["args"] = graph_step["args"]
-        elif "args" in step:
-            del step["args"]
-        # Update optional
+        _set("loop", graph_step.get("loop"))
+        _set("inputs", graph_step.get("inputs"))
+        _set("outputs", graph_step.get("outputs"))
+        _set("args", graph_step.get("args"))
+        _apply_optional_disabled(step, graph_step)
+
+    def _apply_optional_disabled(step: dict[str, Any], graph_step: dict[str, Any]) -> None:
         if graph_step.get("optional"):
             step["optional"] = True
         elif "optional" in step:
             del step["optional"]
-        # Update disabled
         if graph_step.get("disabled"):
             step["disabled"] = True
         elif "disabled" in step:

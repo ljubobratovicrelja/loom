@@ -522,3 +522,75 @@ pipeline:
         # summarize depends on resize_each (via $processed_images = loop.into),
         # and resize_each depends on download_images (via loop.over = $raw_images)
         assert step_names == ["download_images", "resize_each", "summarize"]
+
+
+class TestSequentialGating:
+    """The UI sequential runner must not run tasks on a non-taken branch."""
+
+    @pytest.mark.asyncio
+    async def test_gated_task_is_skipped_before_running(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from loom.runner import PipelineConfig
+        from loom.ui.server import state
+
+        config_file = tmp_path / "pipeline.yml"
+        config_file.write_text("""
+data:
+  d:
+    type: txt
+    path: d.txt
+
+pipeline:
+  - name: cond
+    kind: condition
+    predicate: exists
+    inputs:
+      data: $d
+  - name: gate
+    kind: switch
+    condition: $cond
+    data: $d
+  - name: taken
+    task: tasks/t.py
+    inputs:
+      x: $gate.then
+  - name: not_taken
+    task: tasks/t.py
+    inputs:
+      x: $gate.else
+""")
+        state.configure(config=config_file)
+
+        class FakeWS:
+            def __init__(self) -> None:
+                self.texts: list[str] = []
+
+            async def send_text(self, t: str) -> None:
+                self.texts.append(t)
+
+            async def send_bytes(self, b: bytes) -> None:
+                pass
+
+        ws = FakeWS()
+
+        def fake_eval(config: PipelineConfig, _name: str) -> bool:
+            config.active_branches["gate"] = "then"
+            return True
+
+        commands = [("cond", []), ("gate", []), ("taken", ["true"]), ("not_taken", ["true"])]
+        with patch("loom.ui.execution.evaluate_logic_step", side_effect=fake_eval):
+            from loom.ui.server.terminal import _run_sequential_commands
+
+            await _run_sequential_commands(
+                ws,  # type: ignore[arg-type]
+                commands,
+                lambda *_a, **_k: [],
+            )
+
+        text = "\n".join(ws.texts)
+        # The off-branch task must never be reported as running; it is skipped.
+        assert '{"type": "step_status", "step": "not_taken", "status": "running"}' not in text
+        assert '{"type": "step_status", "step": "not_taken", "status": "skipped"}' in text
+        # The taken branch does run.
+        assert '{"type": "step_status", "step": "taken", "status": "running"}' in text

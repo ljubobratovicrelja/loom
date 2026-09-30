@@ -8,6 +8,31 @@ import sys
 from pathlib import Path
 
 from loom.runner import PipelineConfig, PipelineExecutor, StepConfig
+from loom.runner.config import KIND_CONDITION, KIND_SWITCH
+from loom.runner.orchestrator import PipelineOrchestrator
+
+
+def is_logic_step(step: StepConfig) -> bool:
+    """True for logic-board nodes (condition / switch), which have no command."""
+    return step.kind in (KIND_CONDITION, KIND_SWITCH)
+
+
+def evaluate_logic_step(config: PipelineConfig, step_name: str) -> bool:
+    """Evaluate a condition/switch node in-process, mutating ``config`` state.
+
+    Returns True if evaluation succeeded (regardless of the boolean result).
+    """
+    step = config.get_step_by_name(step_name)
+    executor = PipelineExecutor(config, dry_run=True)
+    if step.kind == KIND_CONDITION:
+        return executor.run_condition(step)
+    return executor.run_switch(step)
+
+
+def is_step_gated_off(config: PipelineConfig, step_name: str) -> bool:
+    """True if a switch branch this step consumes was not taken."""
+    step = config.get_step_by_name(step_name)
+    return PipelineOrchestrator(config).is_gated_off(step)
 
 
 def _build_step_command(
@@ -223,11 +248,14 @@ def build_pipeline_commands(
     else:  # mode == "all"
         steps = executor._get_steps_to_run(include_optional=include_optional)
 
-    # Build commands for each step
-    commands = []
+    # Build commands for each step (logic nodes get an empty command sentinel)
+    commands: list[tuple[str, list[str]]] = []
     for step in steps:
-        cmd = _build_step_command(executor, config, step, config_path)
-        commands.append((step.name, cmd))
+        if is_logic_step(step):
+            commands.append((step.name, []))
+        else:
+            cmd = _build_step_command(executor, config, step, config_path)
+            commands.append((step.name, cmd))
 
     return commands
 
@@ -249,10 +277,13 @@ def build_group_commands(config_path: Path, group_name: str) -> list[tuple[str, 
     executor = PipelineExecutor(config, dry_run=True)
     group_steps = config.get_steps_by_group(group_name)
 
-    commands = []
+    commands: list[tuple[str, list[str]]] = []
     for step in group_steps:
-        cmd = _build_step_command(executor, config, step, config_path)
-        commands.append((step.name, cmd))
+        if is_logic_step(step):
+            commands.append((step.name, []))
+        else:
+            cmd = _build_step_command(executor, config, step, config_path)
+            commands.append((step.name, cmd))
 
     return commands
 
@@ -299,11 +330,14 @@ def build_parallel_commands(
     config = PipelineConfig.from_yaml(config_path)
     executor = PipelineExecutor(config, dry_run=True)
 
-    commands = []
+    commands: list[tuple[str, list[str]]] = []
     for name in step_names:
         step = config.get_step_by_name(name)
-        cmd = _build_step_command(executor, config, step, config_path)
-        commands.append((name, cmd))
+        if is_logic_step(step):
+            commands.append((name, []))
+        else:
+            cmd = _build_step_command(executor, config, step, config_path)
+            commands.append((name, cmd))
 
     return commands
 

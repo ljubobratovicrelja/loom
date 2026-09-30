@@ -57,6 +57,7 @@ nav:
     - Loop (Per-Item Processing): tutorials/loop.md
     - Groups: tutorials/groups.md
     - Multi-Pass Refinement: tutorials/multi-pass.md
+    - Conditional Branching: tutorials/branching.md
   - Reference:
     - CLI Commands: reference/cli.md
     - Pipeline Schema: reference/pipeline-schema.md

@@ -133,12 +133,24 @@ def _flatten_pipeline(
     )
 
 
+#: Recognised pipeline entry kinds.  "task" is the default (a subprocess step).
+KIND_TASK = "task"
+KIND_CONDITION = "condition"
+KIND_SWITCH = "switch"
+
+
 @dataclass
 class StepConfig:
-    """Configuration for a single pipeline step."""
+    """Configuration for a single pipeline node.
+
+    Most nodes are ``task`` steps (a subprocess).  The logic-board kinds are:
+
+    - ``condition``: evaluates a predicate/script in-process to a boolean.
+    - ``switch``: routes a data payload by a boolean condition.
+    """
 
     name: str
-    script: str
+    script: str = ""
     inputs: dict[str, str] = field(default_factory=dict)
     outputs: dict[str, str] = field(default_factory=dict)
     args: dict[str, Any] = field(default_factory=dict)
@@ -146,10 +158,59 @@ class StepConfig:
     disabled: bool = False
     loop: LoopConfig | None = None
     group: str | None = None
+    # Logic-board nodes
+    kind: str = KIND_TASK
+    predicate: str | None = None  # condition: built-in predicate id
+    negate: bool = False  # condition: invert the result
+    condition: str | None = None  # switch: boolean ref ($name or $param)
+    data: str | None = None  # switch: payload ref ($data)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StepConfig":
-        """Create StepConfig from YAML dict."""
+        """Create StepConfig from a YAML dict."""
+        name = data["name"]
+        kind = data.get("kind", KIND_TASK)
+
+        if kind == KIND_CONDITION:
+            predicate = data.get("predicate")
+            script = data.get("script")
+            if not predicate and not script:
+                raise ValueError(
+                    f"condition node '{name}' must have a 'predicate' or 'script' field"
+                )
+            return cls(
+                name=name,
+                script=script or "",
+                inputs=data.get("inputs", {}),
+                args=data.get("args", {}),
+                group=data.get("group"),
+                optional=data.get("optional", False),
+                disabled=data.get("disabled", False),
+                kind=KIND_CONDITION,
+                predicate=predicate,
+                negate=data.get("negate", False),
+            )
+
+        if kind == KIND_SWITCH:
+            condition = data.get("condition")
+            if not condition:
+                raise ValueError(f"switch node '{name}' must have a 'condition' field")
+            return cls(
+                name=name,
+                inputs=data.get("inputs", {}),
+                outputs=data.get("outputs", {}),
+                args=data.get("args", {}),
+                group=data.get("group"),
+                optional=data.get("optional", False),
+                disabled=data.get("disabled", False),
+                kind=KIND_SWITCH,
+                condition=condition,
+                data=data.get("data"),
+            )
+
+        if kind != KIND_TASK:
+            raise ValueError(f"Unknown pipeline node kind: {kind!r} (node '{name}')")
+
         # Support both 'task' (new) and 'script' (legacy) field names
         script = data.get("task") or data.get("script")
         if not script:
@@ -158,7 +219,7 @@ class StepConfig:
         if "loop" in data:
             loop = LoopConfig.from_dict(data["loop"])
         return cls(
-            name=data["name"],
+            name=name,
             script=script,
             inputs=data.get("inputs", {}),
             outputs=data.get("outputs", {}),
@@ -168,6 +229,11 @@ class StepConfig:
             loop=loop,
             group=data.get("group"),
         )
+
+    @property
+    def is_task(self) -> bool:
+        """True for subprocess task steps."""
+        return self.kind == KIND_TASK
 
 
 @dataclass
@@ -183,11 +249,24 @@ class PipelineConfig:
     max_workers: int | None = None
     multi_pass_groups: dict[str, MultiPassGroupConfig] = field(default_factory=dict)
     _output_producers: dict[str, str] = field(default_factory=dict, repr=False)
+    _condition_names: set[str] = field(default_factory=set, repr=False)
+    _switch_names: set[str] = field(default_factory=set, repr=False)
+    # Runtime state populated during execution (per run).
+    condition_results: dict[str, bool] = field(default_factory=dict, repr=False)
+    active_branches: dict[str, str] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
-        """Build output producer mapping after init."""
+        """Build output producer and logic-node name mappings after init."""
         self._output_producers = {}
+        self._condition_names = set()
+        self._switch_names = set()
         for step in self.steps:
+            if step.kind == KIND_CONDITION:
+                self._condition_names.add(step.name)
+                continue
+            if step.kind == KIND_SWITCH:
+                self._switch_names.add(step.name)
+                continue
             for var_ref in step.outputs.values():
                 var_name = var_ref.lstrip("$")
                 self._output_producers[var_name] = step.name
@@ -195,6 +274,40 @@ class PipelineConfig:
             if step.loop is not None:
                 var_name = step.loop.into.lstrip("$")
                 self._output_producers[var_name] = step.name
+
+    def ref_producer(self, ref: Any) -> str | None:
+        """Return the node name that produces a ``$ref``, if any.
+
+        Handles plain data refs, condition output refs (a condition node's name)
+        and switch branch aliases (``$sw.then`` / ``$sw.else``).
+        """
+        if not (isinstance(ref, str) and ref.startswith("$")):
+            return None
+        name = ref[1:]
+        if "." in name:
+            switch_name = name.split(".", 1)[0]
+            if switch_name in self._switch_names:
+                return switch_name
+        if name in self._condition_names:
+            return name
+        return self._output_producers.get(name)
+
+    @staticmethod
+    def parse_branch_ref(ref: Any) -> tuple[str, str] | None:
+        """Parse ``$<switch>.<then|else>`` into (switch_name, branch).
+
+        Returns None for any ref that is not a branch alias or has an unknown
+        branch label.
+        """
+        if not (isinstance(ref, str) and ref.startswith("$")):
+            return None
+        name = ref[1:]
+        if "." not in name:
+            return None
+        switch_name, branch = name.split(".", 1)
+        if branch not in ("then", "else"):
+            return None
+        return switch_name, branch
 
     @classmethod
     def from_yaml(cls, path: Path) -> "PipelineConfig":
@@ -301,6 +414,16 @@ class PipelineConfig:
         # Bare $name (not ${...}): exact-match data/parameter reference.
         if value.startswith("$") and not value.startswith("${"):
             ref_name = value[1:]
+
+            # Switch branch alias: $<switch>.then / $<switch>.else -> payload.
+            if "." in ref_name:
+                switch_name = ref_name.split(".", 1)[0]
+                if switch_name in self._switch_names:
+                    switch = self.get_step_by_name(switch_name)
+                    if not switch.data:
+                        raise ValueError(f"Switch '{switch_name}' has no 'data' payload to alias")
+                    return self.resolve_value(switch.data)
+
             if ref_name in self.variables:
                 return expand_env(self.variables[ref_name], where=f"data node '{ref_name}'")
             if ref_name in self.parameters:
@@ -399,24 +522,21 @@ class PipelineConfig:
         """
         dependencies = set()
 
-        # Check each input to see if it's produced by another step
-        for var_ref in step.inputs.values():
-            var_name = var_ref.lstrip("$")
-            if var_name in self._output_producers:
-                dependencies.add(self._output_producers[var_name])
+        if step.kind == KIND_CONDITION:
+            refs: list[str] = list(step.inputs.values())
+            refs += [v for v in step.args.values() if isinstance(v, str)]
+        elif step.kind == KIND_SWITCH:
+            refs = [r for r in (step.condition, step.data) if r is not None]
+        else:
+            refs = list(step.inputs.values())
+            refs += [v for v in step.args.values() if isinstance(v, str)]
+            if step.loop is not None:
+                refs.append(step.loop.over)
 
-        # Check args for $var references (e.g. multi_pass chain connections)
-        for arg_value in step.args.values():
-            if isinstance(arg_value, str) and arg_value.startswith("$"):
-                var_name = arg_value[1:]
-                if var_name in self._output_producers:
-                    dependencies.add(self._output_producers[var_name])
-
-        # If this is a loop step, also depend on the step that produces loop.over
-        if step.loop is not None:
-            var_name = step.loop.over.lstrip("$")
-            if var_name in self._output_producers:
-                dependencies.add(self._output_producers[var_name])
+        for ref in refs:
+            producer = self.ref_producer(ref)
+            if producer:
+                dependencies.add(producer)
 
         return dependencies
 

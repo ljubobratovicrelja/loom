@@ -156,6 +156,44 @@ async def _run_single_step(
         )
         return
 
+    # Logic-board nodes have no command: evaluate in-process; honor gating.
+    from loom.runner import PipelineConfig
+
+    from ..execution import evaluate_logic_step, is_logic_step, is_step_gated_off
+
+    assert state.config_path is not None
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+        step = config.get_step_by_name(step_name)
+    except Exception:
+        step = None
+
+    if step is not None and is_logic_step(step):
+        await websocket.send_text(
+            json.dumps({"type": "step_status", "step": step_name, "status": "running"})
+        )
+        ok = evaluate_logic_step(config, step_name)
+        label = "SUCCESS" if ok else "FAILED"
+        color = "32" if ok else "31"
+        await websocket.send_text(f"\x1b[{color}m[{label}]\x1b[0m {step_name}\r\n")
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "step_status",
+                    "step": step_name,
+                    "status": "completed" if ok else "failed",
+                }
+            )
+        )
+        return
+
+    if step is not None and is_step_gated_off(config, step_name):
+        await websocket.send_text(
+            json.dumps({"type": "step_status", "step": step_name, "status": "skipped"})
+        )
+        await websocket.send_text(f"\x1b[33m[SKIPPED]\x1b[0m {step_name} (condition not met)\r\n")
+        return
+
     # Build command for this single step
     try:
         cmd = build_step_command(state.config_path, step_name)
@@ -328,6 +366,44 @@ async def _run_parallel_steps(
     if not commands:
         await websocket.send_text("\x1b[33m[WARN]\x1b[0m No steps to run\r\n")
         return
+
+    # Evaluate logic nodes first (so gating is known) and drop gated steps.
+    from loom.runner import PipelineConfig
+
+    from ..execution import evaluate_logic_step, is_step_gated_off
+
+    assert state.config_path is not None
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception:
+        config = None
+
+    if config is not None:
+        runnable: list[tuple[str, list[str]]] = []
+        for name, cmd in commands:
+            if not cmd:
+                ok = evaluate_logic_step(config, name)
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "step_status",
+                            "step": name,
+                            "status": "completed" if ok else "failed",
+                        }
+                    )
+                )
+                continue
+            if is_step_gated_off(config, name):
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": name, "status": "skipped"})
+                )
+                continue
+            runnable.append((name, cmd))
+        commands = runnable
+        if not commands:
+            await websocket.send_text("\x1b[33m[WARN]\x1b[0m No runnable steps\r\n")
+            state.execution_state["status"] = "completed"
+            return
 
     state.execution_state["status"] = "running"
 
@@ -590,8 +666,58 @@ async def _run_sequential_commands(
 
     state.execution_state["status"] = "running"
 
+    from loom.runner import PipelineConfig
+
+    from ..execution import evaluate_logic_step, is_logic_step, is_step_gated_off
+
+    assert state.config_path is not None
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception:
+        config = None
+
     for step_name, cmd in commands:
         state.execution_state["current_step"] = step_name
+
+        # Skip any node (task or logic) on a switch branch that was not taken.
+        # This must run before task steps, so the off-branch task never runs.
+        if config is not None and is_step_gated_off(config, step_name):
+            await websocket.send_text(
+                json.dumps({"type": "step_status", "step": step_name, "status": "skipped"})
+            )
+            await websocket.send_text(
+                f"\x1b[33m[SKIPPED]\x1b[0m {step_name} (condition not met)\r\n"
+            )
+            continue
+
+        # Logic-board nodes: evaluate in-process (no subprocess).
+        if not cmd and config is not None:
+            try:
+                step = config.get_step_by_name(step_name)
+            except ValueError:
+                step = None
+            if step is not None and is_logic_step(step):
+                await websocket.send_text(
+                    json.dumps({"type": "step_status", "step": step_name, "status": "running"})
+                )
+                await websocket.send_text(f"\x1b[36m[RUNNING]\x1b[0m {step_name}\r\n")
+                ok = evaluate_logic_step(config, step_name)
+                label = "SUCCESS" if ok else "FAILED"
+                color = "32" if ok else "31"
+                await websocket.send_text(f"\x1b[{color}m[{label}]\x1b[0m {step_name}\r\n")
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "step_status",
+                            "step": step_name,
+                            "status": "completed" if ok else "failed",
+                        }
+                    )
+                )
+                if not ok:
+                    state.execution_state["status"] = "failed"
+                    return
+                continue
 
         # Create output directories
         try:
@@ -929,15 +1055,34 @@ async def _run_config_parallel_pipeline_with_commands(
             if event.type == EventType.STEP_READY:
                 assert event.step_name is not None
                 sn = event.step_name
-                if sn in cmd_map:
+                if sn in cmd_map and cmd_map[sn]:
                     task = asyncio.create_task(run_step_pty(sn, cmd_map[sn]))
                     running_tasks[sn] = task
+                elif sn in cmd_map:
+                    # Logic-board node: evaluate in-process, feed result to orchestrator.
+                    from ..execution import evaluate_logic_step
+
+                    ok = evaluate_logic_step(config, sn)
+                    try:
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "step_status",
+                                    "step": sn,
+                                    "status": "completed" if ok else "failed",
+                                }
+                            )
+                        )
+                    except Exception:
+                        pass
+                    event = gen.send(StepResult(sn, ok))
+                    continue
                 event = next(gen)
 
             elif event.type == EventType.STEP_SKIPPED:
                 try:
                     await websocket.send_bytes(
-                        f"[OUTPUT:{event.step_name}]\x1b[33m[SKIPPED]\x1b[0m {event.step_name} (dependencies failed: {event.failed_deps})\r\n".encode()
+                        f"[OUTPUT:{event.step_name}]\x1b[33m[SKIPPED]\x1b[0m {event.step_name} ({event.reason or f'dependencies failed: {event.failed_deps}'})\r\n".encode()
                     )
                     await websocket.send_text(
                         json.dumps(
@@ -976,8 +1121,9 @@ async def _run_config_parallel_pipeline_with_commands(
                     gen.send(StepResult(sn, success))
 
         final_results = orch.results
-        success_count = sum(1 for v in final_results.values() if v)
-        total = len(final_results)
+        final_skipped = orch.skipped
+        success_count = sum(1 for n, v in final_results.items() if v and n not in final_skipped)
+        total = sum(1 for n in final_results if n not in final_skipped)
 
         if success_count == total:
             await websocket.send_text(

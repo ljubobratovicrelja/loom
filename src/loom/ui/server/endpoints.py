@@ -268,6 +268,50 @@ def get_data_status() -> dict[str, bool]:
     return result
 
 
+@router.get("/api/logic/status")
+def get_logic_status() -> dict[str, Any]:
+    """Evaluate condition/switch nodes against the current filesystem state.
+
+    Returns the boolean result of each condition node and the branch taken by
+    each switch node, so the editor can preview/fade non-taken branches. Errors
+    from custom condition scripts are reported per node rather than failing the
+    request.
+    """
+    from loom.runner import PipelineConfig
+    from loom.runner.config import KIND_CONDITION, KIND_SWITCH
+    from loom.runner.executor import PipelineExecutor
+
+    empty: dict[str, Any] = {"conditions": {}, "branches": {}, "errors": {}}
+    if not state.config_path or not state.config_path.exists():
+        return empty
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+    except Exception:
+        return empty
+
+    executor = PipelineExecutor(config, dry_run=True)
+    errors: dict[str, str] = {}
+    for step in config.steps:
+        try:
+            if step.kind == KIND_CONDITION:
+                executor.run_condition(step)
+            elif step.kind == KIND_SWITCH:
+                executor.run_switch(step)
+        except Exception as e:  # noqa: BLE001 - report per-node errors
+            errors[step.name] = str(e)
+
+    # Note: whether a branch is *applied* is decided by the client, which already
+    # tracks data-node existence (`exists`, from /api/data/status) for node and
+    # handle coloring. We return the raw evaluation so there is a single source
+    # of truth for "is this data present".
+    return {
+        "conditions": config.condition_results,
+        "branches": config.active_branches,
+        "errors": errors,
+    }
+
+
 @router.get("/api/steps/freshness")
 def get_steps_freshness() -> dict[str, dict[str, dict[str, str]]]:
     """Check freshness status of each step based on file timestamps.

@@ -49,6 +49,8 @@ loom examples/linear/pipeline.yml --clean-list
 | [groups](groups/) | Visual grouping: organize steps under named `group:` blocks. |
 | [image-processing](image-processing/) | Image pipeline with URL data sources and automatic downloads. |
 | [curve-fitting](curve-fitting/) | Scientific workflow: generate data, fit a model, visualize results. |
+| [multi_pass](multi_pass/) | Multi-pass refinement: repeat steps across passes with feedback. |
+| [branching](branching/) | Conditional branching with `condition` and `switch` logic nodes. |
 | [env-vars](env-vars/) | Portable pipelines using `${ENV_VAR}` substitution in paths and args. |
 
 ## Environment Variables

@@ -27,6 +27,9 @@ import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 import type { FreshnessInfo } from '../hooks/useFreshness'
 import { getFreshnessLabel, getFreshnessColorClasses } from '../hooks/useFreshness'
 
+// Built-in condition predicates exposed in the properties panel.
+const BUILTIN_PREDICATES = ['exists', 'is_file', 'is_dir', 'non_empty', 'count', 'param']
+
 // Helper to check if a path is a URL
 const isUrl = (path: string): boolean => {
   return path.startsWith('http://') || path.startsWith('https://')
@@ -549,6 +552,7 @@ export default function PropertiesPanel({
   const [editData, setEditData] = useState<Record<string, unknown>>({})
   const [showRefs, setShowRefs] = useState(true)
   const [paramValueInput, setParamValueInput] = useState('')
+  const [newCondArg, setNewCondArg] = useState('')
 
   // Find the task schema for the currently selected step
   const taskSchema = useMemo(() => {
@@ -670,6 +674,8 @@ export default function PropertiesPanel({
   const isStep = selectedNode.type === 'step'
   const isParameter = selectedNode.type === 'parameter'
   const isData = selectedNode.type === 'data'
+  const isCondition = selectedNode.type === 'condition'
+  const isSwitch = selectedNode.type === 'switch'
 
   const handleChange = (key: string, value: unknown) => {
     const newData = { ...editData, [key]: value }
@@ -723,6 +729,15 @@ export default function PropertiesPanel({
   const handleRemoveArg = (argKey: string) => {
     const args = { ...((editData.args as Record<string, unknown>) || {}) }
     delete args[argKey]
+    handleChange('args', args)
+  }
+
+  const handleConditionArgChange = (argKey: string, value: string) => {
+    const args = { ...((editData.args as Record<string, unknown>) || {}) }
+    if (value === 'true') args[argKey] = true
+    else if (value === 'false') args[argKey] = false
+    else if (!isNaN(Number(value)) && value !== '') args[argKey] = Number(value)
+    else args[argKey] = value
     handleChange('args', args)
   }
 
@@ -985,6 +1000,182 @@ export default function PropertiesPanel({
                 </p>
               </div>
             )}
+          </>
+        )}
+
+        {/* Condition properties */}
+        {isCondition && (
+          <>
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Name</label>
+              <div
+                className="w-full px-3 py-2 bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 text-sm font-mono"
+                title="The name is used by switch nodes as a boolean reference"
+              >
+                {(editData.name as string) || ''}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                Predicate
+              </label>
+              <select
+                value={(editData.predicate as string) || ''}
+                onChange={(e) => handleChange('predicate', e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm"
+              >
+                <option value="">(custom script)</option>
+                {BUILTIN_PREDICATES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {!editData.predicate && (
+              <div>
+                <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                  Script
+                </label>
+                <input
+                  type="text"
+                  value={(editData.script as string) || ''}
+                  onChange={(e) => handleChange('script', e.target.value)}
+                  placeholder="tasks/my_condition.py"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm font-mono"
+                />
+                <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
+                  A Python script exposing <span className="font-mono">evaluate()</span>.
+                </p>
+              </div>
+            )}
+
+            <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm">
+              <input
+                type="checkbox"
+                checked={!!editData.negate}
+                onChange={(e) => handleChange('negate', e.target.checked)}
+              />
+              Negate result
+            </label>
+
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                Inputs
+              </label>
+              {Object.entries((editData.inputs as Record<string, string>) || {}).length === 0 ? (
+                <p className="text-slate-400 dark:text-slate-500 text-xs">No inputs</p>
+              ) : (
+                Object.entries((editData.inputs as Record<string, string>) || {}).map(
+                  ([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between px-2 py-1 bg-white dark:bg-slate-800 rounded mb-1"
+                    >
+                      <span className="text-slate-600 dark:text-slate-300 text-xs">{key}</span>
+                      <span
+                        className={`font-mono text-xs ${value ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500'}`}
+                      >
+                        {value || '(unconnected)'}
+                      </span>
+                    </div>
+                  ),
+                )
+              )}
+            </div>
+
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                Arguments
+              </label>
+              {Object.entries((editData.args as Record<string, unknown>) || {}).map(
+                ([key, value]) => (
+                  <div key={key} className="flex items-center gap-1 mb-1">
+                    <span className="text-slate-600 dark:text-slate-300 text-xs w-20 truncate">
+                      {key}
+                    </span>
+                    <input
+                      type="text"
+                      value={value === undefined || value === null ? '' : String(value)}
+                      onChange={(e) => handleConditionArgChange(key, e.target.value)}
+                      className="flex-1 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-xs font-mono"
+                    />
+                    <button
+                      onClick={() => handleRemoveArg(key)}
+                      className="px-1.5 py-1 text-red-500 hover:text-red-400 text-xs"
+                      title="Remove argument"
+                    >
+                      &#10005;
+                    </button>
+                  </div>
+                ),
+              )}
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="text"
+                  value={newCondArg}
+                  onChange={(e) => setNewCondArg(e.target.value)}
+                  placeholder="arg name"
+                  className="flex-1 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-xs font-mono"
+                />
+                <button
+                  onClick={() => {
+                    const key = newCondArg.trim()
+                    if (!key) return
+                    const args = {
+                      ...((editData.args as Record<string, unknown>) || {}),
+                      [key]: '',
+                    }
+                    handleChange('args', args)
+                    setNewCondArg('')
+                  }}
+                  className="px-2 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white text-xs rounded"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Switch properties */}
+        {isSwitch && (
+          <>
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">Name</label>
+              <div
+                className="w-full px-3 py-2 bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 text-sm font-mono"
+                title="The name is used by branch refs ($name.then / $name.else)"
+              >
+                {(editData.name as string) || ''}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                Condition (bool)
+              </label>
+              <div className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded font-mono text-sm text-slate-700 dark:text-slate-300">
+                {(editData.condition as string) || '(unconnected)'}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                Data (payload)
+              </label>
+              <div className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded font-mono text-sm text-slate-700 dark:text-slate-300">
+                {(editData.data as string) || '(unconnected)'}
+              </div>
+            </div>
+
+            <p className="text-slate-400 dark:text-slate-500 text-xs">
+              The <span className="font-mono">then</span> branch runs when the condition is true;{' '}
+              <span className="font-mono">else</span> when false. Wire branch outputs to step
+              inputs.
+            </p>
           </>
         )}
 

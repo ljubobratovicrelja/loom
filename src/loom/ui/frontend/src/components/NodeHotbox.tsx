@@ -7,21 +7,45 @@ import {
   useLayoutEffect,
   type ReactNode,
 } from 'react'
-import { Cog, Image, Video, Table2, Braces, FolderOpen, Folder, DollarSign } from 'lucide-react'
+import {
+  Cog,
+  Image,
+  Video,
+  Table2,
+  Braces,
+  FolderOpen,
+  Folder,
+  DollarSign,
+  GitBranch,
+  Split,
+} from 'lucide-react'
 import type { TaskInfo, DataType } from '../types/pipeline'
 import { fuzzySearch } from '../utils/fuzzySearch'
 
-const MIN_QUERY_LENGTH = 3
+const MIN_QUERY_LENGTH = 2
+
+// Built-in condition predicates surfaced in the hotbox.
+const CONDITION_PREDICATES: Array<{ id: string; label: string; aliases: string[] }> = [
+  { id: 'is_file', label: 'is_file', aliases: ['condition', 'file', 'exists'] },
+  { id: 'is_dir', label: 'is_dir', aliases: ['condition', 'directory', 'folder'] },
+  { id: 'exists', label: 'exists', aliases: ['condition', 'present', 'file'] },
+  { id: 'non_empty', label: 'non_empty', aliases: ['condition', 'empty', 'size'] },
+  { id: 'count', label: 'count', aliases: ['condition', 'files', 'glob'] },
+  { id: 'param', label: 'param', aliases: ['condition', 'parameter', 'flag'] },
+]
 
 interface HotboxItem {
   id: string
   label: string
-  category: 'task' | 'data' | 'param'
+  category: 'task' | 'data' | 'param' | 'logic'
   icon: ReactNode
+  aliases?: string[]
   task?: TaskInfo
   dataType?: DataType
   paramName?: string
   paramValue?: unknown
+  predicate?: string
+  isSwitch?: boolean
 }
 
 const DATA_TYPE_ENTRIES: Array<{ type: DataType; icon: ReactNode; label: string }> = [
@@ -41,6 +65,8 @@ interface NodeHotboxProps {
   onAddTask: (task: TaskInfo, position: { x: number; y: number }) => void
   onAddData: (dataType: DataType, position: { x: number; y: number }) => void
   onAddParameter: (name: string, value: unknown, position: { x: number; y: number }) => void
+  onAddCondition?: (predicate: string, position: { x: number; y: number }) => void
+  onAddSwitch?: (position: { x: number; y: number }) => void
   onClose: () => void
 }
 
@@ -52,6 +78,8 @@ export default function NodeHotbox({
   onAddTask,
   onAddData,
   onAddParameter,
+  onAddCondition,
+  onAddSwitch,
   onClose,
 }: NodeHotboxProps) {
   const [query, setQuery] = useState('')
@@ -92,6 +120,24 @@ export default function NodeHotbox({
           dataType: dt.type,
         }),
       ),
+      {
+        id: 'logic:switch',
+        label: 'Switch',
+        category: 'logic',
+        icon: <Split className="w-4 h-4" />,
+        aliases: ['if', 'branch', 'conditional', 'route'],
+        isSwitch: true,
+      },
+      ...CONDITION_PREDICATES.map(
+        (p): HotboxItem => ({
+          id: `condition:${p.id}`,
+          label: p.label,
+          category: 'logic',
+          icon: <GitBranch className="w-4 h-4" />,
+          aliases: p.aliases,
+          predicate: p.id,
+        }),
+      ),
     ],
     [tasks, parameters],
   )
@@ -100,7 +146,9 @@ export default function NodeHotbox({
   const results = useMemo(
     () =>
       query.length >= MIN_QUERY_LENGTH
-        ? fuzzySearch(query, allItems, (item) => item.label).map((m) => m.item)
+        ? fuzzySearch(query, allItems, (item) =>
+            [item.label, ...(item.aliases ?? [])].join(' '),
+          ).map((m) => m.item)
         : [],
     [query, allItems],
   )
@@ -113,10 +161,14 @@ export default function NodeHotbox({
         onAddParameter(item.paramName, item.paramValue, flowPosition)
       } else if (item.category === 'data' && item.dataType) {
         onAddData(item.dataType, flowPosition)
+      } else if (item.category === 'logic' && item.isSwitch) {
+        onAddSwitch?.(flowPosition)
+      } else if (item.category === 'logic' && item.predicate) {
+        onAddCondition?.(item.predicate, flowPosition)
       }
       onClose()
     },
-    [flowPosition, onAddTask, onAddParameter, onAddData, onClose],
+    [flowPosition, onAddTask, onAddParameter, onAddData, onAddCondition, onAddSwitch, onClose],
   )
 
   const handleKeyDown = useCallback(
@@ -227,14 +279,20 @@ export default function NodeHotbox({
                       ? 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
                       : item.category === 'param'
                         ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
-                        : 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
+                        : item.category === 'logic'
+                          ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                          : 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300'
                   }`}
                 >
                   {item.category === 'task'
                     ? 'task'
                     : item.category === 'param'
                       ? 'param'
-                      : item.dataType}
+                      : item.category === 'logic'
+                        ? item.isSwitch
+                          ? 'if'
+                          : 'cond'
+                        : item.dataType}
                 </span>
               </button>
             ))}

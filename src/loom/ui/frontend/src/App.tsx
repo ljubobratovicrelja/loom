@@ -27,6 +27,7 @@ import {
   getGroupRunEligibility,
 } from './hooks/useRunEligibility'
 import { useFreshness } from './hooks/useFreshness'
+import { computeBranchActivity } from './utils/logicBranches'
 import { applyDagreLayout } from './utils/layout'
 import { clearDataRefsForEdges } from './utils/dataNodeCreation'
 import { collapseParameterRefs, splitParameterRefNodes } from './utils/parameterRefs'
@@ -39,6 +40,8 @@ import type {
   StepNode,
   ParameterNode,
   DataNode,
+  ConditionNode,
+  SwitchNode,
   TaskInfo,
   StepData,
   DataType,
@@ -51,6 +54,7 @@ import type {
   StepExecutionState,
   ValidationWarning,
   CleanPreview,
+  LogicStatus,
 } from './types/pipeline'
 
 // Type alias for edges used throughout the app
@@ -322,12 +326,22 @@ export default function App() {
   // Task schemas (shared between Sidebar and PropertiesPanel)
   const [tasks, setTasks] = useState<TaskInfo[]>([])
 
+  // Logic-board runtime status (condition booleans + taken switch branches),
+  // evaluated by the server against the current filesystem. Drives branch
+  // fading and run-control gating in the editor.
+  const [logicStatus, setLogicStatus] = useState<LogicStatus>({
+    conditions: {},
+    branches: {},
+    errors: {},
+  })
+
   const {
     loadConfig,
     saveConfig,
     loadState,
     loadTasks,
     loadDataStatus,
+    loadLogicStatus,
     trashData,
     openPath,
     validateConfig,
@@ -339,6 +353,11 @@ export default function App() {
     loading,
     error: apiError,
   } = useApi()
+
+  const refreshLogicStatus = useCallback(async () => {
+    const status = await loadLogicStatus()
+    setLogicStatus(status)
+  }, [loadLogicStatus])
 
   // Debounced path check: validates path existence after typing stops
   // Used when editing data node paths to provide instant feedback
@@ -410,7 +429,32 @@ export default function App() {
   })
 
   // Run eligibility based on dependency graph and running steps
-  const runEligibility = useRunEligibility(nodes, edges, independentStepStatuses)
+  const baseRunEligibility = useRunEligibility(nodes, edges, independentStepStatuses)
+
+  // Which nodes/edges belong to a switch branch that was not taken.
+  const branchActivity = useMemo(
+    () => computeBranchActivity(nodes, edges, logicStatus),
+    [nodes, edges, logicStatus],
+  )
+
+  const inactiveStepIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const n of nodes) {
+      if (n.type === 'step' && branchActivity.inactiveNodeIds.has(n.id)) ids.add(n.id)
+    }
+    return ids
+  }, [nodes, branchActivity])
+
+  // Overlay the "inactive branch" block on top of normal eligibility so the
+  // per-step/From Here buttons disable with an explanatory tooltip.
+  const runEligibility = useMemo(() => {
+    if (inactiveStepIds.size === 0) return baseRunEligibility
+    const merged = new Map(baseRunEligibility)
+    for (const id of inactiveStepIds) {
+      merged.set(id, { canRun: false, reason: 'inactive_branch' as const })
+    }
+    return merged
+  }, [baseRunEligibility, inactiveStepIds])
 
   // Freshness status for all steps (timestamp-based)
   const { freshness, refresh: refreshFreshness } = useFreshness()
@@ -533,6 +577,9 @@ export default function App() {
   // Refresh data node existence status and update ALL node states accordingly
   // This is the single source of truth for node visual states based on file existence
   const refreshVariableStatus = useCallback(async () => {
+    // Refresh logic-board status alongside data existence (cheap, read-only).
+    await refreshLogicStatus()
+
     const status = await loadDataStatus()
     if (Object.keys(status).length === 0) return
 
@@ -566,7 +613,7 @@ export default function App() {
         return node
       }),
     )
-  }, [loadDataStatus, setNodes])
+  }, [loadDataStatus, refreshLogicStatus, setNodes])
 
   // Load initial state and tasks
   useEffect(() => {
@@ -676,6 +723,7 @@ export default function App() {
 
           // Fetch initial freshness status
           refreshFreshness()
+          refreshLogicStatus()
 
           // Validate the loaded config and show warnings
           const validationResult = await validateConfig(state.configPath)
@@ -725,6 +773,7 @@ export default function App() {
     setEdges,
     clearHistory,
     refreshFreshness,
+    refreshLogicStatus,
   ])
 
   // Flag to skip hashchange events triggered by our own programmatic hash updates
@@ -861,6 +910,8 @@ export default function App() {
         // Saved state is now the clean baseline for change detection
         documentSignatureRef.current = documentSignature(stateNodes, stateEdges, parameters)
         setHasChanges(false)
+        // Server-side logic status may have changed with the new config.
+        refreshLogicStatus()
         return true
       } else {
         // Show error to user - save failed
@@ -881,6 +932,7 @@ export default function App() {
       saveConfig,
       clearHistory,
       apiError,
+      refreshLogicStatus,
     ],
   )
 
@@ -1304,6 +1356,81 @@ export default function App() {
     [setNodes, snapshot],
   )
 
+  const handleAddCondition = useCallback(
+    (predicate: string, position?: { x: number; y: number }) => {
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
+
+      const existingNames = new Set(
+        nodesRef.current
+          .filter((n) => n.type === 'condition')
+          .map((n) => (n.data as { name: string }).name),
+      )
+      let condName = `is_${predicate}`
+      if (existingNames.has(condName)) {
+        let counter = 2
+        while (existingNames.has(`is_${predicate}_${counter}`)) counter++
+        condName = `is_${predicate}_${counter}`
+      }
+
+      const newNode: ConditionNode = {
+        id: `condition_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'condition',
+        position: position ?? canvasApiRef.current?.getViewportCenter() ?? { x: 400, y: 100 },
+        data: {
+          name: condName,
+          predicate,
+          inputs: { data: '' },
+          args: {},
+        },
+        selected: true,
+      }
+      setNodes((nds) => [...nds.map((n) => (n.selected ? { ...n, selected: false } : n)), newNode])
+      setSelectedNodes([newNode])
+    },
+    [setNodes, snapshot],
+  )
+
+  const handleAddSwitch = useCallback(
+    (position?: { x: number; y: number }) => {
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
+
+      const existingNames = new Set(
+        nodesRef.current
+          .filter((n) => n.type === 'switch')
+          .map((n) => (n.data as { name: string }).name),
+      )
+      let switchName = 'switch'
+      if (existingNames.has(switchName)) {
+        let counter = 2
+        while (existingNames.has(`switch_${counter}`)) counter++
+        switchName = `switch_${counter}`
+      }
+
+      const newNode: SwitchNode = {
+        id: `switch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        type: 'switch',
+        position: position ?? canvasApiRef.current?.getViewportCenter() ?? { x: 400, y: 100 },
+        data: {
+          name: switchName,
+          condition: '',
+          data: '',
+        },
+        selected: true,
+      }
+      setNodes((nds) => [...nds.map((n) => (n.selected ? { ...n, selected: false } : n)), newNode])
+      setSelectedNodes([newNode])
+    },
+    [setNodes, snapshot],
+  )
+
   const handleUpdateNode = useCallback(
     (id: string, data: Partial<StepData | DataNodeData>) => {
       // Check if this is a data node path change
@@ -1540,12 +1667,15 @@ export default function App() {
 
   // Handle showing the clean dialog
   const handleShowCleanDialog = useCallback(async () => {
+    // Refresh data + logic status so the dialog and branch previews reflect
+    // any files removed since the last refresh.
+    await refreshVariableStatus()
     const preview = await previewClean()
     if (preview) {
       setCleanPreview(preview)
       setShowCleanDialog(true)
     }
-  }, [previewClean])
+  }, [previewClean, refreshVariableStatus])
 
   // Handle cleaning all data
   const handleClean = useCallback(
@@ -1690,6 +1820,7 @@ export default function App() {
 
           // Fetch freshness status
           refreshFreshness()
+          refreshLogicStatus()
 
           // Validate the loaded config
           const validationResult = await validateConfig(result.configPath)
@@ -1724,6 +1855,7 @@ export default function App() {
       loadDataStatus,
       validateConfig,
       refreshFreshness,
+      refreshLogicStatus,
     ],
   )
 
@@ -2083,10 +2215,17 @@ export default function App() {
   // Compute eligibility for selected step(s)
   const selectedStepId = selectedStepNodes.length === 1 ? selectedStepNodes[0].id : null
   const selectedStepEligibility = selectedStepId ? runEligibility.get(selectedStepId) : undefined
+
+  // Ignore inactive-branch members when checking group/parallel runnability: a
+  // partially-gated group or selection is still runnable, and the runner skips
+  // the non-taken branch automatically.
   const selectedStepIds = selectedStepNodes.map((n) => n.id)
+  const activeSelectedStepIds = selectedStepIds.filter((id) => !inactiveStepIds.has(id))
   const parallelEligibility =
     selectedStepIds.length > 1
-      ? getParallelRunEligibility(selectedStepIds, nodes, edges, independentStepStatuses)
+      ? activeSelectedStepIds.length === 0
+        ? { canRun: false, reason: 'inactive_branch' as const }
+        : getParallelRunEligibility(activeSelectedStepIds, nodes, edges, independentStepStatuses)
       : undefined
   // For group eligibility, use only the group's own member IDs (not neighbor nodes)
   const groupStepIds = useMemo(() => {
@@ -2095,10 +2234,30 @@ export default function App() {
       .filter((n) => n.type === 'step' && (n.data as StepData).group === detectedGroupName)
       .map((n) => n.id)
   }, [detectedGroupName, nodes])
+  const activeGroupStepIds = groupStepIds.filter((id) => !inactiveStepIds.has(id))
   const groupEligibility =
     groupStepIds.length > 1
-      ? getGroupRunEligibility(groupStepIds, nodes, edges, independentStepStatuses)
+      ? activeGroupStepIds.length === 0
+        ? { canRun: false, reason: 'inactive_branch' as const }
+        : getGroupRunEligibility(activeGroupStepIds, nodes, edges, independentStepStatuses)
       : undefined
+
+  // "Until Here" (to_step / to_data) is blocked when the target is on a branch
+  // that is not evaluated.
+  const untilHereBlockReason = useMemo(() => {
+    if (selectedStepId && inactiveStepIds.has(selectedStepId)) {
+      return 'Belongs to a branch that is not evaluated'
+    }
+    if (selectedDataKey) {
+      const dataId = nodes.find(
+        (n) => n.type === 'data' && (n.data as DataNodeData).key === selectedDataKey,
+      )?.id
+      if (dataId && branchActivity.inactiveNodeIds.has(dataId)) {
+        return 'Belongs to a branch that is not evaluated'
+      }
+    }
+    return null
+  }, [selectedStepId, selectedDataKey, inactiveStepIds, branchActivity, nodes])
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
@@ -2132,6 +2291,7 @@ export default function App() {
         stepEligibility={selectedStepEligibility}
         parallelEligibility={parallelEligibility}
         groupEligibility={groupEligibility}
+        untilHereBlockReason={untilHereBlockReason}
         detectedGroupName={detectedGroupName}
       />
 
@@ -2273,6 +2433,11 @@ export default function App() {
             detectedGroupName={detectedGroupName}
             onAddTask={handleAddTask}
             onAddData={handleAddData}
+            onAddCondition={handleAddCondition}
+            onAddSwitch={handleAddSwitch}
+            inactiveNodeIds={branchActivity.inactiveNodeIds}
+            inactiveEdgeIds={branchActivity.inactiveEdgeIds}
+            logicStatus={logicStatus}
             onCanvasInit={(api) => {
               canvasApiRef.current = api
             }}

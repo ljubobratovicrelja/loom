@@ -186,9 +186,10 @@ Examples:
         extra_args=extra_args,
     )
 
-    # Return non-zero if any step failed
+    # Return non-zero if any step failed (skipped steps don't count as failures)
     if not args.dry_run and results:
-        failed = [name for name, success in results.items() if not success]
+        skipped = executor.skipped
+        failed = [name for name, success in results.items() if not success and name not in skipped]
         if failed:
             return 1
 
@@ -212,6 +213,15 @@ def _step_tags(step: StepConfig) -> str:
     return "  " + "  ".join(tags) if tags else ""
 
 
+def _node_desc(step: StepConfig) -> str:
+    """Short description of a pipeline node for --list output."""
+    if step.kind == "condition":
+        return f"[condition: {step.predicate or step.script}]"
+    if step.kind == "switch":
+        return f"[switch: {step.condition}]"
+    return step.script
+
+
 def _handle_list(config: PipelineConfig) -> int:
     """List all steps in the pipeline, grouped when groups exist.
 
@@ -229,7 +239,7 @@ def _handle_list(config: PipelineConfig) -> int:
     if not group_names:
         # Flat format — no groups
         for i, step in enumerate(steps, 1):
-            print(f"  {i}. {step.name:<20} {step.script}{_step_tags(step)}")
+            print(f"  {i}. {step.name:<20} {_node_desc(step)}{_step_tags(step)}")
         return 0
 
     # Grouped format
@@ -241,7 +251,7 @@ def _handle_list(config: PipelineConfig) -> int:
                 print(f"  Group: {step.group}")
             current_group = step.group
         indent = "    " if step.group else "  "
-        print(f"{indent}{i}. {step.name:<20} {step.script}{_step_tags(step)}")
+        print(f"{indent}{i}. {step.name:<20} {_node_desc(step)}{_step_tags(step)}")
         i += 1
         # Add blank line after last step of a group
         next_idx = steps.index(step) + 1
@@ -288,6 +298,26 @@ def _handle_investigate(config: PipelineConfig, args: object) -> int:
     except ValueError:
         print(f"Error: Step '{step_name}' not found in pipeline", file=sys.stderr)
         return 1
+
+    # Logic-board nodes have no task script to inspect.
+    if step.kind != "task":
+        print(f"Node: {step_name} [{step.kind}]")
+        if step.kind == "condition":
+            source = step.predicate or step.script
+            print(f"Source: {source}{' (negated)' if step.negate else ''}")
+            if step.inputs:
+                print("Inputs:")
+                for name, ref in step.inputs.items():
+                    print(f"  {name:<14}{ref}")
+            if step.args:
+                print("Args:")
+                for name, value in step.args.items():
+                    print(f"  {name:<14}{value}")
+        else:  # switch
+            print(f"Condition: {step.condition}")
+            if step.data:
+                print(f"Data:      {step.data}")
+        return 0
 
     # Resolve the script path
     script_path = config.resolve_script_path(step.script)
@@ -355,7 +385,7 @@ def _handle_investigate_group(config: PipelineConfig, group_name: str) -> int:
     print(f"Steps: {len(group_steps)}\n")
 
     for i, step in enumerate(group_steps, 1):
-        print(f"  {i}. {step.name:<20} {step.script}{_step_tags(step)}")
+        print(f"  {i}. {step.name:<20} {_node_desc(step)}{_step_tags(step)}")
         deps = config.get_step_dependencies(step)
         if deps:
             in_group = sorted(deps & group_step_names)

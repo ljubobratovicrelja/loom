@@ -6,6 +6,7 @@ import type {
   ValidationResult,
   CleanPreview,
   CleanResult,
+  LogicStatus,
   PipelineInfo,
 } from '../types/pipeline'
 
@@ -161,6 +162,26 @@ export function useApi() {
       return {}
     } finally {
       cleanupSignal('loadDataStatus')
+    }
+  }, [getSignal, cleanupSignal])
+
+  const loadLogicStatus = useCallback(async (): Promise<LogicStatus> => {
+    const empty: LogicStatus = { conditions: {}, branches: {}, errors: {} }
+    const signal = getSignal('loadLogicStatus')
+    try {
+      const res = await fetch(`${API_BASE}/logic/status`, { signal })
+      if (!res.ok) return empty
+      const data = await res.json()
+      return {
+        conditions: data.conditions ?? {},
+        branches: data.branches ?? {},
+        errors: data.errors ?? {},
+      }
+    } catch (e) {
+      if (isAbortError(e)) return empty
+      return empty
+    } finally {
+      cleanupSignal('loadLogicStatus')
     }
   }, [getSignal, cleanupSignal])
 
@@ -355,6 +376,7 @@ export function useApi() {
     loadState,
     loadTasks,
     loadDataStatus,
+    loadLogicStatus,
     trashData,
     openPath,
     validateConfig,

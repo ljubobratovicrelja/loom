@@ -1,0 +1,58 @@
+data:
+  input_dir:
+    type: data_folder
+    path: data/input
+    description: Folder of text files to count (generated)
+  word_report:
+    type: json
+    path: data/word_report.json
+  empty_report:
+    type: json
+    path: data/empty_report.json
+
+parameters:
+  min_files: 1
+
+pipeline:
+  # Produce the input first. Until this runs (e.g. on a clean pipeline) there is
+  # no data, so the switch below does not decide a branch and both branches are
+  # drawn normally.
+  - name: generate_input
+    task: tasks/generate_input.py
+    outputs:
+      -o: $input_dir
+
+  # A condition turns data into a boolean: "does data/input hold at least
+  # min_files .txt file(s)?".  Every built-in predicate takes a `data` input.
+  - name: has_input
+    kind: condition
+    predicate: count
+    inputs:
+      data: $input_dir
+    args:
+      pattern: "*.txt"
+      op: ">="
+      n: $min_files
+
+  # A switch routes a payload by a boolean.  It only cares about the boolean,
+  # and the boolean can come from a condition node OR a boolean parameter.
+  - name: input_gate
+    kind: switch
+    condition: $has_input
+    data: $input_dir
+
+  # "then" branch runs only when the condition is true.
+  - name: count_words
+    task: tasks/count_words.py
+    inputs:
+      folder: $input_gate.then
+    outputs:
+      -o: $word_report
+
+  # "else" branch runs only when the condition is false.
+  - name: empty_report
+    task: tasks/empty_report.py
+    inputs:
+      folder: $input_gate.else
+    outputs:
+      -o: $empty_report

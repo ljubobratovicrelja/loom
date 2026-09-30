@@ -30,6 +30,8 @@ import StepNode from './StepNode'
 import ParameterNode from './ParameterNode'
 import DataNode from './DataNode'
 import GroupNode from './GroupNode'
+import ConditionNode from './ConditionNode'
+import SwitchNode from './SwitchNode'
 import FeedbackEdge from './FeedbackEdge'
 import NodeHotbox from './NodeHotbox'
 import type {
@@ -37,6 +39,9 @@ import type {
   StepData,
   ParameterData,
   DataNodeData,
+  ConditionData,
+  SwitchData,
+  LogicStatus,
   TaskInfo,
   DataNode as DataNodeType,
   DataType,
@@ -45,6 +50,7 @@ import type {
   FeedbackEdgeData,
 } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
+import { conditionInputsAvailable, resolvedSwitchBranches } from '../utils/logicBranches'
 import { estimateParamWidth, estimateStepHeight } from '../utils/layout'
 import {
   clearDataRefsForEdges,
@@ -59,6 +65,8 @@ const nodeTypes = {
   parameter: ParameterNode,
   data: DataNode,
   group: GroupNode,
+  condition: ConditionNode,
+  switch: SwitchNode,
 }
 
 const edgeTypes = {
@@ -152,11 +160,16 @@ interface CanvasProps {
   detectedGroupName?: string | null
   onAddTask?: (task: TaskInfo, position: { x: number; y: number }) => void
   onAddData?: (dataType: DataType, position: { x: number; y: number }) => void
+  onAddCondition?: (predicate: string, position: { x: number; y: number }) => void
+  onAddSwitch?: (position: { x: number; y: number }) => void
   parameters?: Record<string, unknown>
   multiPassGroups?: Record<string, unknown>
   setMultiPassGroups?: Dispatch<SetStateAction<Record<string, unknown>>>
   onEdgesDelete?: (edges: Edge[]) => void
   onCanvasInit?: (api: CanvasApi) => void
+  inactiveNodeIds?: Set<string>
+  inactiveEdgeIds?: Set<string>
+  logicStatus?: LogicStatus
 }
 
 /**
@@ -185,11 +198,16 @@ export default function Canvas({
   detectedGroupName,
   onAddTask,
   onAddData,
+  onAddCondition,
+  onAddSwitch,
   parameters,
   multiPassGroups,
   setMultiPassGroups,
   onEdgesDelete,
   onCanvasInit,
+  inactiveNodeIds,
+  inactiveEdgeIds,
+  logicStatus,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -377,6 +395,159 @@ export default function Canvas({
   const onConnect: OnConnect = useCallback(
     (params) => {
       onSnapshot?.()
+
+      const srcNode = nodesRef.current.find((n) => n.id === params.source)
+      const tgtNode = nodesRef.current.find((n) => n.id === params.target)
+
+      // Ref carried by a source node's value/bool output.
+      const sourceRef = (node: PipelineNode | undefined): string | null => {
+        if (!node) return null
+        if (node.type === 'data') return `$${(node.data as DataNodeData).key}`
+        if (node.type === 'parameter') return `$${(node.data as ParameterData).name}`
+        if (node.type === 'condition') return `$${(node.data as ConditionData).name}`
+        return null
+      }
+
+      // --- Logic-board wiring (condition / switch) ---
+      if (
+        tgtNode?.type === 'condition' ||
+        tgtNode?.type === 'switch' ||
+        srcNode?.type === 'switch'
+      ) {
+        const addUniqueEdge = (edge: Edge) => {
+          setEdges((eds) =>
+            addEdge(
+              edge,
+              eds.filter(
+                (e) => !(e.target === edge.target && e.targetHandle === edge.targetHandle),
+              ),
+            ),
+          )
+        }
+
+        // Condition input <- data / parameter
+        if (tgtNode?.type === 'condition' && params.targetHandle) {
+          const ref = sourceRef(srcNode)
+          if (!ref || !(srcNode?.type === 'data' || srcNode?.type === 'parameter')) {
+            alert('Conditions can only take data or parameter inputs.')
+            return
+          }
+          setNodes(
+            (nds) =>
+              nds.map((n) =>
+                n.id === params.target && n.type === 'condition'
+                  ? {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        inputs: {
+                          ...(n.data as ConditionData).inputs,
+                          [params.targetHandle!]: ref,
+                        },
+                      },
+                    }
+                  : n,
+              ) as PipelineNode[],
+          )
+          addUniqueEdge({
+            id: `e_${params.source}_${params.target}_${params.targetHandle}`,
+            source: params.source!,
+            target: params.target!,
+            sourceHandle: params.sourceHandle ?? undefined,
+            targetHandle: params.targetHandle,
+          })
+          return
+        }
+
+        // Switch inputs: boolean condition + data payload
+        if (tgtNode?.type === 'switch') {
+          if (params.targetHandle === 'condition') {
+            const ref = sourceRef(srcNode)
+            if (!ref || !(srcNode?.type === 'condition' || srcNode?.type === 'parameter')) {
+              alert('A switch condition must come from a condition node or a parameter.')
+              return
+            }
+            setNodes(
+              (nds) =>
+                nds.map((n) =>
+                  n.id === params.target && n.type === 'switch'
+                    ? { ...n, data: { ...n.data, condition: ref } }
+                    : n,
+                ) as PipelineNode[],
+            )
+            addUniqueEdge({
+              id: `e_${params.source}_${params.target}_condition`,
+              source: params.source!,
+              target: params.target!,
+              sourceHandle: params.sourceHandle ?? undefined,
+              targetHandle: 'condition',
+            })
+            return
+          }
+          if (params.targetHandle === 'data') {
+            const ref = sourceRef(srcNode)
+            if (!ref || srcNode?.type !== 'data') {
+              alert('A switch payload must come from a data node.')
+              return
+            }
+            setNodes(
+              (nds) =>
+                nds.map((n) =>
+                  n.id === params.target && n.type === 'switch'
+                    ? { ...n, data: { ...n.data, data: ref } }
+                    : n,
+                ) as PipelineNode[],
+            )
+            addUniqueEdge({
+              id: `e_${params.source}_${params.target}_data`,
+              source: params.source!,
+              target: params.target!,
+              sourceHandle: params.sourceHandle ?? undefined,
+              targetHandle: 'data',
+            })
+            return
+          }
+        }
+
+        // Switch branch -> step handle (gated execution)
+        if (
+          srcNode?.type === 'switch' &&
+          (params.sourceHandle === 'then' || params.sourceHandle === 'else')
+        ) {
+          if (tgtNode?.type !== 'step' || !params.targetHandle) {
+            alert('Switch branches can only connect to a step input or arg.')
+            return
+          }
+          const ref = `$${(srcNode.data as SwitchData).name}.${params.sourceHandle}`
+          setNodes(
+            (nds) =>
+              nds.map((n) => {
+                if (n.id !== params.target || n.type !== 'step') return n
+                const sd = n.data as StepData
+                const isInput = params.targetHandle! in (sd.inputs || {})
+                return {
+                  ...n,
+                  data: {
+                    ...sd,
+                    inputs: isInput ? { ...sd.inputs, [params.targetHandle!]: ref } : sd.inputs,
+                    args: !isInput ? { ...sd.args, [params.targetHandle!]: ref } : sd.args,
+                  },
+                }
+              }) as PipelineNode[],
+          )
+          addUniqueEdge({
+            id: `e_${params.source}_${params.target}_${params.targetHandle}`,
+            source: params.source!,
+            target: params.target!,
+            sourceHandle: params.sourceHandle,
+            targetHandle: params.targetHandle,
+          })
+          return
+        }
+
+        alert('Invalid connection involving a condition or switch.')
+        return
+      }
 
       // If connecting a parameter to a step arg, validate and handle existing connections
       if (params.source && params.source.startsWith('param_') && params.targetHandle) {
@@ -1126,21 +1297,30 @@ export default function Canvas({
   }, [selectedNodes, edges])
 
   const styledEdges = useMemo(() => {
-    if (highlightedEdgeIds.size === 0) return edges
-    return edges.map((edge) =>
-      highlightedEdgeIds.has(edge.id)
-        ? {
-            ...edge,
-            style: {
-              ...edge.style,
-              stroke: '#2dd4bf',
-              strokeWidth: 3,
-              filter: 'drop-shadow(0 0 6px rgba(45, 212, 191, 0.7))',
-            },
-          }
-        : edge,
-    )
-  }, [edges, highlightedEdgeIds])
+    const inactive = inactiveEdgeIds ?? new Set<string>()
+    if (highlightedEdgeIds.size === 0 && inactive.size === 0) return edges
+    return edges.map((edge) => {
+      let next = edge
+      if (inactive.has(edge.id)) {
+        next = {
+          ...next,
+          style: { ...next.style, opacity: 0.2, strokeDasharray: '4 4' },
+        }
+      }
+      if (highlightedEdgeIds.has(edge.id)) {
+        next = {
+          ...next,
+          style: {
+            ...next.style,
+            stroke: '#2dd4bf',
+            strokeWidth: 3,
+            filter: 'drop-shadow(0 0 6px rgba(45, 212, 191, 0.7))',
+          },
+        }
+      }
+      return next
+    })
+  }, [edges, highlightedEdgeIds, inactiveEdgeIds])
 
   // Group click: select all member nodes + their 1st-degree neighbors
   const handleGroupClick = useCallback(
@@ -1180,10 +1360,46 @@ export default function Canvas({
     const MARGIN = 48
     const TOP_MARGIN = 60 // extra space at the top for the group label
 
-    // Apply parameter visibility
-    const regularNodes = hideParameterNodes
-      ? nodes.map((n) => (n.type === 'parameter' ? { ...n, hidden: true } : n))
-      : nodes
+    // Apply parameter visibility, logic-board runtime flags and inactive-branch
+    // fading. These are view-only copies; the persisted `nodes` stay untouched.
+    const inactive = inactiveNodeIds ?? new Set<string>()
+    // Same gate as the fade: a switch only shows a taken branch (and only fades
+    // the other) when its data input is present.
+    const resolvedBranches = resolvedSwitchBranches(nodes, edges, logicStatus)
+    // Nodes in a non-taken branch recede into the background: desaturated and
+    // lightened (plus a touch of transparency). Applied last so it wins over
+    // the zoom-out opacity handling below.
+    const INACTIVE_NODE_STYLE: React.CSSProperties = {
+      opacity: 0.6,
+      filter: 'saturate(0.3) brightness(1.12)',
+    }
+    const withInactive = (arr: PipelineNode[]): PipelineNode[] =>
+      inactive.size
+        ? arr.map((n) =>
+            inactive.has(n.id) ? { ...n, style: { ...n.style, ...INACTIVE_NODE_STYLE } } : n,
+          )
+        : arr
+    const regularNodes = nodes.map((n) => {
+      let next: PipelineNode = n
+      if (hideParameterNodes && n.type === 'parameter') {
+        next = { ...n, hidden: true }
+      }
+      if (n.type === 'condition') {
+        const cd = n.data as ConditionData
+        const result = logicStatus?.conditions[cd.name]
+        // Only show a boolean when the condition's data actually exists.
+        if (result !== undefined && conditionInputsAvailable(n, nodes, edges)) {
+          next = { ...n, data: { ...cd, result } }
+        }
+      } else if (n.type === 'switch') {
+        const sd = n.data as SwitchData
+        const taken = resolvedBranches.get(n.id)
+        if (taken) {
+          next = { ...n, data: { ...sd, taken } }
+        }
+      }
+      return next
+    })
 
     // Build map from step node id → group name
     const stepGroupMap = new Map<string, string>()
@@ -1194,7 +1410,7 @@ export default function Canvas({
       }
     }
 
-    if (stepGroupMap.size === 0) return regularNodes
+    if (stepGroupMap.size === 0) return withInactive(regularNodes)
 
     // For non-step nodes, check if all connected step neighbors share the same group
     const nodeNeighborGroups = new Map<string, Set<string>>()
@@ -1317,7 +1533,9 @@ export default function Canvas({
           return n
         })
 
-    return [...groupNodes, ...styledRegularNodes]
+    // Fade nodes belonging to a switch branch that is not evaluated. Applied
+    // last so it is not stripped by the zoom-out opacity handling above.
+    return [...groupNodes, ...withInactive(styledRegularNodes)]
   }, [
     nodes,
     edges,
@@ -1326,6 +1544,8 @@ export default function Canvas({
     handleGroupClick,
     handleGroupDoubleClick,
     detectedGroupName,
+    inactiveNodeIds,
+    logicStatus,
   ])
 
   // Hotbox handlers
@@ -1348,6 +1568,20 @@ export default function Canvas({
       onParameterDrop?.(name, value, position)
     },
     [onParameterDrop],
+  )
+
+  const handleHotboxAddCondition = useCallback(
+    (predicate: string, position: { x: number; y: number }) => {
+      onAddCondition?.(predicate, position)
+    },
+    [onAddCondition],
+  )
+
+  const handleHotboxAddSwitch = useCallback(
+    (position: { x: number; y: number }) => {
+      onAddSwitch?.(position)
+    },
+    [onAddSwitch],
   )
 
   const handleHotboxClose = useCallback(() => {
@@ -1455,6 +1689,8 @@ export default function Canvas({
             onAddTask={handleHotboxAddTask}
             onAddData={handleHotboxAddData}
             onAddParameter={handleHotboxAddParameter}
+            onAddCondition={handleHotboxAddCondition}
+            onAddSwitch={handleHotboxAddSwitch}
             onClose={handleHotboxClose}
           />
         )}

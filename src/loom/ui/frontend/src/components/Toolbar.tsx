@@ -39,6 +39,7 @@ interface ToolbarProps {
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
   groupEligibility?: RunEligibility
+  untilHereBlockReason?: string | null
   detectedGroupName?: string | null
 }
 
@@ -72,6 +73,7 @@ export default function Toolbar({
   stepEligibility,
   parallelEligibility,
   groupEligibility,
+  untilHereBlockReason,
   detectedGroupName,
 }: ToolbarProps) {
   return (
@@ -111,6 +113,7 @@ export default function Toolbar({
           stepEligibility={stepEligibility}
           parallelEligibility={parallelEligibility}
           groupEligibility={groupEligibility}
+          untilHereBlockReason={untilHereBlockReason}
           detectedGroupName={detectedGroupName}
         />
 

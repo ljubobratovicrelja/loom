@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react'
 
 // Execution types (defined early for use in data types)
-export type StepExecutionState = 'idle' | 'running' | 'completed' | 'failed'
+export type StepExecutionState = 'idle' | 'running' | 'completed' | 'failed' | 'skipped'
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'missing' | 'no_outputs' | 'unknown'
 
@@ -76,11 +76,51 @@ export interface DataNodeData {
   [key: string]: unknown
 }
 
+export interface ConditionData {
+  name: string
+  predicate?: string // built-in predicate id (exists, is_file, ...)
+  script?: string // custom condition script path
+  inputs: Record<string, string>
+  args: Record<string, unknown>
+  negate?: boolean
+  optional?: boolean
+  disabled?: boolean
+  group?: string
+  /** Runtime: evaluated boolean result (unknown until run). */
+  result?: boolean
+  /** Runtime: evaluation state for UI. */
+  executionState?: StepExecutionState
+  // Index signature for React Flow compatibility
+  [key: string]: unknown
+}
+
+export interface SwitchData {
+  name: string
+  condition: string // bool ref: "$<condition>" or "$<param>"
+  data?: string // payload ref: "$<data>"
+  optional?: boolean
+  disabled?: boolean
+  group?: string
+  /** Runtime: taken branch (unknown until run). */
+  taken?: 'then' | 'else'
+  executionState?: StepExecutionState
+  // Index signature for React Flow compatibility
+  [key: string]: unknown
+}
+
 export type StepNode = Node<StepData, 'step'>
 export type ParameterNode = Node<ParameterData, 'parameter'>
 export type DataNode = Node<DataNodeData, 'data'>
 export type GroupNode = Node<GroupNodeData, 'group'>
-export type PipelineNode = StepNode | ParameterNode | DataNode | GroupNode
+export type ConditionNode = Node<ConditionData, 'condition'>
+export type SwitchNode = Node<SwitchData, 'switch'>
+export type PipelineNode =
+  | StepNode
+  | ParameterNode
+  | DataNode
+  | GroupNode
+  | ConditionNode
+  | SwitchNode
 
 export interface EditorOptions {
   autoSave: boolean
@@ -170,6 +210,16 @@ export interface TaskInfo {
 export type RunMode = 'step' | 'from_step' | 'to_step' | 'to_data' | 'all' | 'parallel' | 'group'
 
 export type ExecutionStatus = 'idle' | 'running' | 'cancelled' | 'completed' | 'failed'
+
+/**
+ * Runtime state of the logic board, evaluated against the current filesystem.
+ * Used to fade non-taken branches and disable their run controls.
+ */
+export interface LogicStatus {
+  conditions: Record<string, boolean>
+  branches: Record<string, 'then' | 'else'>
+  errors: Record<string, string>
+}
 
 export interface RunRequest {
   mode: RunMode

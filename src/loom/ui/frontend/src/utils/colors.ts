@@ -99,6 +99,11 @@ export const STATUS_COLORS: Record<
     shadow: 'shadow-red-500/30 shadow-md',
     indicator: 'bg-red-500',
   },
+  skipped: {
+    border: 'border-slate-400 dark:border-slate-600',
+    shadow: '',
+    indicator: 'bg-slate-400 dark:bg-slate-500',
+  },
 }
 
 /**

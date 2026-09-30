@@ -19,6 +19,7 @@ Make sure you have [Loom installed](../getting-started/installation.md) and have
 | [Image Processing](image-processing.md) | Working with images and URL caching |
 | [Loop (Per-Item Processing)](loop.md) | Iterating over every file in a directory |
 | [Groups](groups.md) | Visual grouping of steps in the editor |
+| [Conditional Branching](branching.md) | Branch on a data condition with if/switch nodes |
 
 ## Running Examples
 

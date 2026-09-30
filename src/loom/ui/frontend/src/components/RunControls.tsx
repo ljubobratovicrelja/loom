@@ -19,6 +19,7 @@ interface RunControlsProps {
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
   groupEligibility?: RunEligibility
+  untilHereBlockReason?: string | null
   detectedGroupName?: string | null
 }
 
@@ -32,6 +33,7 @@ export default function RunControls({
   stepEligibility,
   parallelEligibility,
   groupEligibility,
+  untilHereBlockReason,
   detectedGroupName,
 }: RunControlsProps) {
   const isRunning = status === 'running'
@@ -169,16 +171,16 @@ export default function RunControls({
       {showUntilHere && (
         <button
           onClick={handleUntilHere}
-          disabled={isRunning}
+          disabled={isRunning || !!untilHereBlockReason}
           className={`
             px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
             ${
-              isRunning
+              isRunning || untilHereBlockReason
                 ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
                 : 'bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-700 dark:hover:bg-cyan-600'
             }
           `}
-          title={untilHereTooltip}
+          title={untilHereBlockReason || untilHereTooltip}
         >
           <ChevronsLeft className="w-3.5 h-3.5" /> Until Here
         </button>
