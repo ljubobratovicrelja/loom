@@ -16,13 +16,13 @@ You should see output like:
 Pipeline: 3 step(s) to run
 ----------------------------------------
 [RUNNING] generate_data
-[generate_data] Generated 100 samples -> data/readings.csv
+[generate_data] Generated 100 samples -> output/readings.csv
 [SUCCESS] generate_data
 [RUNNING] compute_stats
-[compute_stats] Computed stats for 100 rows -> data/stats.json
+[compute_stats] Computed stats for 100 rows -> output/stats.json
 [SUCCESS] compute_stats
 [RUNNING] format_report
-[format_report] Report written -> data/report.txt
+[format_report] Report written -> output/report.txt
 [SUCCESS] format_report
 ----------------------------------------
 Completed: 3/3 steps succeeded
@@ -43,9 +43,9 @@ generate_data → compute_stats → format_report
 ## Check the Outputs
 
 ```bash
-cat examples/linear/data/readings.csv   # Raw data
-cat examples/linear/data/stats.json     # Statistics
-cat examples/linear/data/report.txt     # Final report
+cat examples/linear/output/readings.csv   # Raw data
+cat examples/linear/output/stats.json     # Statistics
+cat examples/linear/output/report.txt     # Final report
 ```
 
 ## Open in the Visual Editor

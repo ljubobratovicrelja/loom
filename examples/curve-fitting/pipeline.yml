@@ -4,16 +4,16 @@
 data:
   raw_data:
     type: csv
-    path: data/raw_data.csv
+    path: output/raw_data.csv
   raw_plot:
     type: image
-    path: data/raw_plot.png
+    path: output/raw_plot.png
   fit_params:
     type: json
-    path: data/fit_params.json
+    path: output/fit_params.json
   fit_plot:
     type: image
-    path: data/fit_plot.png
+    path: output/fit_plot.png
 parameters:
   num_samples: 50
   noise_level: 0.5

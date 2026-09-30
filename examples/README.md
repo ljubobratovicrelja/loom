@@ -76,7 +76,12 @@ example_name/
 ├── README.md      # What it demonstrates, how to run
 ├── pipeline.yml   # The pipeline configuration
 ├── tasks/         # Python scripts (simple, no dependencies)
-└── data/          # Input files and where outputs go
+├── data/          # Source input files you provide
+└── output/        # Pipeline-owned tree where produced data is written
 ```
+
+Produced data lives under `output/`, which `loom --clean` purges entirely
+(directory shells included). Source inputs in `data/` are protected from
+cleaning by default.
 
 All scripts are self-contained Python with no external dependencies beyond the standard library. They generate real data you can inspect.

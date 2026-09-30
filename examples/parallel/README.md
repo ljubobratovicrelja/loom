@@ -30,11 +30,11 @@ loom pipeline.yml
 loom pipeline.yml --sequential
 
 # Check outputs
-cat data/dataset.csv           # Generated data
-cat data/results_low.json      # Threshold 0.3
-cat data/results_mid.json      # Threshold 0.5
-cat data/results_high.json     # Threshold 0.7
-cat data/comparison.json       # Side-by-side comparison
+cat output/dataset.csv           # Generated data
+cat output/results_low.json      # Threshold 0.3
+cat output/results_mid.json      # Threshold 0.5
+cat output/results_high.json     # Threshold 0.7
+cat output/comparison.json       # Side-by-side comparison
 
 # Run just one configuration branch
 loom pipeline.yml --step process_config_low
@@ -72,7 +72,7 @@ This is useful for:
 ## Extending This Pattern
 
 To add more configurations:
-1. Add a new variable for the output: `results_d: data/results_d.json`
+1. Add a new variable for the output: `results_d: output/results_d.json`
 2. Copy one of the `process_config_*` steps, rename it, change the threshold
 3. Add the new result to `compare_results` inputs
 

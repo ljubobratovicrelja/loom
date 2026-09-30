@@ -22,16 +22,16 @@ Optional steps are skipped by default but can be included with `--include`.
 loom pipeline.yml
 
 # Check outputs
-cat data/frequencies.json    # Word counts
-cat data/top_words.json      # Top 10 words
+cat output/frequencies.json    # Word counts
+cat output/top_words.json      # Top 10 words
 
 # Include the debug export
 loom pipeline.yml --include export_debug
-cat data/debug_dump.txt
+cat output/debug_dump.txt
 
 # Include visualization
 loom pipeline.yml --include visualize
-cat data/chart.txt
+cat output/chart.txt
 
 # Include both optional steps
 loom pipeline.yml --include export_debug --include visualize
@@ -48,4 +48,4 @@ loom-ui pipeline.yml
 - `tasks/top_words.py` — Extracts top N words
 - `tasks/export_debug.py` — (Optional) Full debug dump
 - `tasks/visualize.py` — (Optional) ASCII bar chart
-- `data/sample.txt` — Sample input text
+- `output/sample.txt` — Sample input text

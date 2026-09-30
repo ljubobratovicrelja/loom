@@ -20,9 +20,9 @@ Parameters control the signal characteristics and processing settings.
 loom pipeline.yml
 
 # Check outputs
-cat data/signal.csv         # Raw noisy signal
-cat data/smoothed.csv       # After smoothing
-cat data/peaks.json         # Detected peaks
+cat output/signal.csv         # Raw noisy signal
+cat output/smoothed.csv       # After smoothing
+cat output/peaks.json         # Detected peaks
 
 # Override parameters at runtime
 loom pipeline.yml --set window_size=10 threshold=0.5

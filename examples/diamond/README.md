@@ -26,11 +26,11 @@ This pattern is common when you need to both analyze and clean data, then combin
 loom pipeline.yml
 
 # Check the outputs
-cat data/raw.csv           # Input data
-cat data/validated.csv     # After validation
-cat data/stats.json        # Statistics (path A)
-cat data/clean.csv         # Outliers removed (path B)
-cat data/final_report.json # Combined results
+cat output/raw.csv           # Generated data
+cat output/validated.csv     # After validation
+cat output/stats.json        # Statistics (path A)
+cat output/clean.csv         # Outliers removed (path B)
+cat output/final_report.json # Combined results
 
 # Run from a specific step
 loom pipeline.yml --from filter_outliers
@@ -46,4 +46,4 @@ loom-ui pipeline.yml
 - `tasks/compute_stats.py` — Computes statistics
 - `tasks/filter_outliers.py` — Removes outliers using IQR method
 - `tasks/merge_results.py` — Combines stats and clean data
-- `data/raw.csv` — Input data with some outliers
+- `output/raw.csv` — Generated data with some outliers

@@ -1,13 +1,13 @@
 data:
   signal_csv:
     type: csv
-    path: data/signal.csv
+    path: output/signal.csv
   smoothed_csv:
     type: csv
-    path: data/smoothed.csv
+    path: output/smoothed.csv
   peaks_json:
     type: json
-    path: data/peaks.json
+    path: output/peaks.json
 parameters:
   # Signal generation
   num_points: 200

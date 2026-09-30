@@ -6,19 +6,19 @@ data:
   # Shared input
   dataset:
     type: csv
-    path: data/dataset.csv
+    path: output/dataset.csv
   results_low:
     type: json
-    path: data/results_low.json
+    path: output/results_low.json
   results_mid:
     type: json
-    path: data/results_mid.json
+    path: output/results_mid.json
   results_high:
     type: json
-    path: data/results_high.json
+    path: output/results_high.json
   comparison:
     type: json
-    path: data/comparison.json
+    path: output/comparison.json
 parameters:
   num_samples: 500
 

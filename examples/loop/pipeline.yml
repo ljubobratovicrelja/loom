@@ -5,11 +5,11 @@ data:
     description: Folder of text files to process
   processed_texts:
     type: data_folder
-    path: data/output
+    path: output/processed
     description: Folder of uppercased text files
   summary_txt:
     type: txt
-    path: data/summary.txt
+    path: output/summary.txt
     description: Summary of all processed files
 parameters:
   prefix: "PROCESSED"

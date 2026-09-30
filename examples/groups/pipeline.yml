@@ -2,19 +2,19 @@ data:
   # Input
   raw_csv:
     type: csv
-    path: data/raw.csv
+    path: output/raw.csv
   validated_csv:
     type: csv
-    path: data/validated.csv
+    path: output/validated.csv
   stats_json:
     type: json
-    path: data/stats.json
+    path: output/stats.json
   clean_csv:
     type: csv
-    path: data/clean.csv
+    path: output/clean.csv
   final_report:
     type: json
-    path: data/final_report.json
+    path: output/final_report.json
 parameters:
   outlier_threshold: 1.5
   num_rows: 100

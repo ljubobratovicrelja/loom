@@ -19,23 +19,23 @@ DIAMOND_PIPELINE = EXAMPLES_DIR / "diamond" / "pipeline.yml"
 @pytest.fixture
 def clean_groups_data() -> Generator[None, None, None]:
     """Clean generated data before and after running groups example."""
-    data_dir = EXAMPLES_DIR / "groups" / "data"
-    if data_dir.exists():
-        shutil.rmtree(data_dir)
+    output_dir = EXAMPLES_DIR / "groups" / "output"
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     yield
-    if data_dir.exists():
-        shutil.rmtree(data_dir)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
 
 
 @pytest.fixture
 def clean_diamond_data() -> Generator[None, None, None]:
     """Clean generated data before and after running diamond example."""
-    data_dir = EXAMPLES_DIR / "diamond" / "data"
-    if data_dir.exists():
-        shutil.rmtree(data_dir)
+    output_dir = EXAMPLES_DIR / "diamond" / "output"
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     yield
-    if data_dir.exists():
-        shutil.rmtree(data_dir)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
 
 
 class TestGroupIntegration:
@@ -51,12 +51,12 @@ class TestGroupIntegration:
         )
         assert result.returncode == 0, f"stderr: {result.stderr}"
 
-        data_dir = EXAMPLES_DIR / "groups" / "data"
-        assert (data_dir / "raw.csv").exists()
-        assert (data_dir / "validated.csv").exists()
+        output_dir = EXAMPLES_DIR / "groups" / "output"
+        assert (output_dir / "raw.csv").exists()
+        assert (output_dir / "validated.csv").exists()
         # Analysis outputs should NOT exist — only ingestion was run
-        assert not (data_dir / "stats.json").exists()
-        assert not (data_dir / "final_report.json").exists()
+        assert not (output_dir / "stats.json").exists()
+        assert not (output_dir / "final_report.json").exists()
 
     def test_run_full_pipeline_then_group(self, clean_groups_data: None) -> None:
         """Run full pipeline, then run --group analysis alone."""
@@ -69,12 +69,12 @@ class TestGroupIntegration:
         )
         assert result.returncode == 0, f"stderr: {result.stderr}"
 
-        data_dir = EXAMPLES_DIR / "groups" / "data"
-        assert (data_dir / "final_report.json").exists()
+        output_dir = EXAMPLES_DIR / "groups" / "output"
+        assert (output_dir / "final_report.json").exists()
 
         # Now delete analysis outputs and re-run only the analysis group
-        (data_dir / "stats.json").unlink(missing_ok=True)
-        (data_dir / "clean.csv").unlink(missing_ok=True)
+        (output_dir / "stats.json").unlink(missing_ok=True)
+        (output_dir / "clean.csv").unlink(missing_ok=True)
 
         result = subprocess.run(
             [sys.executable, "-m", "loom.runner.cli", str(GROUPS_PIPELINE), "--group", "analysis"],
@@ -83,8 +83,8 @@ class TestGroupIntegration:
             timeout=60,
         )
         assert result.returncode == 0, f"stderr: {result.stderr}"
-        assert (data_dir / "stats.json").exists()
-        assert (data_dir / "clean.csv").exists()
+        assert (output_dir / "stats.json").exists()
+        assert (output_dir / "clean.csv").exists()
 
 
 class TestListIntegration:

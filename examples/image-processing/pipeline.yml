@@ -7,17 +7,17 @@ data:
     description: Classic test image downloaded from URL
   grayscale_image:
     type: image
-    path: data/grayscale.png
+    path: output/grayscale.png
     name: Grayscale
     description: Image converted to grayscale
   edges_image:
     type: image
-    path: data/edges.png
+    path: output/edges.png
     name: Edge Detection
     description: Canny edge detection result
   blurred_image:
     type: image
-    path: data/blurred.png
+    path: output/blurred.png
     name: Gaussian Blur
     description: Blurred version of grayscale image
 parameters:

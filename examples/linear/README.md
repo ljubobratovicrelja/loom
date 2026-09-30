@@ -21,9 +21,9 @@ generate_data → compute_stats → format_report
 loom pipeline.yml
 
 # Check the outputs
-cat data/readings.csv      # Raw generated data
-cat data/stats.json        # Computed statistics
-cat data/report.txt        # Final report
+cat output/readings.csv      # Raw generated data
+cat output/stats.json        # Computed statistics
+cat output/report.txt        # Final report
 
 # Run just one step
 loom pipeline.yml --step compute_stats
@@ -38,4 +38,4 @@ loom-ui pipeline.yml
 - `tasks/generate_data.py` — Generates synthetic sensor data
 - `tasks/compute_stats.py` — Computes statistics from CSV
 - `tasks/format_report.py` — Formats stats as text report
-- `data/` — Input/output directory
+- `output/` — Generated output directory

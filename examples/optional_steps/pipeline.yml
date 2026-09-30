@@ -1,22 +1,22 @@
 data:
   input_txt:
     type: txt
-    path: data/sample.txt
+    path: output/sample.txt
   normalized_txt:
     type: txt
-    path: data/normalized.txt
+    path: output/normalized.txt
   frequencies_json:
     type: json
-    path: data/frequencies.json
+    path: output/frequencies.json
   top_words_json:
     type: json
-    path: data/top_words.json
+    path: output/top_words.json
   debug_dump:
     type: txt
-    path: data/debug_dump.txt
+    path: output/debug_dump.txt
   chart_txt:
     type: txt
-    path: data/chart.txt
+    path: output/chart.txt
 
 parameters:
   top_n: 10

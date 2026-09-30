@@ -1,13 +1,13 @@
 data:
   input_signal:
     type: csv
-    path: data/signal.csv
+    path: output/signal.csv
   smoothed_signal:
     type: csv
-    path: results/smoothed.csv
+    path: output/smoothed.csv
   cleaned_signal:
     type: csv
-    path: results/cleaned.csv
+    path: output/cleaned.csv
 parameters:
   num_samples: 200
 

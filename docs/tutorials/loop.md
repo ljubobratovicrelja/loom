@@ -14,9 +14,9 @@ This example introduces the `loop:` block — a first-class primitive for iterat
 every file in a data folder.
 
 1. **uppercase_each**: Loops over every `.txt` file in `data/input/`, uppercases its
-   contents, and writes each result to `data/output/` (preserving filename).
-2. **summarize**: Reads the whole `data/output/` folder and concatenates all files into
-   a single `data/summary.txt`.
+   contents, and writes each result to `output/processed/` (preserving filename).
+2. **summarize**: Reads the whole `output/processed/` folder and concatenates all files into
+   a single `output/summary.txt`.
 
 The loop is declared entirely in YAML — no wrapper script needed.
 
@@ -27,11 +27,11 @@ The loop is declared entirely in YAML — no wrapper script needed.
 loom examples/loop/pipeline.yml
 
 # Check per-item outputs
-ls examples/loop/data/output/
-cat examples/loop/data/output/foo.txt
+ls examples/loop/output/processed/
+cat examples/loop/output/processed/foo.txt
 
 # Check the aggregated summary
-cat examples/loop/data/summary.txt
+cat examples/loop/output/summary.txt
 
 # Open in the visual editor
 loom-ui examples/loop/pipeline.yml

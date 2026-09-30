@@ -92,8 +92,8 @@ pipeline:
   For pass N+1, the chained input receives the path from pass N's output. The
   first pass does not receive chained inputs.
 - **Data suffixing** — Output variables are automatically suffixed with the pass
-  name (e.g., `$smoothed_signal` becomes `results/smoothed_coarse.csv`,
-  `results/smoothed_medium.csv`, `results/smoothed_fine.csv`).
+  name (e.g., `$smoothed_signal` becomes `output/smoothed_coarse.csv`,
+  `output/smoothed_medium.csv`, `output/smoothed_fine.csv`).
 - **Last-pass alias** — The unsuffixed variable (`$cleaned_signal`) points to
   the last pass's output, so downstream steps (like `summarize`) don't need
   to know about passes.
