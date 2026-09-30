@@ -130,7 +130,13 @@ export default function Sidebar({
             <button
               key={dt.type}
               onClick={() => onAddData(dt.type)}
-              className="px-2 py-2 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/50 dark:hover:bg-teal-800/50 text-teal-700 dark:text-teal-300 text-xs rounded text-left transition-colors flex items-center gap-1"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/loom-data', JSON.stringify({ type: dt.type }))
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              className="px-2 py-2 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/50 dark:hover:bg-teal-800/50 text-teal-700 dark:text-teal-300 text-xs rounded text-left transition-colors flex items-center gap-1 cursor-grab active:cursor-grabbing"
+              title="Click to add, or drag onto the canvas"
             >
               <span>{dt.icon}</span>
               <span>{dt.label}</span>
@@ -151,7 +157,16 @@ export default function Sidebar({
               <button
                 key={task.name}
                 onClick={() => onAddTask(task)}
-                className="w-full px-3 py-2 bg-white hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded text-left transition-colors"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    'application/loom-task',
+                    JSON.stringify({ path: task.path }),
+                  )
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
+                className="w-full px-3 py-2 bg-white hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded text-left transition-colors cursor-grab active:cursor-grabbing"
+                title="Click to add, or drag onto the canvas"
               >
                 {task.name}
               </button>

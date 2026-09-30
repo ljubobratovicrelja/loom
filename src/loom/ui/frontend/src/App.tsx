@@ -9,7 +9,7 @@ import {
 import { AlertTriangle, Info, XCircle, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import AutoLayoutConfirmDialog from './components/AutoLayoutConfirmDialog'
-import Canvas from './components/Canvas'
+import Canvas, { type CanvasApi } from './components/Canvas'
 import CleanDialog from './components/CleanDialog'
 import ConfirmDialog from './components/ConfirmDialog'
 import FeedbackDialog, { type FeedbackResult } from './components/FeedbackDialog'
@@ -28,6 +28,7 @@ import {
 } from './hooks/useRunEligibility'
 import { useFreshness } from './hooks/useFreshness'
 import { applyDagreLayout } from './utils/layout'
+import { clearDataRefsForEdges } from './utils/dataNodeCreation'
 import { collapseParameterRefs, splitParameterRefNodes } from './utils/parameterRefs'
 import { appendTerminalOutput, startRun, type TerminalBuffer } from './utils/terminalOutput'
 import { documentSignature } from './utils/documentSignature'
@@ -164,6 +165,9 @@ export default function App() {
   const [propertiesWidth, setPropertiesWidth] = useState(320) // Default w-80
   const leftPanelRef = useRef<HTMLDivElement | null>(null)
   const rightPanelRef = useRef<HTMLDivElement | null>(null)
+
+  // Imperative canvas helpers (viewport center for sidebar-created nodes)
+  const canvasApiRef = useRef<CanvasApi | null>(null)
 
   // Collapsible sidebar state
   const [leftCollapsed, setLeftCollapsed] = useState(
@@ -1230,9 +1234,13 @@ export default function App() {
       }
 
       const newNode: StepNode = {
-        id: `step_${Date.now()}`,
+        id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: 'step',
-        position: position ?? { x: 400, y: 100 + nodes.length * 50 },
+        position: position ??
+          canvasApiRef.current?.getViewportCenter() ?? {
+            x: 400,
+            y: 100 + nodesRef.current.length * 50,
+          },
         data: {
           name: stepName,
           task: task.path,
@@ -1244,10 +1252,12 @@ export default function App() {
           inputTypes: Object.keys(inputTypes).length > 0 ? inputTypes : undefined,
           outputTypes: Object.keys(outputTypes).length > 0 ? outputTypes : undefined,
         },
+        selected: true,
       }
-      setNodes((nds) => [...nds, newNode])
+      setNodes((nds) => [...nds.map((n) => (n.selected ? { ...n, selected: false } : n)), newNode])
+      setSelectedNodes([newNode])
     },
-    [nodes.length, setNodes, snapshot],
+    [setNodes, snapshot],
   )
 
   const handleAddData = useCallback(
@@ -1258,7 +1268,7 @@ export default function App() {
         edges: edgesRef.current,
         parameters: parametersRef.current,
       })
-      const dataCount = nodes.filter((n) => n.type === 'data').length
+      const dataCount = nodesRef.current.filter((n) => n.type === 'data').length
 
       // Generate unique name - avoid duplicates
       const existingNames = new Set(
@@ -1276,19 +1286,22 @@ export default function App() {
       // Generate key from name
       const key = dataName.toLowerCase().replace(/\s+/g, '_')
       const newNode: DataNode = {
-        id: `data_${Date.now()}`,
+        id: `data_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: 'data',
-        position: position ?? { x: 50, y: 50 + dataCount * 80 },
+        position: position ??
+          canvasApiRef.current?.getViewportCenter() ?? { x: 50, y: 50 + dataCount * 80 },
         data: {
           key,
           name: dataName,
           type: dataType,
           path: '',
         },
+        selected: true,
       }
-      setNodes((nds) => [...nds, newNode])
+      setNodes((nds) => [...nds.map((n) => (n.selected ? { ...n, selected: false } : n)), newNode])
+      setSelectedNodes([newNode])
     },
-    [nodes, setNodes, snapshot],
+    [setNodes, snapshot],
   )
 
   const handleUpdateNode = useCallback(
@@ -1357,6 +1370,10 @@ export default function App() {
         } else {
           setNodes((nds) => nds.filter((node) => node.id !== id))
         }
+      } else if (nodeToDelete?.type === 'data') {
+        // Clear step references carried by this data node's edges before removal
+        const dataEdges = edgesRef.current.filter((e) => e.source === id || e.target === id)
+        setNodes((nds) => clearDataRefsForEdges(nds, dataEdges).filter((node) => node.id !== id))
       } else {
         setNodes((nds) => nds.filter((node) => node.id !== id))
       }
@@ -1441,17 +1458,25 @@ export default function App() {
     [snapshot, setEdges],
   )
 
-  // Handle deletion of edges — sync multiPassGroups when feedback edges are removed
+  // Handle deletion of edges — sync multiPassGroups when feedback edges are
+  // removed, and clear step references carried by deleted data edges.
   const handleEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       const feedbackEdges = deleted.filter((e) => e.type === 'feedback')
-      if (feedbackEdges.length === 0) return
+      const dataEdges = deleted.filter((e) => e.type !== 'feedback')
+      if (feedbackEdges.length === 0 && dataEdges.length === 0) return
 
       snapshot({
         nodes: nodesRef.current,
         edges: edgesRef.current,
         parameters: parametersRef.current,
       })
+
+      if (dataEdges.length > 0) {
+        setNodes((nds) => clearDataRefsForEdges(nds, dataEdges))
+      }
+
+      if (feedbackEdges.length === 0) return
 
       setMultiPassGroups((prev) => {
         let next = prev
@@ -1501,7 +1526,7 @@ export default function App() {
 
       setHasChanges(true)
     },
-    [snapshot],
+    [snapshot, setNodes],
   )
 
   // Handle trashing variable data
@@ -2253,6 +2278,9 @@ export default function App() {
             detectedGroupName={detectedGroupName}
             onAddTask={handleAddTask}
             onAddData={handleAddData}
+            onCanvasInit={(api) => {
+              canvasApiRef.current = api
+            }}
             parameters={parameters}
             multiPassGroups={multiPassGroups}
             setMultiPassGroups={setMultiPassGroups}

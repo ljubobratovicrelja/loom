@@ -22,6 +22,7 @@ import {
   type Edge,
   type ReactFlowInstance,
   type Viewport,
+  type FinalConnectionState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -45,6 +46,12 @@ import type {
 } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 import { estimateParamWidth, estimateStepHeight } from '../utils/layout'
+import {
+  clearDataRefsForEdges,
+  clearStepRef,
+  createOutputDataNode,
+  setStepRef,
+} from '../utils/dataNodeCreation'
 import { HighlightContext } from '../contexts/HighlightContext'
 
 const nodeTypes = {
@@ -149,6 +156,15 @@ interface CanvasProps {
   multiPassGroups?: Record<string, unknown>
   setMultiPassGroups?: Dispatch<SetStateAction<Record<string, unknown>>>
   onEdgesDelete?: (edges: Edge[]) => void
+  onCanvasInit?: (api: CanvasApi) => void
+}
+
+/**
+ * Imperative helpers exposed to the parent so it can place sidebar-created
+ * nodes in the middle of the current viewport instead of a fixed coordinate.
+ */
+export interface CanvasApi {
+  getViewportCenter: () => { x: number; y: number }
 }
 
 export default function Canvas({
@@ -173,6 +189,7 @@ export default function Canvas({
   multiPassGroups,
   setMultiPassGroups,
   onEdgesDelete,
+  onCanvasInit,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -551,10 +568,26 @@ export default function Canvas({
             return
           }
 
-          // Apply changes: add node (with selection), add edges
+          // Apply changes: add node (with selection), wire step refs, add edges
           setNodes((nds) => {
-            const deselected = nds.map((n) => ({ ...n, selected: false }))
-            return [...deselected, newDataNode] as PipelineNode[]
+            const updated = nds.map((n): PipelineNode => {
+              if (n.id === params.source && n.type === 'step') {
+                return {
+                  ...n,
+                  selected: false,
+                  data: setStepRef(n.data as StepData, params.sourceHandle!, finalKey, 'output'),
+                }
+              }
+              if (n.id === params.target && n.type === 'step') {
+                return {
+                  ...n,
+                  selected: false,
+                  data: setStepRef(n.data as StepData, params.targetHandle!, finalKey, 'input'),
+                }
+              }
+              return n.selected ? { ...n, selected: false } : n
+            })
+            return [...updated, newDataNode] as PipelineNode[]
           })
           setEdges((eds) => [...eds, edge1, edge2])
 
@@ -590,6 +623,25 @@ export default function Canvas({
               )
               return
             }
+
+            // Write the $reference into the step's inputs/args so it persists
+            const dataKey = (sourceNode.data as DataNodeData).key
+            setNodes(
+              (nds) =>
+                nds.map((n) =>
+                  n.id === params.target && n.type === 'step'
+                    ? {
+                        ...n,
+                        data: setStepRef(
+                          n.data as StepData,
+                          params.targetHandle!,
+                          dataKey,
+                          'input',
+                        ),
+                      }
+                    : n,
+                ) as PipelineNode[],
+            )
           }
 
           // Step output → Data: Validate type match
@@ -605,6 +657,25 @@ export default function Canvas({
               )
               return
             }
+
+            // Write the $reference into the step's outputs so it persists
+            const dataKey = (targetNode.data as DataNodeData).key
+            setNodes(
+              (nds) =>
+                nds.map((n) =>
+                  n.id === params.source && n.type === 'step'
+                    ? {
+                        ...n,
+                        data: setStepRef(
+                          n.data as StepData,
+                          params.sourceHandle!,
+                          dataKey,
+                          'output',
+                        ),
+                      }
+                    : n,
+                ) as PipelineNode[],
+            )
           }
         }
 
@@ -738,10 +809,60 @@ export default function Canvas({
 
   // Track edge being reconnected
   const edgeReconnectSuccessful = useRef(true)
+  // True while an existing edge is being dragged (so onConnectEnd can ignore it)
+  const reconnectingRef = useRef(false)
 
   const onReconnectStart = useCallback(() => {
+    reconnectingRef.current = true
     edgeReconnectSuccessful.current = false
   }, [])
+
+  // Dropping a connection on empty space from a step output creates a typed data
+  // node at the drop point and wires it to that output.
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      if (reconnectingRef.current) return
+      if (connectionState.isValid) return
+      if (connectionState.toNode) return
+
+      const fromNode = connectionState.fromNode
+      const fromHandle = connectionState.fromHandle
+      if (!fromNode || fromNode.type !== 'step') return
+      if (!fromHandle || fromHandle.type !== 'source' || !fromHandle.id) return
+
+      const instance = reactFlowInstance.current
+      if (!instance) return
+
+      let clientX: number
+      let clientY: number
+      if ('clientX' in event) {
+        clientX = event.clientX
+        clientY = event.clientY
+      } else {
+        const touch = event.changedTouches[0]
+        if (!touch) return
+        clientX = touch.clientX
+        clientY = touch.clientY
+      }
+
+      const position = instance.screenToFlowPosition({ x: clientX, y: clientY })
+      const result = createOutputDataNode({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        stepId: fromNode.id,
+        handleId: fromHandle.id,
+        position,
+        tasks,
+      })
+      if (!result) return
+
+      onSnapshot?.()
+      setNodes(result.nodes)
+      setEdges(result.edges)
+      onSelectionChangeProp([result.newNode])
+    },
+    [tasks, setNodes, setEdges, onSnapshot, onSelectionChangeProp],
+  )
 
   const onReconnect: OnReconnect = useCallback(
     (oldEdge, newConnection) => {
@@ -789,34 +910,95 @@ export default function Canvas({
         }
       }
 
-      // Handle both clearing old and setting new parameter connections in a single atomic update
+      // Resolve nodes involved (by ref to avoid stale closure) for data-edge refs
+      const oldSourceNode = nodesRef.current.find((n) => n.id === oldEdge.source)
+      const oldTargetNode = nodesRef.current.find((n) => n.id === oldEdge.target)
+      const newSourceNode = newConnection.source
+        ? nodesRef.current.find((n) => n.id === newConnection.source)
+        : undefined
+      const newTargetNode = newConnection.target
+        ? nodesRef.current.find((n) => n.id === newConnection.target)
+        : undefined
+
+      // Handle clearing old and setting new references in a single atomic update
       setNodes(
         (nds) =>
           nds.map((node) => {
             if (node.type !== 'step') return node
 
-            const stepData = node.data as StepData
-            let newArgs = stepData.args || {}
+            let stepData = node.data as StepData
             let changed = false
 
-            // Clear old connection if it was a parameter to step arg
+            // Parameter → arg handling
             if (
               oldEdge.source.startsWith('param_') &&
               node.id === oldEdge.target &&
               oldEdge.targetHandle
             ) {
-              newArgs = { ...newArgs }
-              newArgs[oldEdge.targetHandle] = ''
+              stepData = {
+                ...stepData,
+                args: { ...(stepData.args || {}), [oldEdge.targetHandle]: '' },
+              }
               changed = true
             }
-
-            // Set new connection if connecting a parameter to a step arg
             if (newParamName && node.id === newConnection.target && newConnection.targetHandle) {
-              newArgs = { ...newArgs, [newConnection.targetHandle]: `$${newParamName}` }
+              stepData = {
+                ...stepData,
+                args: {
+                  ...(stepData.args || {}),
+                  [newConnection.targetHandle]: `$${newParamName}`,
+                },
+              }
               changed = true
             }
 
-            return changed ? { ...node, data: { ...stepData, args: newArgs } } : node
+            // Data edge handling: clear the old reference, set the new one
+            if (!oldEdge.source.startsWith('param_')) {
+              if (
+                node.id === oldEdge.source &&
+                oldEdge.sourceHandle &&
+                oldTargetNode?.type === 'data'
+              ) {
+                stepData = clearStepRef(stepData, oldEdge.sourceHandle, 'output')
+                changed = true
+              }
+              if (
+                node.id === oldEdge.target &&
+                oldEdge.targetHandle &&
+                oldSourceNode?.type === 'data'
+              ) {
+                stepData = clearStepRef(stepData, oldEdge.targetHandle, 'input')
+                changed = true
+              }
+              if (
+                node.id === newConnection.source &&
+                newConnection.sourceHandle &&
+                newTargetNode?.type === 'data'
+              ) {
+                stepData = setStepRef(
+                  stepData,
+                  newConnection.sourceHandle,
+                  (newTargetNode.data as DataNodeData).key,
+                  'output',
+                )
+                changed = true
+              }
+              if (
+                node.id === newConnection.target &&
+                newConnection.targetHandle &&
+                newSourceNode?.type === 'data'
+              ) {
+                stepData = setStepRef(
+                  stepData,
+                  newConnection.targetHandle,
+                  (newSourceNode.data as DataNodeData).key,
+                  'input',
+                )
+                changed = true
+              }
+            }
+
+            return changed ? { ...node, data: stepData } : node
           }) as PipelineNode[],
       )
 
@@ -847,8 +1029,12 @@ export default function Canvas({
                 return node
               }) as PipelineNode[],
           )
+        } else {
+          // Data edge dropped into empty space - clear the step reference it carried
+          setNodes((nds) => clearDataRefsForEdges(nds, [edge]))
         }
       }
+      reconnectingRef.current = false
       edgeReconnectSuccessful.current = true
     },
     [setEdges, setNodes, onSnapshot],
@@ -879,21 +1065,47 @@ export default function Canvas({
     (event: React.DragEvent) => {
       event.preventDefault()
 
+      const instance = reactFlowInstance.current
+      if (!instance) return
+      const position = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+
+      // Data type from the sidebar palette
+      const dataTypeData = event.dataTransfer.getData('application/loom-data')
+      if (dataTypeData) {
+        try {
+          const { type } = JSON.parse(dataTypeData) as { type: DataType }
+          onAddData?.(type, position)
+        } catch {
+          // Invalid data, ignore
+        }
+        return
+      }
+
+      // Task from the sidebar
+      const taskData = event.dataTransfer.getData('application/loom-task')
+      if (taskData) {
+        try {
+          const { path } = JSON.parse(taskData) as { path: string }
+          const task = tasks.find((t) => t.path === path)
+          if (task) onAddTask?.(task, position)
+        } catch {
+          // Invalid data, ignore
+        }
+        return
+      }
+
+      // Parameter from the sidebar
       const paramData = event.dataTransfer.getData('application/loom-parameter')
-      if (!paramData || !onParameterDrop || !reactFlowInstance.current) return
+      if (!paramData || !onParameterDrop) return
 
       try {
         const { name, value } = JSON.parse(paramData)
-        const position = reactFlowInstance.current.screenToFlowPosition({
-          x: event.clientX,
-          y: event.clientY,
-        })
         onParameterDrop(name, value, position)
       } catch {
         // Invalid data, ignore
       }
     },
-    [onParameterDrop],
+    [onParameterDrop, onAddData, onAddTask, tasks],
   )
 
   const { highlightedEdgeIds, neighborNodeIds } = useMemo(() => {
@@ -1162,6 +1374,7 @@ export default function Canvas({
           onEdgesChange={onEdgesChange}
           onEdgesDelete={onEdgesDelete}
           onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
           onReconnectStart={onReconnectStart}
           onReconnect={onReconnect}
           onReconnectEnd={onReconnectEnd}
@@ -1170,6 +1383,15 @@ export default function Canvas({
           onEdgeClick={onEdgeClick}
           onInit={(instance) => {
             reactFlowInstance.current = instance
+            onCanvasInit?.({
+              getViewportCenter: () => {
+                const rect = reactFlowWrapper.current?.getBoundingClientRect()
+                const point = rect
+                  ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+                  : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+                return instance.screenToFlowPosition(point)
+              },
+            })
           }}
           onViewportChange={onViewportChange}
           nodeTypes={nodeTypes}
