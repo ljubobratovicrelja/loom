@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300">
+  <defs>
+    <!-- Gradient for background -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#020617"/>
+    </linearGradient>
+
+    <!-- Glow effects -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Grid pattern -->
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="300" fill="url(#bgGrad)"/>
+  <rect width="1200" height="300" fill="url(#grid)" opacity="0.5"/>
+
+  <!-- Pipeline visualization - left side -->
+  <g transform="translate(80, 150)">
+    <!-- Bezier connections -->
+    <g stroke="#64748b" stroke-width="2" fill="none" opacity="0.6">
+      <!-- Parameter to step -->
+      <path d="M 30,−40 C 70,−40 50,0 90,0"/>
+      <!-- Data to step -->
+      <path d="M 30,40 C 70,40 50,0 90,0"/>
+      <!-- Step to data -->
+      <path d="M 170,0 C 210,0 190,−30 230,−30"/>
+      <path d="M 170,0 C 210,0 190,30 230,30"/>
+      <!-- Data to next step -->
+      <path d="M 290,−30 C 330,−30 310,0 350,0"/>
+      <path d="M 290,30 C 330,30 310,0 350,0"/>
+      <!-- Final output -->
+      <path d="M 430,0 C 470,0 450,0 490,0"/>
+    </g>
+
+    <!-- Parameter node (purple) -->
+    <g transform="translate(0, -40)">
+      <rect x="0" y="-12" width="60" height="24" rx="4" fill="#1e1b4b" stroke="#a855f7" stroke-width="1.5"/>
+      <text x="30" y="4" text-anchor="middle" fill="#c4b5fd" font-family="system-ui, sans-serif" font-size="9">param</text>
+    </g>
+
+    <!-- Data node input (teal) -->
+    <g transform="translate(0, 40)">
+      <rect x="0" y="-12" width="60" height="24" rx="4" fill="#042f2e" stroke="#14b8a6" stroke-width="1.5"/>
+      <text x="30" y="4" text-anchor="middle" fill="#5eead4" font-family="system-ui, sans-serif" font-size="9">input</text>
+    </g>
+
+    <!-- Step node 1 -->
+    <g transform="translate(90, 0)">
+      <rect x="0" y="-20" width="80" height="40" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.5" filter="url(#glow)"/>
+      <circle cx="8" cy="0" r="4" fill="#22c55e"/>
+      <text x="44" y="4" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="10" font-weight="500">process</text>
+    </g>
+
+    <!-- Data node outputs -->
+    <g transform="translate(230, -30)">
+      <rect x="0" y="-10" width="60" height="20" rx="4" fill="#042f2e" stroke="#14b8a6" stroke-width="1.5"/>
+      <text x="30" y="3" text-anchor="middle" fill="#5eead4" font-family="system-ui, sans-serif" font-size="8">data_a</text>
+    </g>
+    <g transform="translate(230, 30)">
+      <rect x="0" y="-10" width="60" height="20" rx="4" fill="#042f2e" stroke="#14b8a6" stroke-width="1.5"/>
+      <text x="30" y="3" text-anchor="middle" fill="#5eead4" font-family="system-ui, sans-serif" font-size="8">data_b</text>
+    </g>
+
+    <!-- Step node 2 -->
+    <g transform="translate(350, 0)">
+      <rect x="0" y="-20" width="80" height="40" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.5" filter="url(#glow)"/>
+      <circle cx="8" cy="0" r="4" fill="#22c55e"/>
+      <text x="44" y="4" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="10" font-weight="500">merge</text>
+    </g>
+
+    <!-- Final output -->
+    <g transform="translate(490, 0)">
+      <rect x="0" y="-10" width="60" height="20" rx="4" fill="#042f2e" stroke="#14b8a6" stroke-width="1.5"/>
+      <text x="30" y="3" text-anchor="middle" fill="#5eead4" font-family="system-ui, sans-serif" font-size="8">result</text>
+    </g>
+  </g>
+
+  <!-- Logo text "Loom" -->
+  <g transform="translate(750, 150)">
+    <!-- Subtle thread lines behind text -->
+    <g stroke="#a855f7" stroke-width="1" opacity="0.3" filter="url(#softGlow)">
+      <path d="M -30,−25 Q 60,−40 150,−25" fill="none"/>
+      <path d="M -30,0 Q 60,15 150,0" fill="none"/>
+      <path d="M -30,25 Q 60,40 150,25" fill="none"/>
+    </g>
+
+    <!-- Main text -->
+    <text x="60" y="18" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="600" letter-spacing="-2">
+      Loom
+    </text>
+
+    <!-- Tagline -->
+    <text x="60" y="55" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="14" font-weight="400">
+      Visual pipeline runner for research
+    </text>
+  </g>
+
+  <!-- Decorative elements - flowing lines on right -->
+  <g transform="translate(1000, 100)" opacity="0.4">
+    <path d="M 0,0 Q 40,50 80,30 T 160,100" stroke="#22c55e" stroke-width="2" fill="none"/>
+    <path d="M 20,10 Q 60,60 100,40 T 180,110" stroke="#14b8a6" stroke-width="2" fill="none"/>
+    <path d="M 40,20 Q 80,70 120,50 T 200,120" stroke="#a855f7" stroke-width="2" fill="none"/>
+  </g>
+</svg>
