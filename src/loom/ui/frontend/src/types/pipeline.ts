@@ -70,6 +70,7 @@ export interface DataNodeData {
   path: string // File/directory path
   description?: string // Optional description
   pattern?: string // Optional file pattern for directories
+  nested_in?: string // Parent data node this file/dir lives inside (e.g. "$processed")
   exists?: boolean // Runtime: does path exist?
   pulseError?: boolean // Animation flag for error state
   // Index signature for React Flow compatibility
@@ -138,6 +139,14 @@ export interface DataEntry {
   name?: string // Display name (optional, falls back to key)
   description?: string
   pattern?: string
+  nested_in?: string // Parent data node this file/dir lives inside (e.g. "$processed")
+}
+
+// A file inside a directory data node, used by the directory file picker.
+export interface DataFileEntry {
+  name: string
+  path: string // path relative to the directory root
+  size: number
 }
 
 export interface ConditionConfig {

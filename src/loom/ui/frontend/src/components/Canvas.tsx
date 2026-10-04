@@ -33,7 +33,10 @@ import GroupNode from './GroupNode'
 import ConditionNode from './ConditionNode'
 import SwitchNode from './SwitchNode'
 import FeedbackEdge from './FeedbackEdge'
+import ContainmentEdge from './ContainmentEdge'
 import NodeHotbox from './NodeHotbox'
+import FilePickerPopup from './FilePickerPopup'
+import NewFileConfirmDialog from './NewFileConfirmDialog'
 import type {
   PipelineNode,
   StepData,
@@ -48,6 +51,7 @@ import type {
   LoopConfig,
   GroupNode as GroupNodeType,
   FeedbackEdgeData,
+  DataFileEntry,
 } from '../types/pipeline'
 import { buildDependencyGraph } from '../utils/dependencyGraph'
 import { conditionInputsAvailable, resolvedSwitchBranches } from '../utils/logicBranches'
@@ -55,6 +59,7 @@ import { estimateParamWidth, estimateStepHeight } from '../utils/layout'
 import {
   clearDataRefsForEdges,
   clearStepRef,
+  createNestedDataNode,
   createOutputDataNode,
   setStepRef,
 } from '../utils/dataNodeCreation'
@@ -71,6 +76,7 @@ const nodeTypes = {
 
 const edgeTypes = {
   feedback: FeedbackEdge,
+  containment: ContainmentEdge,
 }
 
 // Color palette for group rectangles (in order of appearance)
@@ -226,6 +232,23 @@ export default function Canvas({
   // Hotbox state
   const [hotbox, setHotbox] = useState<{
     screenPosition: { x: number; y: number }
+    flowPosition: { x: number; y: number }
+  } | null>(null)
+
+  // Directory file-picker state: opened by dropping a directory data node's
+  // output plug on empty canvas.
+  const [filePicker, setFilePicker] = useState<{
+    screenPosition: { x: number; y: number }
+    flowPosition: { x: number; y: number }
+    dirNodeId: string
+  } | null>(null)
+
+  // A file name the user typed that does not exist yet; awaits confirmation.
+  const [pendingNewFile, setPendingNewFile] = useState<{
+    name: string
+    path: string
+    dirNodeId: string
+    dirKey: string
     flowPosition: { x: number; y: number }
   } | null>(null)
 
@@ -989,7 +1012,8 @@ export default function Canvas({
   }, [])
 
   // Dropping a connection on empty space from a step output creates a typed data
-  // node at the drop point and wires it to that output.
+  // node at the drop point and wires it to that output. Dropping from a
+  // directory data node's output opens a file picker for that directory.
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       if (reconnectingRef.current) return
@@ -998,7 +1022,7 @@ export default function Canvas({
 
       const fromNode = connectionState.fromNode
       const fromHandle = connectionState.fromHandle
-      if (!fromNode || fromNode.type !== 'step') return
+      if (!fromNode) return
       if (!fromHandle || fromHandle.type !== 'source' || !fromHandle.id) return
 
       const instance = reactFlowInstance.current
@@ -1017,6 +1041,21 @@ export default function Canvas({
       }
 
       const position = instance.screenToFlowPosition({ x: clientX, y: clientY })
+
+      // Dragging from a directory data node: offer its files to nest.
+      if (fromNode.type === 'data') {
+        const dirData = fromNode.data as DataNodeData
+        if (dirData.type !== 'data_folder' && dirData.type !== 'image_directory') return
+        setFilePicker({
+          screenPosition: { x: clientX, y: clientY },
+          flowPosition: position,
+          dirNodeId: fromNode.id,
+        })
+        return
+      }
+
+      if (fromNode.type !== 'step') return
+
       const result = createOutputDataNode({
         nodes: nodesRef.current,
         edges: edgesRef.current,
@@ -1588,6 +1627,81 @@ export default function Canvas({
     setHotbox(null)
   }, [])
 
+  // Directory file-picker handlers
+  const filePickerDir = useMemo(() => {
+    if (!filePicker) return null
+    const node = nodes.find((n) => n.id === filePicker.dirNodeId)
+    if (!node || node.type !== 'data') return null
+    return node.data as DataNodeData
+  }, [filePicker, nodes])
+
+  const handleFileSelect = useCallback(
+    (entry: DataFileEntry) => {
+      if (!filePicker) return
+      const result = createNestedDataNode({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        dirNodeId: filePicker.dirNodeId,
+        entry,
+        position: filePicker.flowPosition,
+      })
+      if (!result) return
+      onSnapshot?.()
+      setNodes(result.nodes)
+      setEdges(result.edges)
+      onSelectionChangeProp([result.newNode])
+    },
+    [filePicker, setNodes, setEdges, onSnapshot, onSelectionChangeProp],
+  )
+
+  const handleFilePickerClose = useCallback(() => {
+    setFilePicker(null)
+  }, [])
+
+  // A typed name that isn't in the directory: confirm before adding it as an
+  // expected (unverified) output file.
+  const handleFileCreateRequest = useCallback(
+    (path: string) => {
+      if (!filePicker) return
+      const name = path.split('/').pop() || path
+      setPendingNewFile({
+        name,
+        path,
+        dirNodeId: filePicker.dirNodeId,
+        dirKey:
+          (
+            nodesRef.current.find((n) => n.id === filePicker.dirNodeId)?.data as
+              | DataNodeData
+              | undefined
+          )?.key ?? '',
+        flowPosition: filePicker.flowPosition,
+      })
+      setFilePicker(null)
+    },
+    [filePicker],
+  )
+
+  const handleNewFileConfirm = useCallback(() => {
+    if (!pendingNewFile) return
+    const result = createNestedDataNode({
+      nodes: nodesRef.current,
+      edges: edgesRef.current,
+      dirNodeId: pendingNewFile.dirNodeId,
+      entry: { name: pendingNewFile.name, path: pendingNewFile.path, size: 0 },
+      position: pendingNewFile.flowPosition,
+    })
+    setPendingNewFile(null)
+    if (!result) return
+    onSnapshot?.()
+    setNodes(result.nodes)
+    setEdges(result.edges)
+    onSelectionChangeProp([result.newNode])
+  }, [pendingNewFile, setNodes, setEdges, onSnapshot, onSelectionChangeProp])
+
+  const handleNewFileCancel = useCallback(() => {
+    setPendingNewFile(null)
+  }, [])
+
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     mousePositionRef.current = { x: e.clientX, y: e.clientY }
   }, [])
@@ -1692,6 +1806,25 @@ export default function Canvas({
             onAddCondition={handleHotboxAddCondition}
             onAddSwitch={handleHotboxAddSwitch}
             onClose={handleHotboxClose}
+          />
+        )}
+        {filePicker && filePickerDir && (
+          <FilePickerPopup
+            position={filePicker.screenPosition}
+            directoryKey={filePickerDir.key}
+            directoryPath={filePickerDir.path}
+            directoryNestedIn={filePickerDir.nested_in}
+            onSelect={handleFileSelect}
+            onCreateNew={handleFileCreateRequest}
+            onClose={handleFilePickerClose}
+          />
+        )}
+        {pendingNewFile && (
+          <NewFileConfirmDialog
+            fileName={pendingNewFile.path}
+            directoryKey={pendingNewFile.dirKey}
+            onConfirm={handleNewFileConfirm}
+            onCancel={handleNewFileCancel}
           />
         )}
       </div>

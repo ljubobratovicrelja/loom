@@ -966,6 +966,23 @@ export default function PropertiesPanel({
                 </p>
               </div>
             )}
+            {/* Containment: this data node lives inside another data node */}
+            <div>
+              <label className="block text-slate-500 dark:text-slate-400 text-xs mb-1">
+                Nested in (optional)
+              </label>
+              <input
+                type="text"
+                value={(editData.nested_in as string) || ''}
+                onChange={(e) => handleChange('nested_in', e.target.value.trim() || undefined)}
+                placeholder="$container_data_node"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm focus:border-teal-500"
+              />
+              <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">
+                Declare this file/dir as living inside a directory data node, so the step that
+                produces the directory is drawn as a dependency.
+              </p>
+            </div>
             {/* Existence indicator */}
             {editData.exists !== undefined && (
               <div className="flex items-center gap-2 text-xs">

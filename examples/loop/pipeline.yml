@@ -6,11 +6,25 @@ data:
   processed_texts:
     type: data_folder
     path: output/processed
-    description: Folder of uppercased text files
-  summary_txt:
+    description: Folder of uppercased text files (container for nested outputs)
+  hello_processed:
     type: txt
-    path: output/summary.txt
-    description: Summary of all processed files
+    path: hello.txt
+    description: Uppercased hello.txt, extracted for the word-count branch
+    nested_in: $processed_texts
+  greet_processed:
+    type: txt
+    path: greet.txt
+    description: Uppercased greet.txt, extracted for the first-line branch
+    nested_in: $processed_texts
+  hello_report:
+    type: json
+    path: output/hello_report.json
+    description: Word/line counts for the extracted hello file
+  greet_line:
+    type: txt
+    path: output/greet_line.txt
+    description: First line of the extracted greet file
 parameters:
   prefix: "PROCESSED"
 
@@ -28,30 +42,48 @@ pipeline:
     --output: $loop_output
   args:
     --prefix: $prefix
-- name: summarize
-  task: tasks/summarize.py
+- name: count_hello
+  task: tasks/word_count.py
   inputs:
-    folder: $processed_texts
+    text: $hello_processed
   outputs:
-    --output: $summary_txt
-layout:
-  uppercase_each:
-    x: 799
-    y: -17
-  summarize:
-    x: 1718
-    y: 98
-  data_input_texts:
-    x: 50
-    y: 114
-  data_processed_texts:
-    x: 1298
-    y: 114
-  data_summary_txt:
-    x: 2208
-    y: 114
-  param_prefix:
-    x: 368
-    y: 299
+    --output: $hello_report
+- name: extract_greet_line
+  task: tasks/first_line.py
+  inputs:
+    text: $greet_processed
+  outputs:
+    --output: $greet_line
 editor:
   autoSave: true
+layout:
+  uppercase_each:
+    x: 808
+    y: 143
+  count_hello:
+    x: 2138
+    y: 50
+  extract_greet_line:
+    x: 2138
+    y: 332
+  data_input_texts:
+    x: 50
+    y: 207
+  data_processed_texts:
+    x: 1298
+    y: 207
+  data_hello_processed:
+    x: 1718
+    y: 66
+  data_greet_processed:
+    x: 1718
+    y: 348
+  data_hello_report:
+    x: 2628
+    y: 66
+  data_greet_line:
+    x: 2628
+    y: 348
+  param_prefix:
+    x: 470
+    y: 212

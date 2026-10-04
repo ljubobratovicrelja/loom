@@ -109,30 +109,17 @@ def _get_steps_to_produce_data(
     Raises:
         ValueError: If no step produces the data output.
     """
-    # Find which step produces this data output
-    producing_step = None
-    for step in config.steps:
-        for out_ref in step.outputs.values():
-            if out_ref == f"${data_name}":
-                producing_step = step
-                break
-        if producing_step:
-            break
-
-    if not producing_step:
+    # Find which step produces this data output. Nested data nodes inherit the
+    # producer of their containing directory, so resolve through the config.
+    producer_name = config.ref_producer(f"${data_name}")
+    if not producer_name:
         raise ValueError(f"No step produces data '{data_name}'")
+    producing_step = config.get_step_by_name(producer_name)
 
     # Build dependency graph: which variables does each step need?
     # Then trace back from producing_step to find all required steps
     all_steps = list(config.steps)
     step_by_name = {s.name: s for s in all_steps}
-
-    # Map variable -> step that produces it
-    var_producers: dict[str, str] = {}
-    for step in all_steps:
-        for out_ref in step.outputs.values():
-            if out_ref.startswith("$"):
-                var_producers[out_ref[1:]] = step.name
 
     # Find all steps needed (BFS from producing_step backwards)
     needed_steps: set[str] = {producing_step.name}
@@ -142,13 +129,11 @@ def _get_steps_to_produce_data(
         step = queue.pop(0)
         # Check what variables this step needs as inputs
         for in_ref in step.inputs.values():
-            if in_ref.startswith("$"):
-                var_name = in_ref[1:]
-                if var_name in var_producers:
-                    dep_step_name = var_producers[var_name]
-                    if dep_step_name not in needed_steps:
-                        needed_steps.add(dep_step_name)
-                        queue.append(step_by_name[dep_step_name])
+            if isinstance(in_ref, str) and in_ref.startswith("$"):
+                dep_step_name = config.ref_producer(in_ref)
+                if dep_step_name and dep_step_name not in needed_steps:
+                    needed_steps.add(dep_step_name)
+                    queue.append(step_by_name[dep_step_name])
 
     # Get steps in pipeline order (preserving execution order)
     steps = [s for s in all_steps if s.name in needed_steps]

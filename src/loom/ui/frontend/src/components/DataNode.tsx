@@ -136,6 +136,15 @@ function DataNode({ data, id, selected }: NodeProps<DataNodeType>) {
         {data.path && isUrl(data.path) && <Link className="w-3 h-3 flex-shrink-0" />}
         <span className="truncate">{data.path || '(no path)'}</span>
       </div>
+      {data.nested_in && (
+        <div
+          className="px-3 pb-2 -mt-1 text-[10px] text-teal-600 dark:text-teal-300 truncate flex items-center gap-1"
+          title={`Nested inside $${data.nested_in.replace(/^\$/, '')}`}
+        >
+          <span className="flex-shrink-0">&#8834;</span>
+          <span className="truncate font-mono">${data.nested_in.replace(/^\$/, '')}</span>
+        </div>
+      )}
     </div>
   )
 }

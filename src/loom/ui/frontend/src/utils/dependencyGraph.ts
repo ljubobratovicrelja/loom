@@ -93,6 +93,29 @@ export function buildDependencyGraph(nodes: Node[], edges: Edge[]): DependencyGr
     }
   }
 
+  // Containment: a data node nested inside a produced container is produced by
+  // the container's producer. Resolve parent links from containment edges, then
+  // inherit producers upward through the chain.
+  const dataParents = new Map<string, string>()
+  for (const edge of edges) {
+    if (edge.type === 'containment' && dataIds.has(edge.source) && dataIds.has(edge.target)) {
+      dataParents.set(edge.target, edge.source)
+    }
+  }
+  for (const child of dataParents.keys()) {
+    const seen = new Set<string>()
+    let current: string | undefined = child
+    while (current && !seen.has(current)) {
+      seen.add(current)
+      const directProducer = variableProducers.get(current)
+      if (directProducer) {
+        variableProducers.set(child, directProducer)
+        break
+      }
+      current = dataParents.get(current)
+    }
+  }
+
   // Direct dependency maps (step -> steps)
   const directUpstream = new Map<string, Set<string>>()
   const directDownstream = new Map<string, Set<string>>()

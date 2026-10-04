@@ -147,6 +147,31 @@ Features:
 | Step output → Data node | Yes | Step produces data |
 | Parameter → Step arg | Yes | Config value |
 | Data node → Data node | No | Not allowed |
+| Directory data node output → empty canvas | Yes | Opens the file picker (see below) |
+
+### Nested Files (Drill Into a Directory)
+
+A step often produces a whole directory, and a later step needs one specific
+file from inside it. To add such a file:
+
+1. Drag from the **output handle** of a directory data node (`data_folder` /
+   `image_directory`).
+2. Release on empty canvas — a picker opens, listing every file in the
+   directory with a fuzzy-search box (focused automatically).
+3. Type to filter, then click a file (or press Enter).
+
+If you type a name that isn't in the directory, the picker offers to add it as
+a **new expected file** (marked *assumed from output — unverified*). Pressing
+Enter then asks for confirmation and warns that Loom cannot validate the
+connection, since it cannot know whether the producing step will create that
+file once it runs. The node is added anyway, so you can wire up the pipeline
+before the output exists.
+
+The file is added as a data node nested in the directory: it records
+`nested_in: $directory` and is drawn with a dashed `⊂ inside` edge back to the
+container. The nesting is explicit in the YAML, so the consuming step's
+dependency on the producing step is tracked (see
+[Pipeline Schema → Nested Data](pipeline-schema.md#nested-data-files-inside-a-produced-directory)).
 
 ### Type Validation
 

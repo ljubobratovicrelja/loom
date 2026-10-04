@@ -335,6 +335,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                     "path": data_info.get("path", ""),
                     "description": data_info.get("description"),
                     "pattern": data_info.get("pattern"),
+                    "nested_in": data_info.get("nested_in"),
                 },
             )
         )
@@ -547,6 +548,26 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
                     )
                     break
 
+    # 4f: Containment edges — a nested data node is owned by its container.
+    # The edge is drawn explicitly so the file no longer floats detached from
+    # the directory a step produces.
+    for data_name, data_info in data_section.items():
+        nested_ref = data_info.get("nested_in")
+        if not nested_ref:
+            continue
+        parent_name = nested_ref.lstrip("$") if isinstance(nested_ref, str) else ""
+        if parent_name in data_names:
+            edges.append(
+                GraphEdge(
+                    id=f"e_nested_data_{parent_name}_data_{data_name}",
+                    source=f"data_{parent_name}",
+                    target=f"data_{data_name}",
+                    sourceHandle="value",
+                    targetHandle="input",
+                    type="containment",
+                )
+            )
+
     # Read editor options
     editor_data = data.get("editor", {})
     editor = EditorOptions(
@@ -569,6 +590,7 @@ def yaml_to_graph(data: dict[str, Any]) -> PipelineGraph:
             name=info.get("name"),  # Display name (None falls back to key)
             description=info.get("description"),
             pattern=info.get("pattern"),
+            nested_in=info.get("nested_in"),
         )
 
     return PipelineGraph(
@@ -673,6 +695,8 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
                 entry["description"] = node.data["description"]
             if node.data.get("pattern"):
                 entry["pattern"] = node.data["pattern"]
+            if node.data.get("nested_in"):
+                entry["nested_in"] = node.data["nested_in"]
             data_section[data_key] = entry
 
     # Also include any data from graph.data not shown as nodes
@@ -685,6 +709,8 @@ def graph_to_yaml(graph: PipelineGraph) -> dict[str, Any]:
                 entry["description"] = data_entry.description
             if data_entry.pattern:
                 entry["pattern"] = data_entry.pattern
+            if data_entry.nested_in:
+                entry["nested_in"] = data_entry.nested_in
             data_section[name] = entry
 
     # Editor options (only include non-default values to keep YAML clean)
@@ -747,6 +773,8 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
                 entry["description"] = node.data["description"]
             if node.data.get("pattern"):
                 entry["pattern"] = node.data["pattern"]
+            if node.data.get("nested_in"):
+                entry["nested_in"] = node.data["nested_in"]
             data_section[data_key] = entry
 
     # Also include any data from graph.data not shown as nodes
@@ -759,6 +787,8 @@ def update_yaml_from_graph(data: dict[str, Any], graph: PipelineGraph) -> None:
                 entry["description"] = data_entry.description
             if data_entry.pattern:
                 entry["pattern"] = data_entry.pattern
+            if data_entry.nested_in:
+                entry["nested_in"] = data_entry.nested_in
             data_section[name] = entry
 
     # Update data section in-place

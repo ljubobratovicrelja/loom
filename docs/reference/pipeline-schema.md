@@ -96,6 +96,43 @@ data:
 Inputs you place yourself (source data, not produced by any step) are protected
 from cleaning by default and may live anywhere.
 
+### Nested Data (Files Inside a Produced Directory)
+
+A step often produces a whole directory, and a later step needs one specific
+file from inside it. Loom cannot tell that a lone file path belongs to a
+directory another step writes, so the file node would otherwise float detached
+from the DAG. Declare the relationship explicitly with `nested_in`:
+
+```yaml
+data:
+  processed_dir:
+    type: data_folder
+    path: output/processed
+  report:
+    type: json
+    path: report.json          # relative to the container
+    nested_in: $processed_dir  # report.json lives inside output/processed/
+```
+
+- `nested_in` takes a `$data` reference to a container data node and may chain
+  (a file inside a subdirectory inside a produced directory).
+- When `nested_in` is set, `path` is resolved **relative to the container**
+  (an absolute `path` is used as-is).
+- The nested node **inherits the container's producer step**. That closes the
+  gap: the consuming step now waits for the producing step, the file counts as
+  produced data (so it is cleaned with the container and must live under
+  `output/`), and the editor draws an explicit `⊂ inside` edge from the
+  container to the file.
+- If the container is source data (not produced by any step), `nested_in` is a
+  purely visual ownership hint and adds no dependency.
+- A nested path that resolves *outside* its declared container is an error.
+- If a source file sits inside a produced directory without declaring
+  `nested_in`, Loom emits a warning (editor and CLI) suggesting you add it, so
+  the gap is surfaced even before it is fixed.
+
+The editor renders the relation as a dashed `⊂ inside` edge, and the data node
+shows a `⊂ $container` badge, so the containment is visible at a glance.
+
 ### URL Data Sources
 
 You can use HTTP/HTTPS URLs instead of local paths. URLs are automatically downloaded and cached locally.

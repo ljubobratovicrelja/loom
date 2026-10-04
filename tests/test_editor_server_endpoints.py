@@ -1832,3 +1832,61 @@ pipeline:
         warnings = client.get("/api/config/validate").json()["warnings"]
         assert any("'legacy'" in w["message"] and w["level"] == "warning" for w in warnings)
         assert not any("'report'" in w["message"] for w in warnings)
+
+
+class TestListDataFiles:
+    """Tests for /api/data/files (directory file picker)."""
+
+    PIPELINE = """
+data:
+  processed:
+    type: data_folder
+    path: output/processed
+  report:
+    type: json
+    path: report.json
+    nested_in: $processed
+
+pipeline:
+  - name: produce
+    task: tasks/produce.py
+    outputs:
+      -o: $processed
+"""
+
+    def _client(self, tmp_path: Path) -> TestClient:
+        config = tmp_path / "pipeline.yml"
+        config.write_text(self.PIPELINE)
+        d = tmp_path / "output" / "processed"
+        d.mkdir(parents=True)
+        (d / "a.txt").write_text("a")
+        (d / "sub").mkdir()
+        (d / "sub" / "b.json").write_text("{}")
+        (d / ".hidden").write_text("x")
+        configure(config_path=config)
+        return TestClient(app)
+
+    def test_lists_files_relative_and_skips_hidden(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        data = client.get("/api/data/files", params={"name": "processed"}).json()
+
+        paths = [f["path"] for f in data["files"]]
+        assert "a.txt" in paths
+        assert "sub/b.json" in paths
+        assert not any(p.startswith(".") for p in paths)
+
+    def test_resolves_raw_path_fallback(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        data = client.get("/api/data/files", params={"path": "output/processed"}).json()
+        assert any(f["path"] == "a.txt" for f in data["files"])
+
+    def test_unknown_name_returns_empty(self, tmp_path: Path) -> None:
+        client = self._client(tmp_path)
+        data = client.get("/api/data/files", params={"name": "nope"}).json()
+        assert data["files"] == []
+
+    def test_no_config_returns_empty(self) -> None:
+        configure(config_path=None)
+        client = TestClient(app)
+        data = client.get("/api/data/files", params={"path": "x"}).json()
+        assert data["files"] == []

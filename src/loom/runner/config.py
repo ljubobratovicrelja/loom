@@ -133,6 +133,20 @@ def _flatten_pipeline(
     )
 
 
+def _validate_nested_parents(data_parents: dict[str, str]) -> None:
+    """Ensure ``nested_in`` chains are acyclic."""
+    for start in data_parents:
+        seen = {start}
+        current = data_parents.get(start)
+        while current is not None:
+            if current in seen:
+                raise ValueError(
+                    f"Cyclic 'nested_in' relationship detected involving data node '{start}'"
+                )
+            seen.add(current)
+            current = data_parents.get(current)
+
+
 #: Recognised pipeline entry kinds.  "task" is the default (a subprocess step).
 KIND_TASK = "task"
 KIND_CONDITION = "condition"
@@ -245,6 +259,8 @@ class PipelineConfig:
     steps: list[StepConfig]
     base_dir: Path = field(default_factory=Path.cwd)
     data_types: dict[str, str] = field(default_factory=dict)
+    #: child data node name -> container data node name (from ``nested_in``).
+    data_parents: dict[str, str] = field(default_factory=dict, repr=False)
     output_dir: str = "output"
     parallel: bool = False
     max_workers: int | None = None
@@ -276,6 +292,22 @@ class PipelineConfig:
             if step.loop is not None:
                 var_name = step.loop.into.lstrip("$")
                 self._output_producers[var_name] = step.name
+
+        # Propagate producers through `nested_in` containment chains: a file
+        # nested in a produced directory is itself produced by that directory's
+        # producing step, so downstream ordering, cleaning and containment all
+        # apply to it too.
+        if self.data_parents:
+            changed = True
+            while changed:
+                changed = False
+                for child, parent in self.data_parents.items():
+                    if child in self._output_producers:
+                        continue
+                    producer = self._output_producers.get(parent)
+                    if producer is not None:
+                        self._output_producers[child] = producer
+                        changed = True
 
     def ref_producer(self, ref: Any) -> str | None:
         """Return the node name that produces a ``$ref``, if any.
@@ -338,6 +370,7 @@ class PipelineConfig:
         variables: dict[str, str] = {}
         data_types: dict[str, str] = {}
         external_data: set[str] = set()
+        data_parents: dict[str, str] = {}
 
         # Extract path and type from each data entry
         for name, entry in data_section.items():
@@ -347,10 +380,28 @@ class PipelineConfig:
                 data_types[name] = entry.get("type", "")
                 if entry.get("allow_outside_pipeline"):
                     external_data.add(name)
+                nested = entry.get("nested_in")
+                if nested:
+                    if not isinstance(nested, str):
+                        raise ValueError(
+                            f"Data node '{name}' has invalid 'nested_in' (expected a "
+                            f"$data reference)"
+                        )
+                    parent_name = nested.lstrip("$")
+                    if parent_name == name:
+                        raise ValueError(f"Data node '{name}' cannot be nested in itself")
+                    if parent_name not in data_section:
+                        raise ValueError(
+                            f"Data node '{name}' declares nested_in: '{nested}', but "
+                            f"'{parent_name}' is not a data node"
+                        )
+                    data_parents[name] = parent_name
             else:
                 # Fallback: treat as path string
                 variables[name] = str(entry)
                 data_types[name] = ""
+
+        _validate_nested_parents(data_parents)
 
         # Store the pipeline file's directory for relative path resolution
         base_dir = path.parent.resolve()
@@ -366,6 +417,7 @@ class PipelineConfig:
             steps=steps,
             base_dir=base_dir,
             data_types=data_types,
+            data_parents=data_parents,
             output_dir=data.get("output_dir", "output"),
             parallel=parallel,
             max_workers=max_workers,
@@ -432,6 +484,8 @@ class PipelineConfig:
                     return self.resolve_value(switch.data)
 
             if ref_name in self.variables:
+                if ref_name in self.data_parents:
+                    return self._resolve_nested_path(ref_name)
                 return expand_env(self.variables[ref_name], where=f"data node '{ref_name}'")
             if ref_name in self.parameters:
                 param = self.parameters[ref_name]
@@ -442,6 +496,20 @@ class PipelineConfig:
 
         # Plain literal or embedded/pure ${ENV_VAR}: expand env, else pass through.
         return expand_env(value)
+
+    def _resolve_nested_path(self, name: str) -> str:
+        """Resolve a data node nested in a container to its full path.
+
+        The stored path of a ``nested_in`` node is interpreted relative to its
+        container's resolved path (absolute paths are used as-is). Containers
+        may themselves be nested, so this recurses.
+        """
+        parent = self.data_parents[name]
+        parent_path = Path(str(self.resolve_value(f"${parent}")))
+        child_path = Path(expand_env(self.variables[name], where=f"data node '{name}'"))
+        if child_path.is_absolute():
+            return str(child_path)
+        return str(parent_path / child_path)
 
     def resolve_path(self, value: Any) -> Path:
         """Resolve a value to an absolute path.
@@ -622,6 +690,57 @@ class PipelineConfig:
                         f"data under '{self.output_dir}/' so cleaning is safe.",
                     )
                 )
+
+        # A nested node must actually resolve inside its declared container.
+        for child, parent in self.data_parents.items():
+            try:
+                child_path = self.resolve_path(f"${child}").resolve()
+                parent_path = self.resolve_path(f"${parent}").resolve()
+            except (ValueError, OSError):
+                continue
+            if not child_path.is_relative_to(parent_path):
+                issues.append(
+                    (
+                        "error",
+                        f"Data node '{child}' declares nested_in: '${parent}' but its "
+                        f"resolved path ({child_path}) is not inside it ({parent_path}).",
+                    )
+                )
+
+        # Safety net: a source node that physically lives inside a produced
+        # directory is part of that directory's DAG but is not declared as such.
+        # Surface it so the dependency can be made explicit with `nested_in`.
+        produced_dirs: list[tuple[str, Path]] = []
+        for name in self.variables:
+            if self.is_source_data(name) or self.is_external_data(name):
+                continue
+            if self.data_types.get(name) not in ("data_folder", "image_directory"):
+                continue
+            try:
+                produced_dirs.append((name, self.resolve_path(f"${name}").resolve()))
+            except (ValueError, OSError):
+                continue
+
+        if produced_dirs:
+            for name in self.variables:
+                if name in self.data_parents or not self.is_source_data(name):
+                    continue
+                try:
+                    resolved = self.resolve_path(f"${name}").resolve()
+                except (ValueError, OSError):
+                    continue
+                for dir_name, dir_path in produced_dirs:
+                    if resolved.is_relative_to(dir_path):
+                        issues.append(
+                            (
+                                "warning",
+                                f"Data node '{name}' is inside the directory produced "
+                                f"by '${dir_name}' but does not declare "
+                                f"'nested_in: ${dir_name}'. Add it so the dependency "
+                                f"is tracked and the file is drawn with the directory.",
+                            )
+                        )
+                        break
 
         return issues
 

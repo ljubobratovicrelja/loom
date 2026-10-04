@@ -291,6 +291,71 @@ def get_data_status() -> dict[str, bool]:
     return result
 
 
+@router.get("/api/data/files")
+def list_data_files(
+    name: str | None = Query(None, description="Data node key to list"),
+    path: str | None = Query(None, description="Raw directory path to list"),
+    nested_in: str | None = Query(None, description="Parent data node key for a nested path"),
+    limit: int = Query(500, ge=1, le=5000),
+) -> dict[str, Any]:
+    """List files inside a directory data node.
+
+    Backs the editor's "drill into a directory" picker: dragging from a
+    directory data node's output plug lets you pick one of its files, which is
+    added as a nested file data node. Paths are returned relative to the
+    directory root, skipping hidden entries.
+    """
+    from loom.runner import PipelineConfig
+
+    empty: dict[str, Any] = {"files": [], "resolved_path": None, "truncated": False}
+    if not state.config_path or not state.config_path.exists():
+        return empty
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+        if name and name in config.variables:
+            resolved = config.resolve_path(f"${name}")
+        elif path is not None:
+            parent_key = nested_in.lstrip("$") if nested_in else ""
+            if parent_key and parent_key in config.variables:
+                parent_path = config.resolve_path(f"${parent_key}")
+                raw = Path(path)
+                resolved = raw if raw.is_absolute() else parent_path / raw
+            else:
+                resolved = config.resolve_path(path)
+        else:
+            return empty
+    except Exception:
+        return empty
+
+    if not resolved.exists() or not resolved.is_dir():
+        return {"files": [], "resolved_path": str(resolved), "truncated": False}
+
+    files: list[dict[str, Any]] = []
+    truncated = False
+    for entry in sorted(resolved.rglob("*")):
+        if not entry.is_file():
+            continue
+        if any(part.startswith(".") for part in entry.relative_to(resolved).parts):
+            continue
+        if len(files) >= limit:
+            truncated = True
+            break
+        try:
+            size = entry.stat().st_size
+        except OSError:
+            size = 0
+        files.append(
+            {
+                "name": entry.name,
+                "path": entry.relative_to(resolved).as_posix(),
+                "size": size,
+            }
+        )
+
+    return {"files": files, "resolved_path": str(resolved), "truncated": truncated}
+
+
 @router.get("/api/logic/status")
 def get_logic_status() -> dict[str, Any]:
     """Evaluate condition/switch nodes against the current filesystem state.

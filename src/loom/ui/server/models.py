@@ -66,6 +66,7 @@ class DataEntry(BaseModel):
     name: str | None = None  # Display name (falls back to key if not set)
     description: str | None = None
     pattern: str | None = None  # File pattern for directories
+    nested_in: str | None = None  # Parent data node this file/dir lives inside
 
 
 class PipelineGraph(BaseModel):

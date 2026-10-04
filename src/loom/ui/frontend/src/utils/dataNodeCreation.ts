@@ -9,6 +9,7 @@
 
 import type { Edge } from '@xyflow/react'
 import type {
+  DataFileEntry,
   DataNode as DataNodeType,
   DataNodeData,
   DataType,
@@ -168,6 +169,118 @@ export function createOutputDataNode(
       target: nodeId,
       sourceHandle: handleId,
       targetHandle: 'input',
+    },
+  ]
+
+  return { nodes: nextNodes, edges: nextEdges, newNode }
+}
+
+/** Extension -> data type map used when picking a file from a directory. */
+const EXTENSION_TYPE_MAP: Record<string, DataType> = {
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  gif: 'image',
+  bmp: 'image',
+  webp: 'image',
+  tif: 'image',
+  tiff: 'image',
+  mp4: 'video',
+  avi: 'video',
+  mov: 'video',
+  mkv: 'video',
+  webm: 'video',
+  csv: 'csv',
+  json: 'json',
+  txt: 'txt',
+  md: 'txt',
+  log: 'txt',
+}
+
+/** Infers a data node type from a filename extension (default: txt). */
+export function inferDataTypeFromFilename(filename: string): DataType {
+  const dot = filename.lastIndexOf('.')
+  const ext = dot >= 0 ? filename.slice(dot + 1).toLowerCase() : ''
+  return EXTENSION_TYPE_MAP[ext] ?? 'txt'
+}
+
+/** Builds a data key from a file name, dropping its extension. */
+export function buildFileKey(filename: string): string {
+  const stem = filename.replace(/\.[^./]+$/, '')
+  const raw = stem
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+  const trimmed = raw.replace(/^_+/, '').replace(/_+$/, '')
+  return trimmed || 'file'
+}
+
+export interface CreateNestedDataNodeOptions {
+  nodes: PipelineNode[]
+  edges: Edge[]
+  dirNodeId: string
+  entry: DataFileEntry
+  position: { x: number; y: number }
+  nodeId?: string
+}
+
+export interface CreateNestedDataNodeResult {
+  nodes: PipelineNode[]
+  edges: Edge[]
+  newNode: DataNodeType
+}
+
+/**
+ * Creates a file data node nested inside a directory data node and wires the
+ * containment edge (`dir ⊃ file`). The new node records `nested_in` so the
+ * dependency survives serialization and is re-derived on reload.
+ *
+ * Returns `null` when the directory node cannot be resolved.
+ */
+export function createNestedDataNode(
+  options: CreateNestedDataNodeOptions,
+): CreateNestedDataNodeResult | null {
+  const { nodes, edges, dirNodeId, entry, position } = options
+
+  const dirNode = nodes.find((n) => n.id === dirNodeId && n.type === 'data')
+  if (!dirNode) return null
+  const dirData = dirNode.data as DataNodeData
+  if (!dirData.key) return null
+
+  const existingKeys = nodes
+    .filter((n) => n.type === 'data')
+    .map((n) => (n.data as DataNodeData).key)
+  const key = uniqueDataKey(buildFileKey(entry.name), existingKeys)
+
+  const nodeId = options.nodeId ?? makeDataNodeId()
+  const newNode: DataNodeType = {
+    id: nodeId,
+    type: 'data',
+    position,
+    selected: true,
+    data: {
+      key,
+      name: entry.name,
+      type: inferDataTypeFromFilename(entry.name),
+      path: entry.path,
+      nested_in: `$${dirData.key}`,
+    },
+  }
+
+  const nextNodes: PipelineNode[] = [
+    ...nodes.map((node): PipelineNode => (node.selected ? { ...node, selected: false } : node)),
+    newNode,
+  ]
+
+  const nextEdges: Edge[] = [
+    ...edges,
+    {
+      id: `e_nested_${dirNodeId}_${nodeId}`,
+      source: dirNodeId,
+      target: nodeId,
+      sourceHandle: 'value',
+      targetHandle: 'input',
+      type: 'containment',
     },
   ]
 

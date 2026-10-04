@@ -880,6 +880,7 @@ export default function App() {
             name: dataNode.name,
             description: dataNode.description,
             pattern: dataNode.pattern,
+            nested_in: dataNode.nested_in,
           }
         }
       })
@@ -1193,6 +1194,7 @@ export default function App() {
           name: data.name,
           description: data.description,
           pattern: data.pattern,
+          nested_in: data.nested_in,
         }
       }
     })

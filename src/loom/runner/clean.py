@@ -111,6 +111,13 @@ def get_cleanable_paths(
 
     # Collect all data node paths (skip URLs as they're stored in cache)
     for name in config.variables:
+        # Nested nodes are covered by their produced container's path; deleting
+        # the container removes them too, so skip them to avoid duplicate or
+        # failed deletions.
+        container = config.data_parents.get(name)
+        if container is not None and not config.is_source_data(container):
+            continue
+
         # Skip source data unless explicitly requested
         if not include_source and config.is_source_data(name):
             continue

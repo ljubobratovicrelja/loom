@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import type { Edge } from '@xyflow/react'
 import {
   buildDataKey,
+  buildFileKey,
   clearDataRefsForEdges,
   clearStepRef,
+  createNestedDataNode,
   createOutputDataNode,
+  inferDataTypeFromFilename,
   inferOutputDataType,
   makeDataNodeId,
   setStepRef,
@@ -199,5 +202,88 @@ describe('clearDataRefsForEdges', () => {
 describe('makeDataNodeId', () => {
   it('returns unique ids', () => {
     expect(makeDataNodeId()).not.toBe(makeDataNodeId())
+  })
+})
+
+describe('inferDataTypeFromFilename', () => {
+  it('maps known extensions', () => {
+    expect(inferDataTypeFromFilename('photo.PNG')).toBe('image')
+    expect(inferDataTypeFromFilename('clip.mp4')).toBe('video')
+    expect(inferDataTypeFromFilename('data.csv')).toBe('csv')
+    expect(inferDataTypeFromFilename('config.json')).toBe('json')
+    expect(inferDataTypeFromFilename('notes.md')).toBe('txt')
+  })
+
+  it('falls back to txt for unknown extensions', () => {
+    expect(inferDataTypeFromFilename('model.bin')).toBe('txt')
+    expect(inferDataTypeFromFilename('noext')).toBe('txt')
+  })
+})
+
+describe('buildFileKey', () => {
+  it('drops the extension and sanitizes the stem', () => {
+    expect(buildFileKey('My File.csv')).toBe('my_file')
+    expect(buildFileKey('hello.txt')).toBe('hello')
+  })
+})
+
+describe('createNestedDataNode', () => {
+  const entry = { name: 'hello.txt', path: 'hello.txt', size: 12 }
+
+  it('creates a file node nested in the directory and wires a containment edge', () => {
+    const dir = createDataNode('processed', 'data_folder', 'output/processed', {
+      id: 'data_dir',
+      key: 'processed',
+    })
+    const result = createNestedDataNode({
+      nodes: [dir],
+      edges: [],
+      dirNodeId: 'data_dir',
+      entry,
+      position: { x: 10, y: 20 },
+      nodeId: 'data_new',
+    })
+
+    expect(result).not.toBeNull()
+    const node = result!.newNode
+    expect(node.data.type).toBe('txt')
+    expect(node.data.path).toBe('hello.txt')
+    expect(node.data.nested_in).toBe('$processed')
+
+    const edge = result!.edges.find((e) => e.id === 'e_nested_data_dir_data_new')
+    expect(edge).toBeDefined()
+    expect(edge!.source).toBe('data_dir')
+    expect(edge!.target).toBe('data_new')
+    expect(edge!.type).toBe('containment')
+  })
+
+  it('uniquifies the key against existing data nodes', () => {
+    const dir = createDataNode('processed', 'data_folder', 'output/processed', {
+      id: 'data_dir',
+      key: 'processed',
+    })
+    const existing = createDataNode('hello', 'txt', 'output/processed/hello.txt', {
+      id: 'data_old',
+      key: 'hello',
+    })
+    const result = createNestedDataNode({
+      nodes: [dir, existing],
+      edges: [],
+      dirNodeId: 'data_dir',
+      entry,
+      position: { x: 0, y: 0 },
+    })
+    expect(result!.newNode.data.key).toBe('hello_2')
+  })
+
+  it('returns null when the directory node is missing', () => {
+    const result = createNestedDataNode({
+      nodes: [],
+      edges: [],
+      dirNodeId: 'missing',
+      entry,
+      position: { x: 0, y: 0 },
+    })
+    expect(result).toBeNull()
   })
 })

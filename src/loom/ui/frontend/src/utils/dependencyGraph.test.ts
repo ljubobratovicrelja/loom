@@ -615,3 +615,68 @@ describe('getStepName', () => {
     expect(getStepName(node)).toBe('param_threshold')
   })
 })
+
+describe('containment dependencies', () => {
+  it('makes a consumer of a nested file depend on the container producer', () => {
+    // produce -> processed_dir (containment) -> config_file -> consume
+    const nodes = [
+      createStepNode('produce', 'produce'),
+      createStepNode('consume', 'consume'),
+      createDataNode('data_processed_dir', 'processed_dir'),
+      createDataNode('data_config_file', 'config_file'),
+    ]
+
+    const edges: Edge[] = [
+      createEdge('produce', 'data_processed_dir', 'output', 'input'),
+      {
+        id: 'e_nested',
+        source: 'data_processed_dir',
+        target: 'data_config_file',
+        sourceHandle: 'value',
+        targetHandle: 'input',
+        type: 'containment',
+      },
+      createEdge('data_config_file', 'consume', 'value', 'cfg'),
+    ]
+
+    const graph = buildDependencyGraph(nodes, edges)
+
+    expect(graph.getDirectUpstream('consume')).toEqual(new Set(['produce']))
+    expect(graph.getUpstream('consume')).toEqual(new Set(['produce']))
+  })
+
+  it('supports chained containment', () => {
+    const nodes = [
+      createStepNode('produce', 'produce'),
+      createStepNode('consume', 'consume'),
+      createDataNode('data_dir', 'dir'),
+      createDataNode('data_sub', 'sub'),
+      createDataNode('data_file', 'file'),
+    ]
+
+    const edges: Edge[] = [
+      createEdge('produce', 'data_dir', 'output', 'input'),
+      {
+        id: 'e_nested_1',
+        source: 'data_dir',
+        target: 'data_sub',
+        sourceHandle: 'value',
+        targetHandle: 'input',
+        type: 'containment',
+      },
+      {
+        id: 'e_nested_2',
+        source: 'data_sub',
+        target: 'data_file',
+        sourceHandle: 'value',
+        targetHandle: 'input',
+        type: 'containment',
+      },
+      createEdge('data_file', 'consume', 'value', 'cfg'),
+    ]
+
+    const graph = buildDependencyGraph(nodes, edges)
+
+    expect(graph.getDirectUpstream('consume')).toEqual(new Set(['produce']))
+  })
+})
