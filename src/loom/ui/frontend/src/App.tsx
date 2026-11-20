@@ -2177,6 +2177,60 @@ export default function App() {
 
   const handlePreviewClose = useCallback(() => setPreviewTarget(null), [])
 
+  /**
+   * Open the in-graph preview window on an arbitrary source file path — used by
+   * the node context menu's "Show Code" on step and condition nodes.
+   */
+  const handleShowCode = useCallback((path: string) => {
+    const name = path.split('/').pop() ?? path
+    setPreviewTarget({
+      key: name,
+      name,
+      path,
+      type: 'txt' as DataType,
+    })
+  }, [])
+
+  /** Run a single step from the context menu. */
+  const handleContextRunStep = useCallback(
+    (stepName: string) => {
+      void handleRun('step', stepName)
+    },
+    [handleRun],
+  )
+
+  /** Run every step in a group from the context menu. */
+  const handleContextRunGroup = useCallback(
+    (groupName: string) => {
+      void handleRun('group', undefined, undefined, undefined, groupName)
+    },
+    [handleRun],
+  )
+
+  /**
+   * Ungroup: clear the group field on every member step. The synthetic group
+   * rectangle disappears on the next render because it is derived from that
+   * field.
+   */
+  const handleUngroup = useCallback(
+    (groupName: string) => {
+      snapshot({
+        nodes: nodesRef.current,
+        edges: edgesRef.current,
+        parameters: parametersRef.current,
+      })
+      setNodes(
+        (nds) =>
+          nds.map((n) =>
+            n.type === 'step' && (n.data as StepData).group === groupName
+              ? { ...n, data: { ...n.data, group: undefined } }
+              : n,
+          ) as PipelineNode[],
+      )
+    },
+    [setNodes, snapshot],
+  )
+
   const handlePreviewOpenInOS = useCallback(
     (path: string) => {
       void openPath(path)
@@ -2495,6 +2549,13 @@ export default function App() {
             inactiveNodeIds={branchActivity.inactiveNodeIds}
             inactiveEdgeIds={branchActivity.inactiveEdgeIds}
             logicStatus={logicStatus}
+            runningStepNames={independentRunning}
+            onRunStep={handleContextRunStep}
+            onCancelStep={cancelStepIndependent}
+            onDeleteNode={handleDeleteNode}
+            onUngroup={handleUngroup}
+            onRunGroup={handleContextRunGroup}
+            onShowCode={handleShowCode}
             onCanvasInit={(api) => {
               canvasApiRef.current = api
             }}

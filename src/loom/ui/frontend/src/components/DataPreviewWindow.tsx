@@ -321,6 +321,7 @@ export default function DataPreviewWindow({ target, onClose, onOpenInOS }: DataP
       {/* The window: 80% of the smaller edge, so it stays landscape/portrait aware.
           Both dimensions are clamped so the window never overflows the canvas. */}
       <div
+        data-preview-window
         className="relative flex flex-col bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-300 dark:border-slate-700 overflow-hidden"
         style={{
           width: 'min(80vh, 80vw)',

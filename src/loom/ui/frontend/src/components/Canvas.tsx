@@ -38,6 +38,7 @@ import NodeHotbox from './NodeHotbox'
 import FilePickerPopup from './FilePickerPopup'
 import NewFileConfirmDialog from './NewFileConfirmDialog'
 import DataPreviewWindow, { type PreviewTarget } from './DataPreviewWindow'
+import NodeContextMenu, { type ContextMenuItem } from './NodeContextMenu'
 import type {
   PipelineNode,
   StepData,
@@ -51,6 +52,7 @@ import type {
   DataType,
   LoopConfig,
   GroupNode as GroupNodeType,
+  GroupNodeData,
   FeedbackEdgeData,
   DataFileEntry,
 } from '../types/pipeline'
@@ -180,6 +182,15 @@ interface CanvasProps {
   inactiveNodeIds?: Set<string>
   inactiveEdgeIds?: Set<string>
   logicStatus?: LogicStatus
+  /** Step names currently running independently (for Run/Stop labelling). */
+  runningStepNames?: Set<string>
+  onRunStep?: (stepName: string) => void
+  onCancelStep?: (stepName: string) => void
+  onDeleteNode?: (nodeId: string) => void
+  onUngroup?: (groupName: string) => void
+  onRunGroup?: (groupName: string) => void
+  /** Open the in-graph preview window on a source file path. */
+  onShowCode?: (path: string) => void
 }
 
 /**
@@ -221,6 +232,13 @@ export default function Canvas({
   inactiveNodeIds,
   inactiveEdgeIds,
   logicStatus,
+  runningStepNames,
+  onRunStep,
+  onCancelStep,
+  onDeleteNode,
+  onUngroup,
+  onRunGroup,
+  onShowCode,
 }: CanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance<PipelineNode, Edge> | null>(null)
@@ -1369,6 +1387,224 @@ export default function Canvas({
   }, [edges, highlightedEdgeIds, inactiveEdgeIds])
 
   // Group click: select all member nodes + their 1st-degree neighbors
+  // ---------------------------------------------------------------------
+  // Node context menu
+  // ---------------------------------------------------------------------
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    items: ContextMenuItem[]
+  } | null>(null)
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
+  /**
+   * Build the menu entries for a node. The menu is type-sensitive: step nodes
+   * offer source/run actions, data nodes offer preview, and every node type
+   * gets a red delete entry. Group nodes are synthetic (not deletable as such)
+   * so they get ungroup/run-group instead.
+   */
+  const buildContextMenuItems = useCallback(
+    (node: PipelineNode): ContextMenuItem[] => {
+      const items: ContextMenuItem[] = []
+
+      if (node.type === 'step') {
+        const stepData = node.data as StepData
+        const isRunning = runningStepNames?.has(stepData.name) ?? false
+
+        if (onShowCode) {
+          items.push({ label: 'Show Code', onSelect: () => onShowCode(stepData.task) })
+        }
+        if (isRunning) {
+          if (onCancelStep) {
+            items.push({
+              label: 'Stop',
+              onSelect: () => onCancelStep(stepData.name),
+              separatorBefore: items.length > 0,
+            })
+          }
+        } else if (onRunStep) {
+          items.push({
+            label: 'Run',
+            onSelect: () => onRunStep(stepData.name),
+            separatorBefore: items.length > 0,
+          })
+        }
+        if (onDeleteNode) {
+          items.push({
+            label: 'Delete',
+            onSelect: () => onDeleteNode(node.id),
+            danger: true,
+            separatorBefore: true,
+          })
+        }
+        return items
+      }
+
+      if (node.type === 'data') {
+        const dataNode = node.data as DataNodeData
+        if (dataNode.path) {
+          items.push({
+            label: 'Show Preview',
+            onSelect: () => onNodeDoubleClick?.(node),
+          })
+          if (onOpenInOS) {
+            items.push({ label: 'Open in OS', onSelect: () => onOpenInOS(dataNode.path) })
+          }
+        }
+        if (onDeleteNode) {
+          items.push({
+            label: 'Delete',
+            onSelect: () => onDeleteNode(node.id),
+            danger: true,
+            separatorBefore: items.length > 0,
+          })
+        }
+        return items
+      }
+
+      if (node.type === 'condition') {
+        const conditionData = node.data as ConditionData
+        const script = conditionData.script
+        if (script && onShowCode) {
+          items.push({ label: 'Show Code', onSelect: () => onShowCode(script) })
+        }
+        if (onDeleteNode) {
+          items.push({
+            label: 'Delete',
+            onSelect: () => onDeleteNode(node.id),
+            danger: true,
+            separatorBefore: items.length > 0,
+          })
+        }
+        return items
+      }
+
+      if (node.type === 'group') {
+        const groupData = node.data as GroupNodeData
+        if (onRunGroup) {
+          items.push({ label: 'Run group', onSelect: () => onRunGroup(groupData.groupName) })
+        }
+        if (onUngroup) {
+          items.push({
+            label: 'Ungroup',
+            onSelect: () => onUngroup(groupData.groupName),
+            separatorBefore: items.length > 0,
+          })
+        }
+        return items
+      }
+
+      // parameter and switch nodes: delete only
+      if (onDeleteNode) {
+        items.push({ label: 'Delete', onSelect: () => onDeleteNode(node.id), danger: true })
+      }
+      return items
+    },
+    [
+      runningStepNames,
+      onShowCode,
+      onRunStep,
+      onCancelStep,
+      onDeleteNode,
+      onNodeDoubleClick,
+      onOpenInOS,
+      onRunGroup,
+      onUngroup,
+    ],
+  )
+
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: PipelineNode) => {
+      event.preventDefault()
+      const items = buildContextMenuItems(node)
+      if (items.length === 0) return
+      setContextMenu({ x: event.clientX, y: event.clientY, items })
+    },
+    [buildContextMenuItems],
+  )
+
+  /**
+   * Empty-canvas menu. There is no clipboard in Loom yet, so this offers node
+   * creation and viewport actions rather than paste.
+   */
+  const handlePaneContextMenu = useCallback(
+    (event: React.MouseEvent | MouseEvent) => {
+      event.preventDefault()
+      const { clientX, clientY } = event as MouseEvent
+      const rect = reactFlowWrapper.current?.getBoundingClientRect()
+      const instance = reactFlowInstance.current
+      const flowPosition =
+        rect && instance
+          ? instance.screenToFlowPosition({ x: clientX, y: clientY })
+          : { x: 0, y: 0 }
+
+      const items: ContextMenuItem[] = []
+      if (onAddTask && onAddData) {
+        items.push({
+          label: 'Add task…',
+          onSelect: () => {
+            setHotbox({ screenPosition: { x: clientX, y: clientY }, flowPosition })
+          },
+        })
+      }
+      if (onAddData) {
+        items.push({
+          label: 'Add data node',
+          onSelect: () => onAddData('image', flowPosition),
+        })
+      }
+      if (onParameterDrop) {
+        items.push({
+          label: 'Add parameter',
+          onSelect: () => onParameterDrop('new_parameter', null, flowPosition),
+        })
+      }
+      if (onAddCondition) {
+        items.push({
+          label: 'Add condition',
+          onSelect: () => onAddCondition('exists', flowPosition),
+        })
+      }
+      if (onAddSwitch) {
+        items.push({
+          label: 'Add switch',
+          onSelect: () => onAddSwitch(flowPosition),
+        })
+      }
+      if (instance) {
+        items.push({
+          label: 'Fit view',
+          onSelect: () => instance.fitView({ duration: 300 }),
+          separatorBefore: items.length > 0,
+        })
+      }
+      if (items.length > 0) {
+        setContextMenu({ x: clientX, y: clientY, items })
+      }
+    },
+    [onAddTask, onAddData, onParameterDrop, onAddCondition, onAddSwitch],
+  )
+
+  /**
+   * Wrapper-level right-click fallback.
+   *
+   * React Flow swallows the pane's contextmenu event when panOnDrag includes
+   * button 2 (it reserves right-drag for panning), so the pane menu would never
+   * open. This handler runs on the wrapper instead, and only fires when the
+   * event originated on the pane/background rather than on a node or edge.
+   */
+  const handleWrapperContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (target.closest('.react-flow__node') || target.closest('.react-flow__edge')) {
+        return
+      }
+      handlePaneContextMenu(event)
+    },
+    [handlePaneContextMenu],
+  )
+
   const handleGroupClick = useCallback(
     (memberIds: string[]) => {
       const memberSet = new Set(memberIds)
@@ -1718,6 +1954,7 @@ export default function Canvas({
       <div
         ref={reactFlowWrapper}
         className="flex-1 bg-slate-100 dark:bg-slate-950"
+        onContextMenu={handleWrapperContextMenu}
         onDragOver={onDragOver}
         onDrop={onDrop}
         onMouseMove={handleMouseMove}
@@ -1735,6 +1972,8 @@ export default function Canvas({
           onReconnectEnd={onReconnectEnd}
           onSelectionChange={onSelectionChange}
           onNodeDoubleClick={(_event, node) => onNodeDoubleClick?.(node)}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneContextMenu={handlePaneContextMenu}
           onEdgeClick={onEdgeClick}
           onBeforeDelete={async ({ nodes: nodesToDelete, edges: edgesToDelete }) => {
             // Snapshot once, before any node/edge deletion, so Del is undoable.
@@ -1839,6 +2078,14 @@ export default function Canvas({
             target={previewTarget}
             onClose={onPreviewClose}
             onOpenInOS={onOpenInOS}
+          />
+        )}
+        {contextMenu && (
+          <NodeContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={contextMenu.items}
+            onClose={closeContextMenu}
           />
         )}
       </div>
