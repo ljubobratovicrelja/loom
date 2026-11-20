@@ -1,6 +1,7 @@
 """Tests for editor server HTTP endpoints and validation logic."""
 
 import os
+import signal
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -8,10 +9,13 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from loom.ui.server import (
+    _classify_exit_status,
+    _execution_state,
     _get_running_step,
     _is_step_running,
     _register_running_step,
     _running_steps,
+    _stop_all_processes,
     _unregister_running_step,
     _validate_pipeline,
     app,
@@ -1377,6 +1381,157 @@ class TestRunStatus:
         data = response.json()
         assert data["status"] == "running"
         assert data["current_step"] == "extract_features"
+
+
+class TestStopAllProcesses:
+    """Tests for state.stop_all_processes(), the cancel-all backstop."""
+
+    def setup_method(self) -> None:
+        _running_steps.clear()
+        _execution_state["status"] = "idle"
+        _execution_state["current_step"] = None
+        _execution_state["pid"] = None
+
+    def teardown_method(self) -> None:
+        _running_steps.clear()
+        _execution_state["status"] = "idle"
+        _execution_state["current_step"] = None
+        _execution_state["pid"] = None
+
+    def test_nothing_running_returns_empty(self) -> None:
+        """Should report nothing stopped when the server is idle."""
+        assert _stop_all_processes() == []
+
+    def test_signals_every_registered_step(self) -> None:
+        """Should SIGTERM each independent step's process group and mark it cancelled."""
+        _register_running_step("step_a", pid=101, master_fd=1)
+        _register_running_step("step_b", pid=202, master_fd=2)
+
+        with (
+            patch("loom.ui.server.state.os.getpgid", side_effect=lambda pid: pid),
+            patch("loom.ui.server.state.os.killpg") as killpg,
+        ):
+            stopped = _stop_all_processes()
+
+        assert stopped == ["step_a", "step_b"]
+        assert [call.args for call in killpg.call_args_list] == [
+            (101, signal.SIGTERM),
+            (202, signal.SIGTERM),
+        ]
+        assert _running_steps["step_a"]["status"] == "cancelled"
+        assert _running_steps["step_b"]["status"] == "cancelled"
+
+    def test_skips_steps_not_running(self) -> None:
+        """Should not signal a step whose status is no longer 'running'."""
+        _register_running_step("step_a", pid=101, master_fd=1)
+        _running_steps["step_a"]["status"] = "completed"
+
+        with (
+            patch("loom.ui.server.state.os.getpgid", side_effect=lambda pid: pid),
+            patch("loom.ui.server.state.os.killpg") as killpg,
+        ):
+            stopped = _stop_all_processes()
+
+        assert stopped == []
+        killpg.assert_not_called()
+
+    def test_includes_sequential_pipeline_run(self) -> None:
+        """Should also stop the sequential run tracked by execution_state."""
+        _execution_state["status"] = "running"
+        _execution_state["current_step"] = "train"
+        _execution_state["pid"] = 303
+
+        with (
+            patch("loom.ui.server.state.os.getpgid", side_effect=lambda pid: pid),
+            patch("loom.ui.server.state.os.killpg") as killpg,
+        ):
+            stopped = _stop_all_processes()
+
+        assert stopped == ["train"]
+        assert killpg.call_args.args == (303, signal.SIGTERM)
+        assert _execution_state["status"] == "cancelled"
+
+    def test_process_already_gone_is_not_reported(self) -> None:
+        """A step whose process vanished should not be listed as stopped."""
+        _register_running_step("step_a", pid=101, master_fd=1)
+
+        with (
+            patch("loom.ui.server.state.os.getpgid", side_effect=lambda pid: pid),
+            patch("loom.ui.server.state.os.killpg", side_effect=ProcessLookupError),
+        ):
+            stopped = _stop_all_processes()
+
+        assert stopped == []
+        assert _running_steps["step_a"]["status"] == "running"
+
+
+class TestClassifyExitStatus:
+    """Tests for terminal.classify_exit_status()."""
+
+    def test_clean_exit_is_completed(self) -> None:
+        """Exit code 0 should classify as completed."""
+        assert _classify_exit_status(0) == "completed"
+
+    def test_nonzero_exit_is_failed(self) -> None:
+        """A non-zero exit code should classify as failed."""
+        assert _classify_exit_status(3 << 8) == "failed"
+
+    def test_sigterm_is_cancelled(self) -> None:
+        """A SIGTERM kill (Stop button / cancel-all) should classify as cancelled."""
+        assert _classify_exit_status(signal.SIGTERM) == "cancelled"
+
+    def test_sigint_is_cancelled(self) -> None:
+        """A SIGINT kill should classify as cancelled."""
+        assert _classify_exit_status(signal.SIGINT) == "cancelled"
+
+    def test_sigkill_is_failed(self) -> None:
+        """SIGKILL (e.g. OOM) is not a user stop and must stay a failure."""
+        assert _classify_exit_status(signal.SIGKILL) == "failed"
+
+    def test_cancel_flag_wins(self) -> None:
+        """A local cancel request takes precedence regardless of exit status."""
+        assert _classify_exit_status(0, cancelled=True) == "cancelled"
+
+
+class TestCancelAllEndpoint:
+    """Tests for POST /api/run/cancel-all."""
+
+    def setup_method(self) -> None:
+        _running_steps.clear()
+        _execution_state["status"] = "idle"
+        _execution_state["pid"] = None
+        _execution_state["current_step"] = None
+
+    def teardown_method(self) -> None:
+        _running_steps.clear()
+        _execution_state["status"] = "idle"
+        _execution_state["pid"] = None
+        _execution_state["current_step"] = None
+
+    def test_not_running(self) -> None:
+        """Should report not_running when nothing is executing."""
+        client = TestClient(app)
+
+        response = client.post("/api/run/cancel-all")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "not_running", "stopped": []}
+
+    def test_stops_registered_steps(self) -> None:
+        """Should signal each running step and report the names."""
+        _register_running_step("step_a", pid=101, master_fd=1)
+        _register_running_step("step_b", pid=202, master_fd=2)
+
+        with (
+            patch("loom.ui.server.state.os.getpgid", side_effect=lambda pid: pid),
+            patch("loom.ui.server.state.os.killpg") as killpg,
+        ):
+            client = TestClient(app)
+            response = client.post("/api/run/cancel-all")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "cancelled", "stopped": ["step_a", "step_b"]}
+        assert killpg.call_count == 2
 
 
 class TestCleanPreview:

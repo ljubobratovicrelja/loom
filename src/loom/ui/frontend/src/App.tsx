@@ -20,6 +20,7 @@ import Toolbar from './components/Toolbar'
 import TerminalPanel from './components/TerminalPanel'
 import { useApi } from './hooks/useApi'
 import { useStepExecutions } from './hooks/useStepExecutions'
+import { useTerminal } from './hooks/useTerminal'
 import { useHistory, type HistoryState } from './hooks/useHistory'
 import {
   useRunEligibility,
@@ -2056,6 +2057,39 @@ export default function App() {
     [cancelStepIndependent],
   )
 
+  // Orchestrated runs (Run All / From Here / Until Here / group / parallel) live
+  // in one WebSocket owned here, so Stop All can reach both this run and the
+  // independent per-step sockets in useStepExecutions.
+  const {
+    run: runOrchestrated,
+    cancel: cancelOrchestrated,
+    cancelStep: cancelOrchestratedStep,
+    status: orchestratedStatus,
+    runningSteps: orchestratedRunningSteps,
+  } = useTerminal({
+    onStatusChange: setExecutionStatus,
+    onStepStatusChange: (stepName, state) => handleStepStatusChange(stepName, state),
+    onStepOutput: (stepName, output) => handleStepOutput(stepName, output),
+  })
+
+  const independentRunning = independentRunningSteps()
+  const anythingRunning = orchestratedStatus === 'running' || independentRunning.size > 0
+
+  // Stop every execution: tell each live WebSocket to cancel (so the streams
+  // report [CANCELLED] and the UI unblocks), then hit the server endpoint as a
+  // backstop for runs whose socket is gone (reloaded / closed tab).
+  const handleStopAll = useCallback(async () => {
+    cancelOrchestrated()
+    for (const stepName of independentRunningSteps()) {
+      cancelStepIndependent(stepName)
+    }
+    try {
+      await fetch('/api/run/cancel-all', { method: 'POST' })
+    } catch (err) {
+      console.error('Failed to cancel all runs:', err)
+    }
+  }, [cancelOrchestrated, cancelStepIndependent, independentRunningSteps])
+
   // Handle selection change - set active terminal step when a step is selected
   // Wrap onNodesChange to detect drag start and create snapshot
   const handleNodesChange = useCallback(
@@ -2273,9 +2307,10 @@ export default function App() {
         selectedStepName={selectedStepName}
         selectedStepNames={selectedStepNames}
         selectedDataKey={selectedDataKey}
-        executionStatus={executionStatus}
+        anythingRunning={anythingRunning}
         onRun={handleRun}
         onRunStep={handleRunStepIndependent}
+        onStopAll={handleStopAll}
         onToggleTerminal={handleToggleTerminal}
         onUndo={() => undo(getCurrentState())}
         onRedo={() => redo(getCurrentState())}
@@ -2499,14 +2534,16 @@ export default function App() {
         <TerminalPanel
           visible={terminalVisible}
           onToggle={handleToggleTerminal}
-          onStatusChange={setExecutionStatus}
-          onStepStatusChange={handleStepStatusChange}
-          onStepOutput={handleStepOutput}
+          run={runOrchestrated}
+          cancel={cancelOrchestrated}
+          cancelStep={cancelOrchestratedStep}
+          status={orchestratedStatus}
+          orchestratedRunningSteps={orchestratedRunningSteps}
           runRequest={runRequest}
           activeTerminalStep={activeTerminalStep}
           stepOutputs={stepTerminalOutputs}
           stepStatuses={independentStepStatuses}
-          externalRunningSteps={independentRunningSteps()}
+          externalRunningSteps={independentRunning}
           onCancelStep={cancelStepIndependent}
           onClearStepOutput={(stepName) => {
             setStepTerminalOutputs((prev) => {

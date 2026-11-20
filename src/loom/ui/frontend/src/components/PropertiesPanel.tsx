@@ -1644,31 +1644,44 @@ export default function PropertiesPanel({
                     </span>
                   )}
                 </div>
-                {stepStatus === 'running' ? (
-                  <button
-                    onClick={() => onCancelStep(stepName)}
-                    className="w-full px-3 py-2 bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
-                  >
-                    <span className="animate-pulse">&#9679;</span> Cancel Execution
-                  </button>
-                ) : (
+                <div className="flex flex-col gap-2">
                   <button
                     onClick={() => onRunStep(stepName)}
-                    disabled={runEligibility && !runEligibility.canRun}
+                    disabled={
+                      stepStatus === 'running' || Boolean(runEligibility && !runEligibility.canRun)
+                    }
                     className={`w-full px-3 py-2 text-white text-sm rounded transition-colors flex items-center justify-center gap-2 ${
-                      runEligibility && !runEligibility.canRun
+                      stepStatus === 'running' || (runEligibility && !runEligibility.canRun)
                         ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
                         : 'bg-green-600 hover:bg-green-500 dark:bg-green-700 dark:hover:bg-green-600'
                     }`}
                     title={
-                      runEligibility
-                        ? getBlockReasonMessage(runEligibility) || undefined
-                        : undefined
+                      stepStatus === 'running'
+                        ? 'Step is already running'
+                        : runEligibility
+                          ? getBlockReasonMessage(runEligibility) || undefined
+                          : undefined
                     }
                   >
                     &#9654; Run This Step
                   </button>
-                )}
+                  <button
+                    onClick={() => onCancelStep(stepName)}
+                    disabled={stepStatus !== 'running'}
+                    className={`w-full px-3 py-2 text-white text-sm rounded transition-colors flex items-center justify-center gap-2 ${
+                      stepStatus !== 'running'
+                        ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                        : 'bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600'
+                    }`}
+                    title={
+                      stepStatus === 'running'
+                        ? `Stop "${stepName}"`
+                        : 'Available while this step is running'
+                    }
+                  >
+                    &#9632; Stop This Step
+                  </button>
+                </div>
                 {/* Eligibility reason when blocked */}
                 {runEligibility && !runEligibility.canRun && stepStatus !== 'running' && (
                   <p className="text-amber-500 dark:text-amber-400 text-xs mt-1 text-center">

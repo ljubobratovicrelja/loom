@@ -967,6 +967,22 @@ def cancel_run() -> dict[str, str]:
     return {"status": "not_running"}
 
 
+@router.post("/api/run/cancel-all")
+def cancel_all_runs() -> dict[str, Any]:
+    """Cancel every execution the server knows about.
+
+    The UI sends per-socket ``__CANCEL__`` messages for live runs, but those
+    only reach processes whose WebSocket is still open. This endpoint is the
+    backstop: it terminates independent step runs and the sequential pipeline
+    run by pid, so a reloaded or closed tab cannot leave executions running.
+    """
+    stopped = state.stop_all_processes()
+    return {
+        "status": "cancelled" if stopped else "not_running",
+        "stopped": stopped,
+    }
+
+
 # Frontend serving endpoints
 
 

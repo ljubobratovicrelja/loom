@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo, Fragment } from 'react'
 import type { ExecutionStatus, RunRequest, StepExecutionState } from '../types/pipeline'
-import { useTerminal } from '../hooks/useTerminal'
 import { renderTerminalOutput, type TerminalBuffer } from '../utils/terminalOutput'
 
 const ansiColors: Record<string, string> = {
@@ -86,10 +85,13 @@ function RunSeparator({ startedAt }: { startedAt: number }) {
 interface TerminalPanelProps {
   visible: boolean
   onToggle: () => void
-  onStatusChange: (status: ExecutionStatus) => void
-  onStepStatusChange?: (stepName: string, state: StepExecutionState) => void
-  onStepOutput?: (stepName: string, output: string) => void
-  onPipelineMessage?: (message: string) => void
+  // Orchestrated execution state, owned by App so a single Stop All can reach
+  // both this run and the independent per-step WebSockets.
+  run: (request: RunRequest) => void
+  cancel: () => void
+  cancelStep: (stepName: string) => void
+  status: ExecutionStatus
+  orchestratedRunningSteps: Set<string>
   runRequest: RunRequest | null
   activeTerminalStep?: string | null
   stepOutputs?: Map<string, TerminalBuffer>
@@ -103,10 +105,11 @@ interface TerminalPanelProps {
 export default function TerminalPanel({
   visible,
   onToggle,
-  onStatusChange,
-  onStepStatusChange,
-  onStepOutput,
-  onPipelineMessage,
+  run,
+  cancel,
+  cancelStep,
+  status,
+  orchestratedRunningSteps,
   runRequest,
   activeTerminalStep,
   stepOutputs,
@@ -118,19 +121,6 @@ export default function TerminalPanel({
   const outputRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(300)
   const lastRequestRef = useRef<RunRequest | null>(null)
-
-  const {
-    run,
-    cancel,
-    cancelStep: cancelOrchestratedStep,
-    status,
-    runningSteps: orchestratedRunningSteps,
-  } = useTerminal({
-    onStatusChange,
-    onStepStatusChange,
-    onStepOutput,
-    onPipelineMessage,
-  })
 
   // Combined "anything running" set: orchestrated runs (sequential/group/all/parallel)
   // plus independent step WebSockets driven by useStepExecutions.
@@ -217,19 +207,12 @@ export default function TerminalPanel({
     if (externalRunningSteps?.has(viewedStep) && onCancelStep) {
       onCancelStep(viewedStep)
     } else if (orchestratedRunningSteps.has(viewedStep)) {
-      cancelOrchestratedStep(viewedStep)
+      cancelStep(viewedStep)
     } else {
       // Sequential / pipeline-level cancel
       cancel()
     }
-  }, [
-    viewedStep,
-    externalRunningSteps,
-    onCancelStep,
-    orchestratedRunningSteps,
-    cancelOrchestratedStep,
-    cancel,
-  ])
+  }, [viewedStep, externalRunningSteps, onCancelStep, orchestratedRunningSteps, cancelStep, cancel])
 
   // Tab strip: only render when more than one step is concurrently running.
   const runningStepsList = useMemo(() => Array.from(allRunningSteps), [allRunningSteps])

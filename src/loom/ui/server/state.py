@@ -1,5 +1,7 @@
 """Global state management for the pipeline editor server."""
 
+import os
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -52,3 +54,50 @@ def is_step_running(step_name: str) -> bool:
 def get_running_step(step_name: str) -> dict[str, Any] | None:
     """Get running step info."""
     return running_steps.get(step_name)
+
+
+def _terminate_process(pid: int | None) -> bool:
+    """SIGTERM the process group led by ``pid``.
+
+    Every subprocess the server spawns calls ``os.setsid()`` in the child, so the
+    child's pid is also its process-group id and killing the group takes down any
+    grandchildren (e.g. the loom CLI re-invoked for loop / multi_pass steps).
+
+    Returns:
+        True if a signal was delivered, False if the process was already gone.
+    """
+    if not pid:
+        return False
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def stop_all_processes() -> list[str]:
+    """Terminate every execution the server is currently aware of.
+
+    Covers independent single-step runs (``running_steps``) and the sequential
+    pipeline run tracked by ``execution_state``. Used by the cancel-all endpoint
+    so a reloaded/closed browser tab cannot leave orphans behind.
+
+    Returns:
+        Names of the steps whose processes were signalled, in registration order.
+    """
+    stopped: list[str] = []
+
+    for step_name, info in list(running_steps.items()):
+        if info.get("status") != "running":
+            continue
+        if _terminate_process(info.get("pid")):
+            info["status"] = "cancelled"
+            stopped.append(step_name)
+
+    if execution_state["status"] == "running" and _terminate_process(execution_state.get("pid")):
+        execution_state["status"] = "cancelled"
+        current_step = execution_state.get("current_step")
+        if current_step and current_step not in stopped:
+            stopped.append(current_step)
+
+    return stopped

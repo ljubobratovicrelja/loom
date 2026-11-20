@@ -1,5 +1,5 @@
-import { Play, StepForward, ChevronsRight, ChevronsLeft, Columns2 } from 'lucide-react'
-import type { ExecutionStatus, RunMode } from '../types/pipeline'
+import { Play, Square, StepForward, ChevronsRight, ChevronsLeft, Columns2 } from 'lucide-react'
+import type { RunMode } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 import { getBlockReasonMessage } from '../hooks/useRunEligibility'
 
@@ -7,7 +7,8 @@ interface RunControlsProps {
   selectedStepName: string | null
   selectedStepNames: string[]
   selectedDataKey: string | null
-  status: ExecutionStatus
+  /** True while any execution is in flight (orchestrated run or independent step). */
+  anythingRunning: boolean
   onRun: (
     mode: RunMode,
     stepName?: string,
@@ -16,6 +17,7 @@ interface RunControlsProps {
     groupName?: string,
   ) => void
   onRunStep?: (stepName: string) => void // Independent step execution
+  onStopAll?: () => void
   stepEligibility?: RunEligibility
   parallelEligibility?: RunEligibility
   groupEligibility?: RunEligibility
@@ -27,29 +29,30 @@ export default function RunControls({
   selectedStepName,
   selectedStepNames,
   selectedDataKey,
-  status,
+  anythingRunning,
   onRun,
   onRunStep,
+  onStopAll,
   stepEligibility,
   parallelEligibility,
   groupEligibility,
   untilHereBlockReason,
   detectedGroupName,
 }: RunControlsProps) {
-  const isRunning = status === 'running'
+  const isRunning = anythingRunning
 
   // Determine if step-specific actions can run
-  const canRunStep = stepEligibility?.canRun ?? !isRunning
+  const canRunStep = !isRunning && (stepEligibility?.canRun ?? true)
   const stepBlockReason = stepEligibility ? getBlockReasonMessage(stepEligibility) : null
 
   // Determine if parallel execution can run
-  const canRunParallel = parallelEligibility?.canRun ?? !isRunning
+  const canRunParallel = !isRunning && (parallelEligibility?.canRun ?? true)
   const parallelBlockReason = parallelEligibility
     ? getBlockReasonMessage(parallelEligibility)
     : null
 
   // Determine if group execution can run (allows in-group deps, orchestrator handles ordering)
-  const canRunGroup = groupEligibility?.canRun ?? !isRunning
+  const canRunGroup = !isRunning && (groupEligibility?.canRun ?? true)
   const groupBlockReason = groupEligibility ? getBlockReasonMessage(groupEligibility) : null
 
   // "Until Here" is available when a step or data node is selected
@@ -87,6 +90,29 @@ export default function RunControls({
       >
         <Play className="w-3.5 h-3.5" /> Run All
       </button>
+
+      {/* Stop All - terminates every in-flight execution and any orphaned process */}
+      {onStopAll && (
+        <button
+          onClick={onStopAll}
+          disabled={!isRunning}
+          className={`
+            px-3 py-1.5 text-white text-sm rounded transition-colors flex items-center gap-1.5
+            ${
+              !isRunning
+                ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
+                : 'bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600'
+            }
+          `}
+          title={
+            isRunning
+              ? 'Stop every running execution'
+              : 'Stop All is available while something is running'
+          }
+        >
+          <Square className="w-3.5 h-3.5" /> Stop All
+        </button>
+      )}
 
       {/* Run Group - when selection matches exactly one group */}
       {selectedStepNames.length >= 2 && detectedGroupName && (

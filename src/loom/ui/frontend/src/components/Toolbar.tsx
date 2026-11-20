@@ -1,6 +1,6 @@
 import { Eye, EyeOff, LayoutGrid } from 'lucide-react'
 import RunControls from './RunControls'
-import type { ExecutionStatus, RunMode } from '../types/pipeline'
+import type { RunMode } from '../types/pipeline'
 import type { RunEligibility } from '../hooks/useRunEligibility'
 
 interface ToolbarProps {
@@ -13,7 +13,7 @@ interface ToolbarProps {
   selectedStepName: string | null
   selectedStepNames: string[]
   selectedDataKey: string | null
-  executionStatus: ExecutionStatus
+  anythingRunning: boolean
   onRun: (
     mode: RunMode,
     stepName?: string,
@@ -22,6 +22,7 @@ interface ToolbarProps {
     groupName?: string,
   ) => void
   onRunStep?: (stepName: string) => void // Independent step execution
+  onStopAll: () => void
   onToggleTerminal: () => void
   onUndo: () => void
   onRedo: () => void
@@ -53,9 +54,10 @@ export default function Toolbar({
   selectedStepName,
   selectedStepNames,
   selectedDataKey,
-  executionStatus,
+  anythingRunning,
   onRun,
   onRunStep,
+  onStopAll,
   onToggleTerminal,
   onUndo,
   onRedo,
@@ -107,9 +109,10 @@ export default function Toolbar({
           selectedStepName={selectedStepName}
           selectedStepNames={selectedStepNames}
           selectedDataKey={selectedDataKey}
-          status={executionStatus}
+          anythingRunning={anythingRunning}
           onRun={onRun}
           onRunStep={onRunStep}
+          onStopAll={onStopAll}
           stepEligibility={stepEligibility}
           parallelEligibility={parallelEligibility}
           groupEligibility={groupEligibility}

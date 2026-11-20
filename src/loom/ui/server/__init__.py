@@ -59,11 +59,15 @@ from .state import (
     running_steps as _running_steps,
 )
 from .state import (
+    stop_all_processes as _stop_all_processes,
+)
+from .state import (
     tasks_dir as _tasks_dir,
 )
 from .state import (
     unregister_running_step as _unregister_running_step,
 )
+from .terminal import classify_exit_status as _classify_exit_status
 from .terminal import terminal_websocket
 
 # Re-export validation function (used by tests)
@@ -135,6 +139,8 @@ __all__ = [
     "_unregister_running_step",
     "_is_step_running",
     "_get_running_step",
+    "_stop_all_processes",
+    "_classify_exit_status",
     # YAML
     "_yaml",
 ]

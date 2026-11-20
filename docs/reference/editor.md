@@ -96,13 +96,24 @@ Represent Python tasks:
 ### Run Controls (Toolbar)
 
 - **Run All** — Execute entire pipeline
-- **Stop** — Cancel running execution
+- **Stop All** — Stop every execution in flight: the orchestrated run *and* any
+  individually running steps. Available only while something is running.
+- **Run Step / From Here / Until Here** — Run a single step, or a dependency chain;
+  disabled while anything is running.
 
 ### Run from Properties Panel
 
 Select a step to access:
 
-- **Run This Step** — Execute just this step
+- **Run This Step** — Execute just this step (disabled while that step is running)
+- **Stop This Step** — Stop only this step's execution (enabled only while it is
+  running)
+
+Per-step runs use their own WebSocket, so several steps — or a step plus an
+orchestrated pipeline run — can execute concurrently. **Stop All** sends a cancel
+on each live socket and then calls `POST /api/run/cancel-all`, which terminates
+any process still registered on the server (a reloaded or closed browser tab
+cannot leave runs going).
 
 ### Run from Toolbar
 

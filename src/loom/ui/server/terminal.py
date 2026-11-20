@@ -14,6 +14,31 @@ from . import state
 from .models import RunRequest
 
 
+def classify_exit_status(wait_status: int, cancelled: bool = False) -> str:
+    """Classify a ``waitpid`` status as ``cancelled``, ``completed`` or ``failed``.
+
+    A process terminated by SIGTERM/SIGINT was stopped on purpose (Stop button,
+    cancel-all endpoint), so it must be reported as cancelled rather than failed.
+
+    Args:
+        wait_status: Status returned by ``os.waitpid``.
+        cancelled: True when the WebSocket listener already saw a cancel request.
+
+    Returns:
+        One of ``"cancelled"``, ``"completed"`` or ``"failed"``.
+    """
+    if cancelled:
+        return "cancelled"
+    if os.WIFSIGNALED(wait_status) and os.WTERMSIG(wait_status) in (
+        signal.SIGTERM,
+        signal.SIGINT,
+    ):
+        return "cancelled"
+    if os.WIFEXITED(wait_status) and os.WEXITSTATUS(wait_status) == 0:
+        return "completed"
+    return "failed"
+
+
 async def terminal_websocket(websocket: WebSocket) -> None:
     """WebSocket endpoint for real-time terminal streaming.
 
@@ -326,12 +351,13 @@ async def _run_single_step(
             state.unregister_running_step(step_name)
 
         # Send result (only if websocket still open)
-        if cancelled:
+        outcome = classify_exit_status(status, cancelled)
+        if outcome == "cancelled":
             await safe_send_text(f"\x1b[33m[CANCELLED]\x1b[0m {step_name}\r\n")
             await safe_send_text(
                 json.dumps({"type": "step_status", "step": step_name, "status": "cancelled"})
             )
-        elif os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0:
+        elif outcome == "completed":
             await safe_send_text(f"\x1b[32m[SUCCESS]\x1b[0m {step_name}\r\n")
             await safe_send_text(
                 json.dumps({"type": "step_status", "step": step_name, "status": "completed"})
