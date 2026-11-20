@@ -37,6 +37,7 @@ import ContainmentEdge from './ContainmentEdge'
 import NodeHotbox from './NodeHotbox'
 import FilePickerPopup from './FilePickerPopup'
 import NewFileConfirmDialog from './NewFileConfirmDialog'
+import DataPreviewWindow, { type PreviewTarget } from './DataPreviewWindow'
 import type {
   PipelineNode,
   StepData,
@@ -160,6 +161,9 @@ interface CanvasProps {
   onEdgeSelect?: (edge: Edge | null) => void
   onSnapshot?: () => void
   onNodeDoubleClick?: (node: PipelineNode) => void
+  previewTarget?: PreviewTarget | null
+  onPreviewClose?: () => void
+  onOpenInOS?: (path: string) => void
   onParameterDrop?: (name: string, value: unknown, position: { x: number; y: number }) => void
   hideParameterNodes?: boolean
   selectedNodes?: PipelineNode[]
@@ -198,6 +202,9 @@ export default function Canvas({
   onEdgeSelect,
   onSnapshot,
   onNodeDoubleClick,
+  previewTarget,
+  onPreviewClose,
+  onOpenInOS,
   onParameterDrop,
   hideParameterNodes,
   selectedNodes,
@@ -1825,6 +1832,13 @@ export default function Canvas({
             directoryKey={pendingNewFile.dirKey}
             onConfirm={handleNewFileConfirm}
             onCancel={handleNewFileCancel}
+          />
+        )}
+        {previewTarget && onPreviewClose && onOpenInOS && (
+          <DataPreviewWindow
+            target={previewTarget}
+            onClose={onPreviewClose}
+            onOpenInOS={onOpenInOS}
           />
         )}
       </div>

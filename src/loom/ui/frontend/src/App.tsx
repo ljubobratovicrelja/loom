@@ -10,6 +10,7 @@ import { AlertTriangle, Info, XCircle, X, ChevronLeft, ChevronRight } from 'luci
 
 import AutoLayoutConfirmDialog from './components/AutoLayoutConfirmDialog'
 import Canvas, { type CanvasApi } from './components/Canvas'
+import type { PreviewTarget } from './components/DataPreviewWindow'
 import CleanDialog from './components/CleanDialog'
 import ConfirmDialog from './components/ConfirmDialog'
 import FeedbackDialog, { type FeedbackResult } from './components/FeedbackDialog'
@@ -150,6 +151,7 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNodes, setSelectedNodes] = useState<PipelineNode[]>([])
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+  const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null)
   const [configPath, setConfigPath] = useState<string | null>(null)
   const [parameters, setParameters] = useState<Record<string, unknown>>({})
   const [hasChanges, setHasChanges] = useState(false)
@@ -2159,12 +2161,27 @@ export default function App() {
               )
             }, 1300)
           } else {
-            openPath(dataNode.path)
+            setPreviewTarget({
+              key: dataNode.key,
+              name: dataNode.name,
+              path: dataNode.path,
+              type: dataNode.type,
+              nestedIn: dataNode.nested_in,
+            })
           }
         }
       }
     },
-    [openPath, setNodes],
+    [setNodes],
+  )
+
+  const handlePreviewClose = useCallback(() => setPreviewTarget(null), [])
+
+  const handlePreviewOpenInOS = useCallback(
+    (path: string) => {
+      void openPath(path)
+    },
+    [openPath],
   )
 
   const handleUpdateParameter = useCallback(
@@ -2464,6 +2481,9 @@ export default function App() {
               })
             }
             onNodeDoubleClick={handleNodeDoubleClick}
+            previewTarget={previewTarget}
+            onPreviewClose={handlePreviewClose}
+            onOpenInOS={handlePreviewOpenInOS}
             onParameterDrop={handleParameterDrop}
             hideParameterNodes={!showParameterNodes}
             selectedNodes={selectedNodes}

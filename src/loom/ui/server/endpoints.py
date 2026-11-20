@@ -9,8 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from ruamel.yaml import YAML
 from send2trash import send2trash  # type: ignore[import-untyped]
 
@@ -638,6 +638,114 @@ def get_preview_by_path(
         return Response(status_code=204)
 
     return dict(preview)
+
+
+_CONTENT_CHUNK_SIZE = 1024 * 1024
+
+
+def _content_media_type(suffix: str) -> str:
+    """Map a file suffix to a media type for the content endpoint."""
+    import mimetypes
+
+    media_type, _ = mimetypes.guess_type(f"file{suffix}")
+    return media_type or "application/octet-stream"
+
+
+@router.get("/api/content/by-path", response_model=None)
+def get_content_by_path(
+    request: Request,
+    path: str = Query(..., description="Path to the file"),
+    download: bool = Query(False, description="Send as attachment instead of inline"),
+) -> Response:
+    """Stream raw file content for the in-graph preview window.
+
+    Unlike ``/api/thumbnail/by-path`` and ``/api/preview/by-path`` this returns
+    the full file, so images render at full resolution and videos play. Supports
+    HTTP Range requests (206 + ``Content-Range``) so browsers can seek in video
+    without downloading the whole file first. The path is resolved through the
+    pipeline config exactly like the other ``by-path`` endpoints, so relative
+    paths and ``$variables`` work the same way.
+    """
+    from fastapi.responses import RedirectResponse
+
+    from loom.runner import PipelineConfig
+
+    # Remote assets are not local files: hand the browser the URL and let it
+    # fetch from the origin. The preview window points <img>/<video> straight at
+    # the URL, so this path only matters for direct API use.
+    if is_url(path):
+        return RedirectResponse(path, status_code=302)
+
+    if not state.config_path or not state.config_path.exists():
+        raise HTTPException(status_code=404, detail="No pipeline loaded")
+
+    try:
+        config = PipelineConfig.from_yaml(state.config_path)
+        resolved = config.resolve_path(path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not resolve path: {e}")
+
+    if not resolved.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    try:
+        file_size = resolved.stat().st_size
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Could not stat file: {e}")
+
+    media_type = _content_media_type(resolved.suffix)
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache",
+        "Content-Disposition": ("attachment" if download else "inline")
+        + f'; filename="{resolved.name}"',
+    }
+
+    range_header = request.headers.get("range")
+    if range_header:
+        match = _re.match(r"bytes=(\d*)-(\d*)$", range_header.strip())
+        if match:
+            start_s, end_s = match.group(1), match.group(2)
+            if start_s:
+                start = int(start_s)
+                end = int(end_s) if end_s else file_size - 1
+            elif end_s:
+                # Suffix range: last N bytes.
+                start = max(file_size - int(end_s), 0)
+                end = file_size - 1
+            else:
+                start, end = 0, file_size - 1
+
+            end = min(end, file_size - 1)
+            if start > end or start >= file_size:
+                return Response(
+                    status_code=416,
+                    headers={"Content-Range": f"bytes */{file_size}"},
+                )
+
+            length = end - start + 1
+
+            def _iter_range() -> Any:
+                with open(resolved, "rb") as fh:
+                    fh.seek(start)
+                    remaining = length
+                    while remaining > 0:
+                        chunk = fh.read(min(_CONTENT_CHUNK_SIZE, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        yield chunk
+
+            headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+            headers["Content-Length"] = str(length)
+            return StreamingResponse(
+                _iter_range(), status_code=206, media_type=media_type, headers=headers
+            )
+
+    headers["Content-Length"] = str(file_size)
+    return FileResponse(resolved, media_type=media_type, headers=headers)
 
 
 @router.delete("/api/data/{name}")
